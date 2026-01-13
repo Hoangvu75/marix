@@ -1,0 +1,226 @@
+================================================================================
+                    MARIX WEBSITE - TODO LIST
+                    Trang web giới thiệu Marix SSH Client
+================================================================================
+
+📌 KHUYẾN NGHỊ: DaisyUI
+   - Lý do: CDN-friendly, không cần build step phức tạp
+   - Dễ tích hợp với Tailwind CSS CDN
+   - Có sẵn nhiều component đẹp, dark mode support
+   - shadcn/ui cần npm install, không có CDN chính thức
+
+================================================================================
+                         PHASE 1: SETUP CƠ BẢN
+================================================================================
+
+[ ] 1.1 Tạo cấu trúc thư mục
+    └── marix-website/
+        ├── index.html
+        ├── css/
+        │   └── custom.css
+        ├── js/
+        │   └── main.ts
+        ├── assets/
+        │   ├── images/
+        │   ├── icons/
+        │   └── screenshots/
+        └── tsconfig.json
+
+[ ] 1.2 Setup HTML với CDN
+    - Tailwind CSS CDN
+    - DaisyUI CDN
+    - TypeScript (compile ra JS hoặc dùng esbuild-wasm)
+
+[ ] 1.3 Cấu hình TypeScript
+    - tsconfig.json cho browser
+    - Build script đơn giản
+
+================================================================================
+                         PHASE 2: THIẾT KẾ UI/UX
+================================================================================
+
+[ ] 2.1 Header / Navigation
+    - Logo Marix
+    - Menu: Features | Screenshots | Download | Languages | GitHub
+    - Theme toggle (dark/light)
+    - Language selector
+
+[ ] 2.2 Hero Section
+    - Tagline: "Modern Zero-Knowledge SSH Client"
+    - Mô tả ngắn về Marix
+    - Nút CTA: Download | View on GitHub
+    - Hero image/animation của app
+
+[ ] 2.3 Features Section
+    - SSH Terminal với xterm.js
+    - SFTP File Manager
+    - FTP/FTPS Support
+    - RDP Remote Desktop
+    - WebSocket (WSS) Connections
+    - Cloudflare DNS Management
+    - WHOIS & Network Tools
+    - Argon2id Encrypted Backup
+    - Multi-language Support (14 ngôn ngữ)
+    - Dark/Light Theme
+
+[ ] 2.4 Screenshots Gallery
+    - Terminal view
+    - SFTP panel
+    - RDP session
+    - Settings page
+    - Cloudflare DNS
+    - Network tools
+
+[ ] 2.5 Download Section
+    - Windows (.exe)
+    - macOS (.dmg)
+    - Linux (.AppImage, .deb)
+    - Auto-detect OS
+
+[ ] 2.6 Tech Stack Section
+    - ElectronJS
+    - React + TypeScript
+    - Tailwind CSS
+    - SSH2 / xterm.js
+    - node-rdpjs
+
+[ ] 2.7 Footer
+    - Copyright
+    - GitHub link
+    - Author: datvuong166
+    - License info
+
+================================================================================
+                         PHASE 3: TÍNH NĂNG NÂNG CAO
+================================================================================
+
+[ ] 3.1 Đa ngôn ngữ (i18n)
+    - English
+    - Tiếng Việt
+    - 中文
+    - 日本語
+    - 한국어
+    - Deutsch
+    - Français
+    - Español
+    - Português
+    - Русский
+    - ภาษาไทย
+    - Bahasa Indonesia
+    - Bahasa Melayu
+    - Filipino
+
+[ ] 3.2 Auto-update Check
+    - Fetch latest release từ GitHub API
+    - Hiển thị version mới nhất
+    - Changelog
+
+[ ] 3.3 Responsive Design
+    - Mobile-first approach
+    - Tablet layout
+    - Desktop layout
+
+[ ] 3.4 SEO Optimization
+    - Meta tags
+    - Open Graph
+    - Twitter Cards
+    - Structured data
+
+[ ] 3.5 Performance
+    - Lazy loading images
+    - Minify CSS/JS
+    - Compress assets
+
+================================================================================
+                         PHASE 4: TRIỂN KHAI
+================================================================================
+
+[ ] 4.1 Chọn hosting
+    - GitHub Pages (miễn phí)
+    - Vercel
+    - Netlify
+    - Cloudflare Pages
+
+[ ] 4.2 Setup CI/CD
+    - Auto build khi push
+    - Deploy tự động
+
+[ ] 4.3 Domain (tùy chọn)
+    - Mua domain hoặc dùng subdomain
+    - SSL/HTTPS
+
+[ ] 4.4 Analytics
+    - Google Analytics hoặc
+    - Plausible/Umami (privacy-friendly)
+
+================================================================================
+                         RESOURCES CẦN CHUẨN BỊ
+================================================================================
+
+[ ] Logo Marix (SVG)
+[ ] Screenshots của app (các tính năng chính)
+[ ] GIF/Video demo (tùy chọn)
+[ ] Nội dung mô tả cho từng feature
+[ ] Bản dịch cho các ngôn ngữ
+
+================================================================================
+                         CDN LINKS
+================================================================================
+
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com"></script>
+
+<!-- DaisyUI -->
+<link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.2/dist/full.min.css" rel="stylesheet">
+
+<!-- Tailwind Config cho DaisyUI -->
+<script>
+  tailwind.config = {
+    plugins: [],
+    daisyui: {
+      themes: ["light", "dark", "nord"],
+    },
+  }
+</script>
+
+================================================================================
+                         GỢI Ý CẤU TRÚC CODE
+================================================================================
+
+// TypeScript interfaces
+interface Feature {
+  icon: string;
+  title: string;
+  description: string;
+}
+
+interface Download {
+  os: 'windows' | 'macos' | 'linux';
+  url: string;
+  filename: string;
+}
+
+interface Translation {
+  hero: { title: string; description: string; };
+  features: Feature[];
+  download: { title: string; button: string; };
+}
+
+================================================================================
+                         TIMELINE DỰ KIẾN
+================================================================================
+
+Tuần 1: Phase 1 + Phase 2 (Setup + UI cơ bản)
+Tuần 2: Phase 3 (i18n + responsive + SEO)
+Tuần 3: Phase 4 (Deploy + testing)
+
+================================================================================
+                         NOTES
+================================================================================
+
+- Ưu tiên DaisyUI vì có CDN, dễ dùng
+- shadcn/ui đẹp hơn nhưng cần npm, phức tạp hơn
+- Có thể dùng Vite nếu muốn build step đầy đủ
+- GitHub Pages là lựa chọn tốt nhất cho open source
+
+================================================================================

@@ -1,0 +1,241 @@
+@import "tailwindcss";
+
+/* Source paths for Tailwind CSS 4 to scan */
+@source "../**/*.{js,jsx,ts,tsx}";
+@source "../../public/index.html";
+
+/* Google Fonts */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+/* Custom theme for Tailwind CSS 4 */
+@theme {
+  /* Navy colors (dark theme backgrounds) */
+  --color-navy-900: #0f1419;
+  --color-navy-800: #1a1f29;
+  --color-navy-700: #252b37;
+  --color-navy-600: #2d3443;
+  
+  /* Light theme backgrounds */
+  --color-light-100: #ffffff;
+  --color-light-200: #f8fafc;
+  --color-light-300: #f1f5f9;
+  --color-light-400: #e2e8f0;
+  --color-light-500: #cbd5e1;
+  
+  /* Font families */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+}
+
+/* Base styles */ {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+  background: #0f1419;
+  color: #d4d7dc;
+}
+
+/* Light theme - Base */
+body.light-theme {
+  background: #f8fafc;
+  color: #1e293b;
+}
+
+/* Light theme - Navy colors (dark background colors to light) */
+.light-theme .bg-navy-900 { background: #ffffff !important; }
+.light-theme .bg-navy-800 { background: #f8fafc !important; }
+.light-theme .bg-navy-700 { background: #f1f5f9 !important; }
+.light-theme .bg-navy-600 { background: #e2e8f0 !important; }
+.light-theme .border-navy-800 { border-color: #f1f5f9 !important; }
+.light-theme .border-navy-700 { border-color: #e2e8f0 !important; }
+.light-theme .border-navy-600 { border-color: #cbd5e1 !important; }
+
+/* Light theme - Text colors */
+.light-theme .text-gray-100 { color: #1e293b !important; }
+.light-theme .text-gray-300 { color: #334155 !important; }
+.light-theme .text-gray-400 { color: #475569 !important; }
+.light-theme .text-gray-500 { color: #64748b !important; }
+.light-theme .text-white { color: #0f172a !important; }
+
+/* Light theme - Hover states */
+.light-theme .hover\:bg-navy-800:hover { background: #f1f5f9 !important; }
+.light-theme .hover\:bg-navy-700:hover { background: #e2e8f0 !important; }
+.light-theme .hover\:bg-navy-600:hover { background: #cbd5e1 !important; }
+.light-theme .hover\:text-white:hover { color: #0f172a !important; }
+
+/* Light theme - SFTP/FTP specific */
+.light-theme .bg-teal-900\/30 { background: rgba(20, 184, 166, 0.15) !important; }
+.light-theme .bg-teal-900\/20 { background: rgba(20, 184, 166, 0.1) !important; }
+.light-theme .bg-purple-900\/30 { background: rgba(147, 51, 234, 0.15) !important; }
+.light-theme .bg-purple-900\/20 { background: rgba(147, 51, 234, 0.1) !important; }
+
+/* Light theme - Input fields */
+.light-theme input[type="text"],
+.light-theme input[type="password"],
+.light-theme input[type="number"],
+.light-theme textarea,
+.light-theme select {
+  background: #ffffff !important;
+  border-color: #cbd5e1 !important;
+  color: #0f172a !important;
+}
+
+.light-theme input::placeholder,
+.light-theme textarea::placeholder {
+  color: #94a3b8 !important;
+}
+
+.light-theme input:focus,
+.light-theme textarea:focus,
+.light-theme select:focus {
+  border-color: #0d9488 !important;
+}
+
+/* Light theme - Teal buttons (keep visible) */
+.light-theme .bg-teal-600 { 
+  background: #0d9488 !important;
+}
+.light-theme .bg-teal-600:hover,
+.light-theme .hover\:bg-teal-700:hover,
+.light-theme .hover\:bg-teal-500:hover { 
+  background: #0f766e !important;
+}
+.light-theme .bg-teal-600 .text-white,
+.light-theme .bg-teal-600.text-white { 
+  color: #ffffff !important;
+}
+
+/* Light theme - Purple (remote pane accent) */
+.light-theme .bg-purple-600 { 
+  background: #9333ea !important; 
+}
+.light-theme .bg-purple-600 .text-white,
+.light-theme .bg-purple-600.text-white { 
+  color: #ffffff !important; 
+}
+.light-theme .text-purple-400 { color: #7c3aed !important; }
+.light-theme .border-purple-500 { border-color: #8b5cf6 !important; }
+.light-theme .ring-purple-500 { --tw-ring-color: #8b5cf6 !important; }
+
+/* Light theme - Teal accent (local pane) */
+.light-theme .text-teal-400 { color: #0d9488 !important; }
+.light-theme .text-teal-500 { color: #14b8a6 !important; }
+.light-theme .border-teal-500 { border-color: #14b8a6 !important; }
+.light-theme .ring-teal-500 { --tw-ring-color: #14b8a6 !important; }
+
+/* Light theme - Sidebar active button text should be white */
+.light-theme .bg-teal-600 span,
+.light-theme .bg-teal-600 svg {
+  color: #ffffff !important;
+}
+
+.light-theme .bg-purple-600 span,
+.light-theme .bg-purple-600 svg {
+  color: #ffffff !important;
+}
+
+/* Light theme - Table rows */
+.light-theme table tr.border-t { border-color: #e2e8f0 !important; }
+.light-theme table thead { background: #f1f5f9 !important; }
+.light-theme table tbody tr:hover { background: #f1f5f9 !important; }
+
+/* Light theme - Selected row */
+.light-theme .bg-navy-700 { background: #e0f2fe !important; }
+
+/* Light theme - Error/Warning states */
+.light-theme .text-red-400 { color: #dc2626 !important; }
+.light-theme .bg-red-600 { background: #dc2626 !important; }
+.light-theme .bg-red-500\/20 { background: rgba(220, 38, 38, 0.15) !important; }
+.light-theme .text-amber-400 { color: #d97706 !important; }
+.light-theme .text-amber-500 { color: #b45309 !important; }
+
+/* Light theme - Context menu */
+.light-theme .fixed.bg-navy-800 {
+  background: #ffffff !important;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05) !important;
+  border-color: #e2e8f0 !important;
+}
+
+/* Light theme - Modal dialogs */
+.light-theme .bg-black\/50 { background: rgba(0, 0, 0, 0.3) !important; }
+
+/* Light theme - Dividers */
+.light-theme .w-px.bg-navy-600 { background: #cbd5e1 !important; }
+
+/* Custom scrollbar - Dark */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #2d3443;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #3a4050;
+}
+
+/* Custom scrollbar - Light */
+.light-theme ::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+}
+
+.light-theme ::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Xterm terminal */
+.xterm {
+  padding: 0 !important;
+  height: 100% !important;
+  width: 100% !important;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.xterm-viewport {
+  background-color: transparent !important;
+  overflow-y: auto !important;
+}
+
+.xterm-screen {
+  padding: 0 !important;
+}
+
+.xterm .xterm-screen canvas {
+  display: block;
+}
+
+/* Status indicators */
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.status-connected {
+  background: #3dd68c;
+  box-shadow: 0 0 8px rgba(61, 214, 140, 0.4);
+}
+
+.status-disconnected {
+  background: #6b7280;
+}
+
+.status-error {
+  background: #f87171;
+  box-shadow: 0 0 8px rgba(248, 113, 113, 0.4);
+}
+

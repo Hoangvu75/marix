@@ -1,0 +1,83 @@
+{
+  "appId": "com.marix.app",
+  "productName": "Marix",
+  "copyright": "Copyright © 2025 datvuong166",
+  "directories": {
+    "output": "release"
+  },
+  "files": [
+    "dist/**/*",
+    "package.json"
+  ],
+  "asar": true,
+  "compression": "maximum",
+  "linux": {
+    "icon": "icon",
+    "target": [
+      {
+        "target": "AppImage",
+        "arch": ["x64"]
+      },
+      {
+        "target": "deb",
+        "arch": ["x64"]
+      }
+    ],
+    "category": "Network",
+    "maintainer": "datvuong166",
+    "synopsis": "Modern SSH/SFTP/FTP Client",
+    "description": "Marix - Modern Zero-Knowledge SSH Client with SFTP, FTP, RDP, WSS support"
+  },
+  "win": {
+    "icon": "icon/icon.ico",
+    "target": [
+      {
+        "target": "nsis",
+        "arch": ["x64"]
+      }
+    ]
+  },
+  "nsis": {
+    "oneClick": false,
+    "allowToChangeInstallationDirectory": true,
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true,
+    "shortcutName": "Marix"
+  },
+  "mac": {
+    "icon": "icon/icon.icns",
+    "target": [
+      {
+        "target": "dmg",
+        "arch": ["x64", "arm64"]
+      },
+      {
+        "target": "zip",
+        "arch": ["x64", "arm64"]
+      }
+    ],
+    "category": "public.app-category.developer-tools",
+    "hardenedRuntime": false,
+    "gatekeeperAssess": false
+  },
+  "dmg": {
+    "title": "Marix ${version}",
+    "contents": [
+      {
+        "x": 130,
+        "y": 220
+      },
+      {
+        "x": 410,
+        "y": 220,
+        "type": "link",
+        "path": "/Applications"
+      }
+    ]
+  },
+  "publish": {
+    "provider": "github",
+    "owner": "datvuong166",
+    "repo": "marix"
+  }
+}
