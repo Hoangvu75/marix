@@ -4,14 +4,13 @@ on:
   push:
     branches:
       - main
+    tags:
+      - '*.*.*'
     paths-ignore:
       - '**.md'
       - 'docs/**'
       - '.github/**'
       - '!.github/workflows/build.yml'
-  push:
-    tags:
-      - '*.*.*'
   workflow_dispatch:
     inputs:
       version:
