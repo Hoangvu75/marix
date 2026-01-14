@@ -11,6 +11,14 @@ All notable changes to Marix SSH Client will be documented in this file.
   - Upload/download backup files
   - Integration with existing backup modal (4th tab)
   - Password-protected with Argon2id encryption
+ 
+  - - **gitlab Cloud Backup**: New cloud backup option with OAuth authentication
+  - OAuth PKCE flow for secure authentication
+  - Encrypted backup storage on gitlab
+  - Upload/download backup files
+  - Integration with existing backup modal (4th tab)
+  - Password-protected with Argon2id encryption
+
 
 - **Port Knocking Security**: Advanced SSH security feature
   - TCP SYN packet sequence for pre-authentication
