@@ -100,9 +100,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: macos-builds
-          path: |
-            release/*.dmg
-            release/*.zip
+          path: release/*.zip
           retention-days: 5
 
   release:
@@ -169,7 +167,12 @@ jobs:
             ### Downloads
             - **Linux**: AppImage, DEB, RPM
             - **Windows**: EXE installer
-            - **macOS**: DMG, ZIP
+            - **macOS**: ZIP (Intel & Apple Silicon)
+            
+            **macOS Installation**:
+            1. Download and extract the ZIP file
+            2. Right-click Marix.app → Open (bypass Gatekeeper)
+            3. If blocked: System Settings → Privacy & Security → Open Anyway
             
             See full changelog below.
         env:
