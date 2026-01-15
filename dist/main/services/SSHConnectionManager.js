@@ -23,7 +23,13 @@ class SSHConnectionManager {
                 port: config.port,
                 username: config.username,
                 password: config.password,
-                privateKey: config.privateKey,
+                // Normalize private key: ensure LF line endings and trailing newline
+                privateKey: config.privateKey
+                    ? (typeof config.privateKey === 'string'
+                        ? config.privateKey.replace(/\r\n/g, '\n').replace(/\r/g, '\n') + (config.privateKey.endsWith('\n') ? '' : '\n')
+                        : config.privateKey)
+                    : undefined,
+                passphrase: config.passphrase,
                 readyTimeout: 30000,
                 keepaliveInterval: 10000,
                 keepaliveCountMax: 3,

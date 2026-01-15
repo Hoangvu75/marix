@@ -135,6 +135,8 @@
 
 ### 🛠️ 内置工具
 
+- **局域网文件传输**: 通过LAN发送文件 — 发送方选择文件并显示6位码，接收方输入码自动查找发送方并接收文件
+- **局域网服务器共享**: 共享服务器配置 — 发送方选择服务器并发送到选定设备，接收方输入码解密并导入
 - **DNS和网络**: A、AAAA、MX、TXT、SPF、CNAME、NS、SOA、PTR、Ping、Traceroute、TCP端口、HTTP/HTTPS、SMTP、黑名单、WHOIS、ARIN
 - **Cloudflare DNS管理**: 管理域名、DNS记录、Cloudflare代理
 - **SSH密钥管理**: 生成RSA-4096、Ed25519、ECDSA-521，导入/导出密钥

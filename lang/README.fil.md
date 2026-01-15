@@ -135,6 +135,8 @@
 
 ### 🛠️ Mga Built-in Tool
 
+- **LAN File Transfer**: Magpadala ng mga file via LAN — Ang sender ay pumili ng mga file at ipakita ang 6-digit code, ang receiver ay maglagay ng code para hanapin ang sender at matanggap ang mga file
+- **LAN Server Sharing**: Ibahagi ang server configuration — Ang sender ay pumili ng mga server at ipadala sa napiling device, ang receiver ay maglagay ng code para i-decrypt at i-import
 - **DNS at Network**: A, AAAA, MX, TXT, SPF, CNAME, NS, SOA, PTR, Ping, Traceroute, TCP port, HTTP/HTTPS, SMTP, Blacklist, WHOIS, ARIN
 - **Cloudflare DNS Manager**: Pamahalaan ang mga domain, DNS records, Cloudflare proxy
 - **SSH Key Manager**: Gumawa ng RSA-4096, Ed25519, ECDSA-521, mag-import/export ng mga key

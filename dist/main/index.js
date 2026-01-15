@@ -56,6 +56,8 @@ const GitLabApiService_1 = require("./services/GitLabApiService");
 const BoxOAuthService_1 = require("./services/BoxOAuthService");
 const BoxApiService_1 = require("./services/BoxApiService");
 const PortKnockService_1 = require("./services/PortKnockService");
+const LANSharingService_1 = require("./services/LANSharingService");
+const LANFileTransferService_1 = require("./services/LANFileTransferService");
 let mainWindow = null;
 let tray = null;
 const nativeSSH = new NativeSSHManager_1.NativeSSHManager(); // For terminal (with MOTD)
@@ -67,6 +69,70 @@ const wssManager = new WSSManager_1.WSSManager(); // For WebSocket Secure
 const serverStore = new ServerStore_1.ServerStore(); // For persistent server storage
 const backupService = new BackupService_1.BackupService(); // For backup/restore
 const githubAuthService = new GitHubAuthService_1.GitHubAuthService(); // For GitHub OAuth
+const lanSharingService = new LANSharingService_1.LANSharingService(); // For LAN sharing
+function createAppMenu() {
+    const template = [
+        {
+            label: 'File',
+            submenu: [
+                {
+                    label: 'Send Files via LAN',
+                    accelerator: 'CmdOrCtrl+Shift+F',
+                    click: () => {
+                        mainWindow?.webContents.send('menu:send-files');
+                    }
+                },
+                { type: 'separator' },
+                {
+                    label: 'Exit',
+                    accelerator: 'CmdOrCtrl+Q',
+                    click: () => {
+                        electron_1.app.quit();
+                    }
+                }
+            ]
+        },
+        {
+            label: 'Edit',
+            submenu: [
+                { role: 'undo' },
+                { role: 'redo' },
+                { type: 'separator' },
+                { role: 'cut' },
+                { role: 'copy' },
+                { role: 'paste' },
+                { role: 'selectAll' }
+            ]
+        },
+        {
+            label: 'View',
+            submenu: [
+                { role: 'reload' },
+                { role: 'forceReload' },
+                { role: 'toggleDevTools' },
+                { type: 'separator' },
+                { role: 'resetZoom' },
+                { role: 'zoomIn' },
+                { role: 'zoomOut' },
+                { type: 'separator' },
+                { role: 'togglefullscreen' }
+            ]
+        },
+        {
+            label: 'Help',
+            submenu: [
+                {
+                    label: 'About Marix',
+                    click: () => {
+                        mainWindow?.webContents.send('menu:about');
+                    }
+                }
+            ]
+        }
+    ];
+    const menu = electron_1.Menu.buildFromTemplate(template);
+    electron_1.Menu.setApplicationMenu(menu);
+}
 function createTray() {
     // Try multiple icon paths
     const iconPaths = [
@@ -170,6 +236,17 @@ electron_1.app.whenReady().then(() => {
     }
     createWindow();
     createTray();
+    createAppMenu();
+    // Start LAN sharing service on app startup for always-on discovery
+    lanSharingService.start().then(() => {
+        console.log('[App] LAN sharing service started on app ready');
+    }).catch((err) => {
+        console.error('[App] Failed to start LAN sharing on startup:', err);
+    });
+    // Start file transfer service
+    LANFileTransferService_1.lanFileTransferService.start().catch((err) => {
+        console.error('[FileTransfer] Failed to start:', err);
+    });
     electron_1.app.on('activate', () => {
         if (electron_1.BrowserWindow.getAllWindows().length === 0) {
             createWindow();
@@ -1771,5 +1848,183 @@ electron_1.ipcMain.handle('app:checkForUpdates', async () => {
 electron_1.ipcMain.handle('app:openUrl', async (event, url) => {
     const { shell } = require('electron');
     shell.openExternal(url);
+});
+// ==================== LAN Sharing ====================
+// Start LAN sharing service
+electron_1.ipcMain.handle('lan-share:start', async () => {
+    try {
+        await lanSharingService.start();
+        return { success: true };
+    }
+    catch (error) {
+        console.error('[LANShare] Start error:', error);
+        return { success: false, error: error.message };
+    }
+});
+// Stop LAN sharing service
+electron_1.ipcMain.handle('lan-share:stop', () => {
+    try {
+        lanSharingService.stop();
+        return { success: true };
+    }
+    catch (error) {
+        return { success: false, error: error.message };
+    }
+});
+// Get discovered peers
+electron_1.ipcMain.handle('lan-share:getPeers', () => {
+    return lanSharingService.getPeers();
+});
+// Share servers with peer
+electron_1.ipcMain.handle('lan-share:shareWithPeer', (event, peerId, servers, code) => {
+    const success = lanSharingService.shareWithPeer(peerId, servers, code);
+    return { success };
+});
+// Generate pairing code
+electron_1.ipcMain.handle('lan-share:generateCode', () => {
+    return lanSharingService.generatePairingCode();
+});
+// Decrypt received data
+electron_1.ipcMain.handle('lan-share:decrypt', (event, encrypted, code) => {
+    const decrypted = lanSharingService.decrypt(encrypted, code);
+    if (decrypted) {
+        try {
+            return { success: true, data: JSON.parse(decrypted) };
+        }
+        catch (err) {
+            return { success: false, error: 'Invalid data format' };
+        }
+    }
+    return { success: false, error: 'Decryption failed - wrong code?' };
+});
+// Get device info
+electron_1.ipcMain.handle('lan-share:getDeviceInfo', () => {
+    return lanSharingService.getDeviceInfo();
+});
+// Send ACK to peer
+electron_1.ipcMain.handle('lan-share:sendAck', (event, peerId, data) => {
+    const success = lanSharingService.sendAck(peerId, data);
+    return { success };
+});
+// Setup event forwarding to renderer
+lanSharingService.on('peer-found', (peer) => {
+    mainWindow?.webContents.send('lan-share:peer-found', peer);
+});
+lanSharingService.on('peer-lost', (peerId) => {
+    mainWindow?.webContents.send('lan-share:peer-lost', peerId);
+});
+lanSharingService.on('share-received', (data) => {
+    mainWindow?.webContents.send('lan-share:share-received', data);
+});
+lanSharingService.on('share-request', (data) => {
+    mainWindow?.webContents.send('lan-share:share-request', data);
+});
+lanSharingService.on('share-ack', (data) => {
+    mainWindow?.webContents.send('lan-share:ack-received', data);
+});
+// ==================== LAN File Transfer ====================
+// IPC Handlers for file transfer
+electron_1.ipcMain.handle('file-transfer:getDeviceInfo', () => {
+    return LANFileTransferService_1.lanFileTransferService.getDeviceInfo();
+});
+electron_1.ipcMain.handle('file-transfer:generateCode', () => {
+    return LANFileTransferService_1.lanFileTransferService.generatePairingCode();
+});
+// NEW FLOW: Sender prepares files and waits for receiver
+electron_1.ipcMain.handle('file-transfer:prepareToSend', async (event, filePaths, pairingCode) => {
+    try {
+        const result = LANFileTransferService_1.lanFileTransferService.prepareToSend(filePaths, pairingCode);
+        return { success: true, ...result };
+    }
+    catch (err) {
+        return { success: false, error: err.message };
+    }
+});
+// NEW FLOW: Receiver requests files from sender
+electron_1.ipcMain.handle('file-transfer:requestFiles', async (event, peerAddress, peerPort, pairingCode, savePath) => {
+    try {
+        const sessionId = await LANFileTransferService_1.lanFileTransferService.requestFiles(peerAddress, peerPort, pairingCode, savePath);
+        return { success: true, sessionId };
+    }
+    catch (err) {
+        return { success: false, error: err.message };
+    }
+});
+electron_1.ipcMain.handle('file-transfer:cancelTransfer', async (event, sessionId) => {
+    LANFileTransferService_1.lanFileTransferService.cancelTransfer(sessionId);
+    return { success: true };
+});
+electron_1.ipcMain.handle('file-transfer:getSessions', () => {
+    return LANFileTransferService_1.lanFileTransferService.getSessions();
+});
+electron_1.ipcMain.handle('file-transfer:selectFiles', async () => {
+    const result = await electron_1.dialog.showOpenDialog(mainWindow, {
+        title: 'Select Files to Send',
+        properties: ['openFile', 'multiSelections'],
+    });
+    if (result.canceled)
+        return { success: false, canceled: true };
+    return { success: true, filePaths: result.filePaths };
+});
+electron_1.ipcMain.handle('file-transfer:selectFolder', async () => {
+    const result = await electron_1.dialog.showOpenDialog(mainWindow, {
+        title: 'Select Folder to Send',
+        properties: ['openDirectory'],
+    });
+    if (result.canceled)
+        return { success: false, canceled: true };
+    return { success: true, filePaths: result.filePaths };
+});
+electron_1.ipcMain.handle('file-transfer:selectSaveLocation', async () => {
+    const result = await electron_1.dialog.showOpenDialog(mainWindow, {
+        title: 'Select Save Location',
+        properties: ['openDirectory', 'createDirectory'],
+    });
+    if (result.canceled)
+        return { success: false, canceled: true };
+    return { success: true, savePath: result.filePaths[0] };
+});
+// Event forwarding for file transfer
+LANFileTransferService_1.lanFileTransferService.on('transfer-request', (data) => {
+    mainWindow?.webContents.send('file-transfer:request', data);
+});
+LANFileTransferService_1.lanFileTransferService.on('transfer-waiting', (data) => {
+    mainWindow?.webContents.send('file-transfer:waiting', data);
+});
+LANFileTransferService_1.lanFileTransferService.on('transfer-connected', (data) => {
+    mainWindow?.webContents.send('file-transfer:connected', data);
+});
+LANFileTransferService_1.lanFileTransferService.on('transfer-fileinfo', (data) => {
+    mainWindow?.webContents.send('file-transfer:fileinfo', data);
+});
+LANFileTransferService_1.lanFileTransferService.on('transfer-started', (data) => {
+    mainWindow?.webContents.send('file-transfer:started', data);
+});
+LANFileTransferService_1.lanFileTransferService.on('transfer-progress', (data) => {
+    mainWindow?.webContents.send('file-transfer:progress', data);
+});
+LANFileTransferService_1.lanFileTransferService.on('transfer-completed', (data) => {
+    mainWindow?.webContents.send('file-transfer:completed', data);
+});
+LANFileTransferService_1.lanFileTransferService.on('transfer-error', (data) => {
+    mainWindow?.webContents.send('file-transfer:error', data);
+});
+LANFileTransferService_1.lanFileTransferService.on('transfer-cancelled', (data) => {
+    mainWindow?.webContents.send('file-transfer:cancelled', data);
+});
+// ==================== Find Sender by Code ====================
+// IPC handler for finding sender by pairing code (broadcasts to LAN)
+electron_1.ipcMain.handle('file-transfer:findSenderByCode', async (event, pairingCode) => {
+    lanSharingService.findSenderByCode(pairingCode);
+    return { success: true };
+});
+// IPC handler to set active pairing code when preparing to send
+electron_1.ipcMain.handle('file-transfer:setActivePairingCode', async (event, code) => {
+    lanSharingService.setActivePairingCode(code);
+    return { success: true };
+});
+// Event forwarding when sender is found via LAN broadcast
+lanSharingService.on('sender-found', (data) => {
+    mainWindow?.webContents.send('file-transfer:sender-found', data);
 });
 //# sourceMappingURL=index.js.map

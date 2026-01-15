@@ -759,6 +759,18 @@ export interface Translations {
   knockMarixStep5: string;
   knockMarixAutomatic: string;
   
+  lanShare: string;
+  thisDevice: string;
+  serversToShare: string;
+  noServersSelected: string;
+  lanShareSecurity: string;
+  pairingCode: string;
+  pairingCodeDesc: string;
+  availableDevices: string;
+  noDevicesFound: string;
+  shareOnLAN: string;
+  selectServersToShare: string;
+  
   localForwardDesc: string;
   remoteForwardDesc: string;
   dynamicForwardDesc: string;

@@ -42,13 +42,16 @@ export class ServerStore {
     return servers.find(server => server.id === id);
   }
 
-  addServer(server: Omit<ServerConfig, 'id' | 'createdAt'>): ServerConfig {
+  addServer(server: Omit<ServerConfig, 'id' | 'createdAt'> | ServerConfig): ServerConfig {
     const servers = this.getAllServers();
+    
+    // If server already has id and createdAt (e.g., from LAN import), use them
     const newServer: ServerConfig = {
-      ...server,
-      id: Date.now().toString(),
-      createdAt: Date.now(),
+      ...(server as ServerConfig),
+      id: (server as ServerConfig).id || Date.now().toString(),
+      createdAt: (server as ServerConfig).createdAt || Date.now(),
     };
+    
     servers.push(newServer);
     this.store.set('servers', servers);
     return newServer;

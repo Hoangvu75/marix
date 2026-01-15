@@ -128,20 +128,24 @@ class BackupService {
     }
     /**
      * Derive encryption key from password using Argon2id (hash-wasm)
+     * @param password - User password
+     * @param salt - Random salt
+     * @param kdfOptions - KDF options from backup file (for cross-machine compatibility)
      */
-    async deriveKey(password, salt, memoryCost) {
-        const options = getArgon2Options();
-        // Use provided memoryCost (for decryption) or auto-detected value
-        if (memoryCost) {
-            options.memoryCost = memoryCost;
-        }
+    async deriveKey(password, salt, kdfOptions) {
+        const defaultOptions = getArgon2Options();
+        // Use stored options from backup (for decryption) or auto-detected values (for encryption)
+        const memoryCost = kdfOptions?.memoryCost || defaultOptions.memoryCost;
+        const parallelism = kdfOptions?.parallelism || defaultOptions.parallelism;
+        const timeCost = kdfOptions?.timeCost || defaultOptions.timeCost;
+        console.log(`[BackupService] Argon2id: memoryCost=${memoryCost / 1024}MB, parallelism=${parallelism}, timeCost=${timeCost}`);
         const hash = await (0, hash_wasm_1.argon2id)({
             password: password,
             salt: salt,
-            parallelism: options.parallelism,
-            iterations: options.timeCost,
-            memorySize: options.memoryCost,
-            hashLength: options.hashLength,
+            parallelism: parallelism,
+            iterations: timeCost,
+            memorySize: memoryCost,
+            hashLength: KEY_LENGTH,
             outputType: 'binary',
         });
         return Buffer.from(hash);
@@ -150,9 +154,13 @@ class BackupService {
      * Encrypt data with password using Argon2id + AES-256-GCM
      */
     async encrypt(data, password) {
-        const memoryCost = getOptimalMemoryCost();
+        const options = getArgon2Options();
         const salt = crypto.randomBytes(SALT_LENGTH);
-        const key = await this.deriveKey(password, salt, memoryCost);
+        const key = await this.deriveKey(password, salt, {
+            memoryCost: options.memoryCost,
+            parallelism: options.parallelism,
+            timeCost: options.timeCost,
+        });
         const iv = crypto.randomBytes(IV_LENGTH);
         const cipher = crypto.createCipheriv(ALGORITHM, key, iv);
         const jsonData = JSON.stringify(data);
@@ -160,13 +168,15 @@ class BackupService {
         encrypted += cipher.final('base64');
         const authTag = cipher.getAuthTag();
         return {
-            version: '2.0', // Version 2.0 uses Argon2id
+            version: '2.1', // Version 2.1 stores all KDF params for cross-machine compatibility
             encrypted,
             salt: salt.toString('base64'),
             iv: iv.toString('base64'),
             authTag: authTag.toString('base64'),
             kdf: 'argon2id',
-            memoryCost, // Store memoryCost for cross-machine compatibility
+            memoryCost: options.memoryCost,
+            parallelism: options.parallelism,
+            timeCost: options.timeCost,
         };
     }
     /**
@@ -177,9 +187,16 @@ class BackupService {
             const salt = Buffer.from(encryptedBackup.salt, 'base64');
             const iv = Buffer.from(encryptedBackup.iv, 'base64');
             const authTag = Buffer.from(encryptedBackup.authTag, 'base64');
-            // Use stored memoryCost from backup or auto-detect
-            const memoryCost = encryptedBackup.memoryCost || getOptimalMemoryCost();
-            const key = await this.deriveKey(password, salt, memoryCost);
+            // Use stored KDF options from backup for cross-machine compatibility
+            // For old backups (v2.0), use defaults that match the original encryption machine
+            const defaultOptions = getArgon2Options();
+            const kdfOptions = {
+                memoryCost: encryptedBackup.memoryCost || defaultOptions.memoryCost,
+                parallelism: encryptedBackup.parallelism || defaultOptions.parallelism,
+                timeCost: encryptedBackup.timeCost || defaultOptions.timeCost,
+            };
+            console.log(`[BackupService] Decrypting backup v${encryptedBackup.version} with KDF options:`, kdfOptions);
+            const key = await this.deriveKey(password, salt, kdfOptions);
             const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
             decipher.setAuthTag(authTag);
             let decrypted = decipher.update(encryptedBackup.encrypted, 'base64', 'utf8');

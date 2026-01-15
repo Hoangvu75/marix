@@ -135,6 +135,8 @@
 
 ### 🛠️ Tools Bawaan
 
+- **LAN File Transfer**: Kirim file via LAN — Pengirim pilih file dan tampilkan kode 6 digit, Penerima masukkan kode untuk mencari pengirim dan terima file otomatis
+- **LAN Server Sharing**: Bagikan konfigurasi server — Pengirim pilih server dan kirim ke perangkat yang dipilih, Penerima masukkan kode untuk dekripsi dan impor
 - **DNS & Network**: A, AAAA, MX, TXT, SPF, CNAME, NS, SOA, PTR, Ping, Traceroute, TCP port, HTTP/HTTPS, SMTP, Blacklist, WHOIS, ARIN
 - **Cloudflare DNS Manager**: Kelola domain, record DNS, proxy Cloudflare
 - **SSH Key Manager**: Generate RSA-4096, Ed25519, ECDSA-521, import/export key

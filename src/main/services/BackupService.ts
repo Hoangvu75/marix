@@ -83,6 +83,8 @@ export interface EncryptedBackup {
   authTag: string;   // Base64 encoded
   kdf: 'argon2id';   // Key derivation function used
   memoryCost?: number; // Store memory cost used for decryption
+  parallelism?: number; // Store parallelism for cross-machine compatibility
+  timeCost?: number;    // Store iterations for cross-machine compatibility
 }
 
 export interface PasswordValidation {
@@ -153,21 +155,31 @@ export class BackupService {
 
   /**
    * Derive encryption key from password using Argon2id (hash-wasm)
+   * @param password - User password
+   * @param salt - Random salt
+   * @param kdfOptions - KDF options from backup file (for cross-machine compatibility)
    */
-  private async deriveKey(password: string, salt: Buffer, memoryCost?: number): Promise<Buffer> {
-    const options = getArgon2Options();
-    // Use provided memoryCost (for decryption) or auto-detected value
-    if (memoryCost) {
-      options.memoryCost = memoryCost;
-    }
+  private async deriveKey(
+    password: string, 
+    salt: Buffer, 
+    kdfOptions?: { memoryCost?: number; parallelism?: number; timeCost?: number }
+  ): Promise<Buffer> {
+    const defaultOptions = getArgon2Options();
+    
+    // Use stored options from backup (for decryption) or auto-detected values (for encryption)
+    const memoryCost = kdfOptions?.memoryCost || defaultOptions.memoryCost;
+    const parallelism = kdfOptions?.parallelism || defaultOptions.parallelism;
+    const timeCost = kdfOptions?.timeCost || defaultOptions.timeCost;
+    
+    console.log(`[BackupService] Argon2id: memoryCost=${memoryCost/1024}MB, parallelism=${parallelism}, timeCost=${timeCost}`);
     
     const hash = await argon2id({
       password: password,
       salt: salt,
-      parallelism: options.parallelism,
-      iterations: options.timeCost,
-      memorySize: options.memoryCost,
-      hashLength: options.hashLength,
+      parallelism: parallelism,
+      iterations: timeCost,
+      memorySize: memoryCost,
+      hashLength: KEY_LENGTH,
       outputType: 'binary',
     });
     return Buffer.from(hash);
@@ -177,9 +189,13 @@ export class BackupService {
    * Encrypt data with password using Argon2id + AES-256-GCM
    */
   async encrypt(data: BackupData, password: string): Promise<EncryptedBackup> {
-    const memoryCost = getOptimalMemoryCost();
+    const options = getArgon2Options();
     const salt = crypto.randomBytes(SALT_LENGTH);
-    const key = await this.deriveKey(password, salt, memoryCost);
+    const key = await this.deriveKey(password, salt, {
+      memoryCost: options.memoryCost,
+      parallelism: options.parallelism,
+      timeCost: options.timeCost,
+    });
     const iv = crypto.randomBytes(IV_LENGTH);
 
     const cipher = crypto.createCipheriv(ALGORITHM, key, iv) as crypto.CipherGCM;
@@ -191,13 +207,15 @@ export class BackupService {
     const authTag = cipher.getAuthTag();
 
     return {
-      version: '2.0', // Version 2.0 uses Argon2id
+      version: '2.1', // Version 2.1 stores all KDF params for cross-machine compatibility
       encrypted,
       salt: salt.toString('base64'),
       iv: iv.toString('base64'),
       authTag: authTag.toString('base64'),
       kdf: 'argon2id',
-      memoryCost, // Store memoryCost for cross-machine compatibility
+      memoryCost: options.memoryCost,
+      parallelism: options.parallelism,
+      timeCost: options.timeCost,
     };
   }
 
@@ -209,9 +227,18 @@ export class BackupService {
       const salt = Buffer.from(encryptedBackup.salt, 'base64');
       const iv = Buffer.from(encryptedBackup.iv, 'base64');
       const authTag = Buffer.from(encryptedBackup.authTag, 'base64');
-      // Use stored memoryCost from backup or auto-detect
-      const memoryCost = encryptedBackup.memoryCost || getOptimalMemoryCost();
-      const key = await this.deriveKey(password, salt, memoryCost);
+      
+      // Use stored KDF options from backup for cross-machine compatibility
+      // For old backups (v2.0), use defaults that match the original encryption machine
+      const defaultOptions = getArgon2Options();
+      const kdfOptions = {
+        memoryCost: encryptedBackup.memoryCost || defaultOptions.memoryCost,
+        parallelism: encryptedBackup.parallelism || defaultOptions.parallelism,
+        timeCost: encryptedBackup.timeCost || defaultOptions.timeCost,
+      };
+      
+      console.log(`[BackupService] Decrypting backup v${encryptedBackup.version} with KDF options:`, kdfOptions);
+      const key = await this.deriveKey(password, salt, kdfOptions);
 
       const decipher = crypto.createDecipheriv(ALGORITHM, key, iv) as crypto.DecipherGCM;
       decipher.setAuthTag(authTag);

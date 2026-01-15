@@ -135,6 +135,8 @@
 
 ### 🛠️ 내장 도구
 
+- **LAN 파일 전송**: LAN을 통해 파일 전송 — 발신자는 파일을 선택하고 6자리 코드를 표시, 수신자는 코드를 입력하여 발신자를 자동 검색하고 파일 수신
+- **LAN 서버 공유**: 서버 구성 공유 — 발신자는 서버를 선택하고 선택한 장치로 전송, 수신자는 코드를 입력하여 복호화하고 가져오기
 - **DNS 및 네트워크**: A, AAAA, MX, TXT, SPF, CNAME, NS, SOA, PTR, Ping, Traceroute, TCP 포트, HTTP/HTTPS, SMTP, 블랙리스트, WHOIS, ARIN
 - **Cloudflare DNS 관리자**: 도메인, DNS 레코드, Cloudflare 프록시 관리
 - **SSH 키 관리자**: RSA-4096, Ed25519, ECDSA-521 생성, 키 가져오기/내보내기

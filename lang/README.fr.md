@@ -135,6 +135,8 @@
 
 ### 🛠️ Outils Intégrés
 
+- **LAN File Transfer** : Envoyez des fichiers via LAN — L'expéditeur sélectionne les fichiers et affiche un code à 6 chiffres, le destinataire saisit le code pour trouver l'expéditeur et recevoir les fichiers automatiquement
+- **LAN Server Sharing** : Partagez les configurations de serveur — L'expéditeur sélectionne les serveurs et envoie au périphérique choisi, le destinataire saisit le code pour déchiffrer et importer
 - **DNS & Réseau** : A, AAAA, MX, TXT, SPF, CNAME, NS, SOA, PTR, Ping, Traceroute, port TCP, HTTP/HTTPS, SMTP, Blacklist, WHOIS, ARIN
 - **Gestionnaire DNS Cloudflare** : Gestion des domaines, enregistrements DNS, proxy Cloudflare
 - **Gestionnaire de Clés SSH** : Génération RSA-4096, Ed25519, ECDSA-521, import/export de clés

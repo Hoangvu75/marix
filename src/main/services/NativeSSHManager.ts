@@ -3,6 +3,65 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { EventEmitter } from 'events';
+import { execSync } from 'child_process';
+
+/**
+ * Find SSH executable path
+ * On Windows, node-pty needs full path to ssh.exe
+ */
+function findSSHExecutable(): string {
+  const isWindows = process.platform === 'win32';
+  
+  if (!isWindows) {
+    return 'ssh'; // Unix can use PATH
+  }
+  
+  // Windows: Try common SSH locations
+  const possiblePaths = [
+    // Windows 10/11 built-in OpenSSH
+    path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'OpenSSH', 'ssh.exe'),
+    // Git for Windows
+    path.join(process.env.ProgramFiles || 'C:\\Program Files', 'Git', 'usr', 'bin', 'ssh.exe'),
+    path.join(process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)', 'Git', 'usr', 'bin', 'ssh.exe'),
+    // Standalone OpenSSH
+    path.join(process.env.ProgramFiles || 'C:\\Program Files', 'OpenSSH', 'ssh.exe'),
+    // User's local bin
+    path.join(process.env.USERPROFILE || '', 'AppData', 'Local', 'Programs', 'Git', 'usr', 'bin', 'ssh.exe'),
+  ];
+  
+  for (const sshPath of possiblePaths) {
+    if (fs.existsSync(sshPath)) {
+      console.log('[NativeSSH] Found SSH at:', sshPath);
+      return sshPath;
+    }
+  }
+  
+  // Try to find via 'where' command
+  try {
+    const result = execSync('where ssh.exe', { encoding: 'utf8', timeout: 5000 });
+    const firstPath = result.split('\n')[0].trim();
+    if (firstPath && fs.existsSync(firstPath)) {
+      console.log('[NativeSSH] Found SSH via where:', firstPath);
+      return firstPath;
+    }
+  } catch {
+    // 'where' failed, ssh not in PATH
+  }
+  
+  // Fallback - let node-pty try to find it
+  console.warn('[NativeSSH] SSH not found in common paths, trying ssh.exe');
+  return 'ssh.exe';
+}
+
+// Cache SSH path
+let cachedSSHPath: string | null = null;
+
+function getSSHPath(): string {
+  if (!cachedSSHPath) {
+    cachedSSHPath = findSSHExecutable();
+  }
+  return cachedSSHPath;
+}
 
 export interface SSHConfig {
   host: string;
@@ -60,15 +119,28 @@ export class NativeSSHManager {
       // Write key to temp file (SSH requires file path)
       const tempDir = os.tmpdir();
       keyFilePath = path.join(tempDir, `ssh_key_${Date.now()}`);
-      fs.writeFileSync(keyFilePath, config.privateKey, { mode: 0o600 });
+      
+      // Ensure key has correct format:
+      // 1. Normalize line endings to LF (Unix style)
+      // 2. Ensure key ends with newline
+      let keyContent = config.privateKey.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+      if (!keyContent.endsWith('\n')) {
+        keyContent += '\n';
+      }
+      
+      fs.writeFileSync(keyFilePath, keyContent, { mode: 0o600 });
       sshArgs.unshift('-i', keyFilePath);
-      console.log('[NativeSSH] Using private key');
+      console.log('[NativeSSH] Using private key (normalized)');
     }
 
     console.log('[NativeSSH] Spawning:', 'ssh', sshArgs.join(' '));
 
+    // Get SSH executable path (important for Windows)
+    const sshPath = getSSHPath();
+    console.log('[NativeSSH] Using SSH path:', sshPath);
+
     // Spawn SSH process with PTY
-    const ptyProcess = pty.spawn('ssh', sshArgs, {
+    const ptyProcess = pty.spawn(sshPath, sshArgs, {
       name: 'xterm-256color',
       cols,
       rows,
@@ -80,38 +152,84 @@ export class NativeSSHManager {
     let passwordSent = false;
     let passphraseSent = false;
     let dataBuffer = '';
+    let lastBufferSize = 0;
+    let hideNextOutput = false;  // Flag to hide password prompt output
 
     // Forward data from PTY to emitter
     ptyProcess.onData((data: string) => {
       dataBuffer += data;
       
-      // Handle passphrase for encrypted key
+      // Keep buffer manageable (last 500 chars)
+      if (dataBuffer.length > 500) {
+        dataBuffer = dataBuffer.slice(-500);
+      }
+      
+      // Only check for prompts on new data
+      const newData = dataBuffer.slice(lastBufferSize);
+      lastBufferSize = dataBuffer.length;
+      const lowerData = data.toLowerCase();
+      const lowerBuffer = dataBuffer.toLowerCase();
+      
+      // Handle passphrase for encrypted key (check new data only)
       if (config.authType === 'key' && config.passphrase && !passphraseSent) {
-        if (dataBuffer.toLowerCase().includes('passphrase') || 
-            dataBuffer.toLowerCase().includes('enter passphrase')) {
-          console.log('[NativeSSH] Passphrase prompt detected');
+        const lowerNewData = newData.toLowerCase();
+        // Match common passphrase prompts
+        if (lowerNewData.includes('enter passphrase') || 
+            lowerNewData.includes('passphrase for') ||
+            (lowerNewData.includes('passphrase') && lowerNewData.includes(':'))) {
+          console.log('[NativeSSH] Passphrase prompt detected, sending passphrase');
           passphraseSent = true;
+          
+          // Send passphrase after small delay
           setTimeout(() => {
             ptyProcess.write(config.passphrase + '\r');
           }, 50);
+          
+          // Continue to emit the prompt data so user sees it
+          emitter.emit('data', data);
           return;
         }
       }
       
-      // Handle password authentication
-      if (config.password && !passwordSent && config.authType !== 'key') {
-        // Check for password prompt
-        if (dataBuffer.toLowerCase().includes('password:')) {
+      // Handle password authentication (only for password auth type)
+      if (config.authType === 'password' && config.password && !passwordSent) {
+        // Check for password prompt in current chunk OR buffer (Windows may split prompt)
+        const hasPasswordPrompt = 
+          lowerData.includes('password:') || 
+          lowerData.includes("'s password:") ||
+          lowerData.includes('password for') ||
+          lowerBuffer.includes("'s password:") ||
+          // Also check for partial patterns (Windows terminal may send char by char)
+          (lowerBuffer.endsWith('password:') || lowerBuffer.endsWith("'s password:"));
+        
+        if (hasPasswordPrompt) {
           console.log('[NativeSSH] Password prompt detected, sending password');
           passwordSent = true;
+          hideNextOutput = true;  // Hide any echoed output
           
           // Send password after small delay
           setTimeout(() => {
             ptyProcess.write(config.password + '\r');
           }, 50);
           
-          // Don't emit password prompt
+          // Stop hiding after password is processed
+          setTimeout(() => {
+            hideNextOutput = false;
+          }, 500);
+          
+          // Don't emit password prompt to keep it hidden
           return;
+        }
+      }
+      
+      // Skip output if hiding (during password entry)
+      if (hideNextOutput) {
+        // But allow through if it looks like we're past the password prompt
+        if (data.includes('Last login') || data.includes('Welcome') || 
+            data.includes('$') || data.includes('#') || data.includes('~')) {
+          hideNextOutput = false;
+        } else {
+          return;  // Hide this output
         }
       }
       

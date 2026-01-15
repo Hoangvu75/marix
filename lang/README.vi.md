@@ -135,6 +135,8 @@
 
 ### 🛠️ Built-in tools
 
+- **LAN File Transfer**: Gửi file qua LAN — Sender chọn file và hiện mã 6 số, Receiver nhập mã để tìm sender và nhận file tự động
+- **LAN Server Sharing**: Chia sẻ cấu hình server — Sender chọn server và gửi đến thiết bị đã chọn, Receiver nhập mã để giải mã và import
 - **DNS & Network**: A, AAAA, MX, TXT, SPF, CNAME, NS, SOA, PTR, Ping, Traceroute, TCP port, HTTP/HTTPS, SMTP, Blacklist, WHOIS, ARIN
 - **Cloudflare DNS Manager**: Quản lý domain, DNS records, Cloudflare proxy
 - **SSH Key Manager**: Generate RSA-4096, Ed25519, ECDSA-521, import/export key

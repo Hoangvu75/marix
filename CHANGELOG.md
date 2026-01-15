@@ -2,6 +2,47 @@
 
 All notable changes to Marix SSH Client will be documented in this file.
 
+## [1.0.3] - 2026-01-14
+
+### Added
+- **LAN File Transfer**: Send files directly to devices on local network
+  - **Sender flow**: Select files → Display 6-digit code → Wait for receiver to connect
+  - **Receiver flow**: Enter sender's code → Auto-find sender via UDP → Select save folder → Receive files
+  - TCP-based reliable transfer (port 45679) with 64KB chunks
+  - Real-time transfer progress with speed display
+  - Support multiple files and folders
+  - Cancel transfer anytime
+
+- **LAN Server Sharing**: Share server configurations across local network devices
+  - **Sender flow**: Select servers → Display 6-digit code → Select peer device → Send encrypted data
+  - **Receiver flow**: Receive notification → Enter sender's code to decrypt → Import servers
+  - UDP broadcast device discovery (port 45678)
+  - AES-256-CBC encryption with scrypt key derivation
+  - Option to include/exclude passwords and private keys
+  - Real-time peer discovery and status updates
+  - Auto-cleanup stale devices (30s timeout)
+
+### Translations
+- Added 20+ translation keys for LAN File Transfer in all 13 languages:
+  - `lanFileTransfer`, `sendFiles`, `receiveFiles`, `send`, `receive`
+  - `selectFilesToSend`, `selectFiles`, `selectFolder`, `yourPairingCode`
+  - `shareWithReceiver`, `waitingForReceiver`, `startSending`, `enterSenderCode`
+  - `enterCodeToFind`, `findSender`, `searchingSender`, `senderFound`
+  - `receiveFrom`, `startReceiving`, `transferProgress`, `transferCompleted`
+  - `transferFailed`, `transferCancelled`, `transferDirectly`, `noSenderFound`
+
+- Added 11 translation keys for LAN Server Sharing in all 13 languages:
+  - `lanShare`, `thisDevice`, `serversToShare`, `noServersSelected`
+  - `lanShareSecurity`, `pairingCode`, `pairingCodeDesc`
+  - `availableDevices`, `noDevicesFound`, `shareOnLAN`, `selectServersToShare`
+
+### Fixed
+- Fixed session ID mismatch between sender and receiver during file transfer
+- Fixed file count display showing 0 on receiver side
+- Fixed Vietnamese locale JSON syntax error (missing closing brace)
+
+---
+
 ## [1.0.2] - 2026-01-14
 
 ### Added
@@ -11,14 +52,6 @@ All notable changes to Marix SSH Client will be documented in this file.
   - Upload/download backup files
   - Integration with existing backup modal (4th tab)
   - Password-protected with Argon2id encryption
- 
-  - - **gitlab Cloud Backup**: New cloud backup option with OAuth authentication
-  - OAuth PKCE flow for secure authentication
-  - Encrypted backup storage on gitlab
-  - Upload/download backup files
-  - Integration with existing backup modal (4th tab)
-  - Password-protected with Argon2id encryption
-
 
 - **Port Knocking Security**: Advanced SSH security feature
   - TCP SYN packet sequence for pre-authentication

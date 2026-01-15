@@ -135,6 +135,8 @@
 
 ### 🛠️ Integrierte Werkzeuge
 
+- **LAN-Dateiübertragung**: Dateien via LAN senden — Absender wählt Dateien und zeigt 6-stelligen Code, Empfänger gibt Code ein um Absender zu finden und Dateien automatisch zu empfangen
+- **LAN-Server-Sharing**: Serverkonfigurationen teilen — Absender wählt Server und sendet an ausgewähltes Gerät, Empfänger gibt Code ein zum Entschlüsseln und Importieren
 - **DNS & Netzwerk**: A, AAAA, MX, TXT, SPF, CNAME, NS, SOA, PTR, Ping, Traceroute, TCP-Port, HTTP/HTTPS, SMTP, Blacklist, WHOIS, ARIN
 - **Cloudflare DNS-Manager**: Verwaltung von Domains, DNS-Einträgen, Cloudflare-Proxy
 - **SSH-Schlüsselmanager**: RSA-4096, Ed25519, ECDSA-521 generieren, Schlüssel importieren/exportieren

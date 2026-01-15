@@ -181,6 +181,33 @@ The app automatically detects your system RAM and adjusts encryption parameters 
 ### 🛠️ Built-in Tools
 
 <details>
+<summary><b>LAN File Transfer</b></summary>
+
+*Share files instantly between devices on your local network.*
+
+- **Sender**: Select files → Show 6-digit code → Wait for receiver
+- **Receiver**: Enter sender's code → Auto-find sender via UDP → Select save folder → Receive files
+- Real-time transfer progress with speed display
+- TCP-based reliable transfer (64KB chunks)
+- Send multiple files and folders
+- Works on WiFi and Ethernet
+
+</details>
+
+<details>
+<summary><b>LAN Server Sharing</b></summary>
+
+*Share server configurations with nearby devices securely.*
+
+- **Sender**: Select servers → Show 6-digit code → Select peer device → Send encrypted data
+- **Receiver**: Receive notification → Enter sender's code to decrypt → Import servers
+- AES-256-CBC encryption with scrypt key derivation
+- Auto-discover devices on local network
+- Option to include/exclude passwords and private keys
+
+</details>
+
+<details>
 <summary><b>DNS & Network Tools</b></summary>
 
 - A / AAAA / MX / TXT / SPF / CNAME / NS / SOA / PTR lookups

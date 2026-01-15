@@ -135,6 +135,8 @@
 
 ### 🛠️ Ferramentas Integradas
 
+- **LAN File Transfer**: Envie arquivos via LAN — Remetente seleciona arquivos e exibe código de 6 dígitos, Receptor digita o código para encontrar remetente e receber arquivos automaticamente
+- **LAN Server Sharing**: Compartilhe configurações de servidor — Remetente seleciona servidores e envia para dispositivo escolhido, Receptor digita código para descriptografar e importar
 - **DNS e Rede**: A, AAAA, MX, TXT, SPF, CNAME, NS, SOA, PTR, Ping, Traceroute, porta TCP, HTTP/HTTPS, SMTP, Lista Negra, WHOIS, ARIN
 - **Gerenciador DNS Cloudflare**: Gerenciar domínios, registros DNS, proxy Cloudflare
 - **Gerenciador de Chaves SSH**: Gerar RSA-4096, Ed25519, ECDSA-521, importar/exportar chaves

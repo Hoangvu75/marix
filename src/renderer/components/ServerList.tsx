@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useLanguage } from '../contexts/LanguageContext';
 
 interface Server {
@@ -18,6 +18,9 @@ interface Props {
   onConnect: (server: Server) => void;
   onEdit: (server: Server) => void;
   onDelete: (id: string) => void;
+  onShareOnLAN?: (serverIds: string[]) => void;
+  selectedServerIds?: string[];
+  onSelectionChange?: (ids: string[]) => void;
 }
 
 // Protocol colors and icons
@@ -74,10 +77,92 @@ const PROTOCOL_CONFIG: Record<string, { color: string; bgColor: string; icon: Re
   },
 };
 
-const ServerList: React.FC<Props> = ({ servers, onConnect, onEdit, onDelete }) => {
+const ServerList: React.FC<Props> = ({ 
+  servers, 
+  onConnect, 
+  onEdit, 
+  onDelete, 
+  onShareOnLAN,
+  selectedServerIds = [],
+  onSelectionChange,
+}) => {
   const { t } = useLanguage();
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; server: Server } | null>(null);
+  const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
+  const [showTagSelector, setShowTagSelector] = useState(false);
+
+  // Get all unique tags from servers
+  const allTags = useMemo(() => {
+    const tagSet = new Set<string>();
+    servers.forEach(server => {
+      server.tags?.forEach(tag => tagSet.add(tag));
+    });
+    return Array.from(tagSet).sort();
+  }, [servers]);
+
+  // Get tag statistics (count servers per tag)
+  const tagStats = useMemo(() => {
+    const stats: { [tag: string]: number } = {};
+    servers.forEach(server => {
+      server.tags?.forEach(tag => {
+        stats[tag] = (stats[tag] || 0) + 1;
+      });
+    });
+    return stats;
+  }, [servers]);
+
+  // Select servers by tag
+  const selectByTag = (tag: string) => {
+    if (!onSelectionChange) return;
+    const serversByTag = servers.filter(s => s.tags?.includes(tag)).map(s => s.id);
+    const newSelection = [...new Set([...selectedServerIds, ...serversByTag])];
+    onSelectionChange(newSelection);
+    setShowTagSelector(false);
+  };
+
+  // Toggle server selection
+  const toggleSelection = (serverId: string) => {
+    if (!onSelectionChange) return;
+    
+    const newSelection = selectedServerIds.includes(serverId)
+      ? selectedServerIds.filter(id => id !== serverId)
+      : [...selectedServerIds, serverId];
+    
+    onSelectionChange(newSelection);
+  };
+
+  // Select all visible servers
+  const selectAll = () => {
+    if (!onSelectionChange) return;
+    onSelectionChange(filteredServers.map(s => s.id));
+  };
+
+  // Clear selection
+  const clearSelection = () => {
+    if (!onSelectionChange) return;
+    onSelectionChange([]);
+    setIsMultiSelectMode(false);
+  };
+
+  // Close context menu on click outside
+  useEffect(() => {
+    const handleClick = () => {
+      setContextMenu(null);
+      setShowTagSelector(false);
+    };
+    if (contextMenu || showTagSelector) {
+      window.addEventListener('click', handleClick);
+      return () => window.removeEventListener('click', handleClick);
+    }
+  }, [contextMenu, showTagSelector]);
+
+  const handleContextMenu = (e: React.MouseEvent, server: Server) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setContextMenu({ x: e.clientX, y: e.clientY, server });
+  };
 
   // Filter servers by search
   const filteredServers = useMemo(() => {
@@ -108,29 +193,106 @@ const ServerList: React.FC<Props> = ({ servers, onConnect, onEdit, onDelete }) =
 
   return (
     <div className="h-full flex flex-col">
-      {/* Search */}
-      <div className="flex-shrink-0 px-4 pt-4 pb-3">
-        <div className="relative">
-          <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-          </svg>
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder={t('searchServers') || 'Search servers...'}
-            className="w-full pl-9 pr-8 py-2 bg-navy-800/60 border border-navy-700/50 rounded-lg text-sm text-white placeholder-gray-500 focus:outline-none focus:border-teal-500/50 transition-all"
-          />
-          {searchTerm && (
-            <button onClick={() => setSearchTerm('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white">
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          )}
+      {/* Search and LAN Discovery Toggle */}
+      <div className="flex-shrink-0 px-4 pt-4 pb-3 space-y-2">
+        <div className="flex items-center gap-2">
+          {/* Search input */}
+          <div className="relative flex-1">
+            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder={t('searchServers') || 'Search servers...'}
+              className="w-full pl-9 pr-8 py-2 bg-navy-800/60 border border-navy-700/50 rounded-lg text-sm text-white placeholder-gray-500 focus:outline-none focus:border-teal-500/50 transition-all"
+            />
+            {searchTerm && (
+              <button onClick={() => setSearchTerm('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white">
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            )}
+          </div>
         </div>
+        
+        {/* Multi-Select Controls - only show when selecting */}
+        {onShareOnLAN && isMultiSelectMode && (
+          <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 flex-1 flex-wrap">
+                <span className="text-xs text-gray-400">
+                  {selectedServerIds.length} selected
+                </span>
+                <button
+                  onClick={selectAll}
+                  className="text-xs px-2 py-1 text-teal-400 hover:text-teal-300 transition-colors"
+                >
+                  Select All
+                </button>
+                
+                {/* Select by Tag dropdown */}
+                {allTags.length > 0 && (
+                  <div className="relative">
+                    <button
+                      onClick={() => setShowTagSelector(!showTagSelector)}
+                      className="text-xs px-2 py-1 text-purple-400 hover:text-purple-300 transition-colors flex items-center gap-1"
+                    >
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                      </svg>
+                      By Tag
+                    </button>
+                    
+                    {showTagSelector && (
+                      <div 
+                        className="absolute top-full left-0 mt-1 bg-navy-800 border border-navy-700 rounded-lg shadow-xl z-50 min-w-[180px] max-h-[200px] overflow-y-auto"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {allTags.map(tag => (
+                          <button
+                            key={tag}
+                            onClick={() => selectByTag(tag)}
+                            className="w-full px-3 py-2 text-left text-xs text-white hover:bg-navy-700 transition-colors flex items-center justify-between gap-2"
+                          >
+                            <span className="truncate">{tag}</span>
+                            <span className="text-gray-500 text-[10px] bg-navy-900 px-1.5 py-0.5 rounded">
+                              {tagStats[tag]}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+                
+                <button
+                  onClick={clearSelection}
+                  className="text-xs px-2 py-1 text-gray-400 hover:text-white transition-colors"
+                >
+                  Clear
+                </button>
+                {selectedServerIds.length > 0 && (
+                  <button
+                    onClick={() => {
+                      onShareOnLAN(selectedServerIds);
+                      setIsMultiSelectMode(false);
+                    }}
+                    className="ml-auto text-xs px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-lg transition-colors flex items-center gap-1.5"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                    </svg>
+                    Share ({selectedServerIds.length})
+                  </button>
+                )}
+              </div>
+          </div>
+        )}
+        
         {searchTerm && (
-          <p className="text-xs text-gray-500 mt-2">{filteredServers.length} result{filteredServers.length !== 1 ? 's' : ''}</p>
+          <p className="text-xs text-gray-500">{filteredServers.length} result{filteredServers.length !== 1 ? 's' : ''}</p>
         )}
       </div>
 
@@ -148,6 +310,7 @@ const ServerList: React.FC<Props> = ({ servers, onConnect, onEdit, onDelete }) =
             {filteredServers.map(server => {
               const protocol = PROTOCOL_CONFIG[server.protocol || 'ssh'];
               const isHovered = hoveredId === server.id;
+              const isSelected = selectedServerIds.includes(server.id);
               const connectionStr = server.protocol === 'wss' 
                 ? (server.wssUrl || server.host)
                 : `${server.username}@${server.host}:${server.port}`;
@@ -156,14 +319,47 @@ const ServerList: React.FC<Props> = ({ servers, onConnect, onEdit, onDelete }) =
                 <div
                   key={server.id}
                   className={`group relative bg-navy-800 rounded-lg border transition-all duration-200 cursor-pointer ${
-                    isHovered 
+                    isSelected
+                      ? 'border-teal-500 shadow-lg shadow-teal-500/20 ring-2 ring-teal-500/30'
+                      : isHovered 
                       ? 'border-teal-500/50 shadow-lg shadow-teal-500/10' 
                       : 'border-navy-700 hover:border-navy-600'
                   }`}
                   onMouseEnter={() => setHoveredId(server.id)}
                   onMouseLeave={() => setHoveredId(null)}
-                  onClick={() => onConnect(server)}
+                  onClick={(e) => {
+                    if (isMultiSelectMode) {
+                      e.stopPropagation();
+                      toggleSelection(server.id);
+                    } else {
+                      onConnect(server);
+                    }
+                  }}
+                  onContextMenu={(e) => handleContextMenu(e, server)}
                 >
+                  {/* Multi-select checkbox */}
+                  {isMultiSelectMode && (
+                    <div className="absolute top-2 left-2 z-10">
+                      <div
+                        className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
+                          isSelected
+                            ? 'bg-teal-500 border-teal-500'
+                            : 'bg-navy-900 border-navy-600 hover:border-teal-500'
+                        }`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleSelection(server.id);
+                        }}
+                      >
+                        {isSelected && (
+                          <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                          </svg>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  
                   {/* Protocol indicator */}
                   <div 
                     className="absolute top-0 left-4 w-8 h-1 rounded-b-full"
@@ -240,6 +436,111 @@ const ServerList: React.FC<Props> = ({ servers, onConnect, onEdit, onDelete }) =
           </div>
         )}
       </div>
+
+      {/* Context Menu */}
+      {contextMenu && (
+        <div
+          className="fixed z-[9999] bg-navy-800 border border-navy-700 rounded-lg shadow-2xl py-1 min-w-[180px]"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            onClick={() => {
+              onConnect(contextMenu.server);
+              setContextMenu(null);
+            }}
+            className="w-full px-4 py-2 text-left text-sm text-white hover:bg-navy-700 flex items-center gap-2"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+            {t('connect')}
+          </button>
+          <button
+            onClick={() => {
+              onEdit(contextMenu.server);
+              setContextMenu(null);
+            }}
+            className="w-full px-4 py-2 text-left text-sm text-white hover:bg-navy-700 flex items-center gap-2"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+            </svg>
+            {t('edit')}
+          </button>
+          {onShareOnLAN && (
+            <>
+              <button
+                onClick={() => {
+                  onShareOnLAN([contextMenu.server.id]);
+                  setContextMenu(null);
+                }}
+                className="w-full px-4 py-2 text-left text-sm text-white hover:bg-navy-700 flex items-center gap-2"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                </svg>
+                {t('shareOnLAN')}
+              </button>
+              
+              {/* Share by tag submenu */}
+              {contextMenu.server.tags && contextMenu.server.tags.length > 0 && (
+                <div className="relative group/submenu">
+                  <button
+                    className="w-full px-4 py-2 text-left text-sm text-purple-400 hover:bg-navy-700 flex items-center justify-between gap-2"
+                  >
+                    <div className="flex items-center gap-2">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                      </svg>
+                      <span>Share by Tag</span>
+                    </div>
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </button>
+                  
+                  {/* Submenu */}
+                  <div className="absolute left-full top-0 ml-1 bg-navy-800 border border-navy-700 rounded-lg shadow-2xl py-1 min-w-[160px] opacity-0 invisible group-hover/submenu:opacity-100 group-hover/submenu:visible transition-all">
+                    {contextMenu.server.tags.map(tag => {
+                      const count = tagStats[tag] || 0;
+                      return (
+                        <button
+                          key={tag}
+                          onClick={() => {
+                            selectByTag(tag);
+                            setContextMenu(null);
+                            setIsMultiSelectMode(true);
+                          }}
+                          className="w-full px-3 py-2 text-left text-xs text-white hover:bg-navy-700 flex items-center justify-between gap-2"
+                        >
+                          <span className="truncate">{tag}</span>
+                          <span className="text-gray-500 text-[10px] bg-navy-900 px-1.5 py-0.5 rounded">
+                            {count}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+          <div className="border-t border-navy-700 my-1" />
+          <button
+            onClick={() => {
+              onDelete(contextMenu.server.id);
+              setContextMenu(null);
+            }}
+            className="w-full px-4 py-2 text-left text-sm text-red-400 hover:bg-red-500/10 flex items-center gap-2"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+            {t('delete')}
+          </button>
+        </div>
+      )}
     </div>
   );
 };

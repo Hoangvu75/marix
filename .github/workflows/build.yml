@@ -160,20 +160,26 @@ jobs:
             artifacts/macos-builds/*
           draft: false
           prerelease: false
-          generate_release_notes: true
+          generate_release_notes: false
           body: |
             ## Marix SSH Client ${{ steps.package-version.outputs.version }}
             
             ### Downloads
-            - **Linux**: AppImage, DEB, RPM
-            - **Windows**: EXE installer
-            - **macOS**: ZIP (Intel & Apple Silicon)
+            | Platform | File |
+            |----------|------|
+            | **Linux** | AppImage, DEB, RPM |
+            | **Windows** | EXE installer |
+            | **macOS** | ZIP (Intel & Apple Silicon) |
             
-            **macOS Installation**:
+            ### Installation
+            
+            **macOS**:
             1. Download and extract the ZIP file
             2. Right-click Marix.app → Open (bypass Gatekeeper)
             3. If blocked: System Settings → Privacy & Security → Open Anyway
             
-            See full changelog below.
+            ---
+            
+            📋 **[View Full Changelog](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md)**
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

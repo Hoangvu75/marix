@@ -135,6 +135,8 @@
 
 ### 🛠️ Alat Terbina Dalam
 
+- **LAN File Transfer**: Hantar fail via LAN — Pengirim pilih fail dan papar kod 6 digit, Penerima masukkan kod untuk cari pengirim dan terima fail secara automatik
+- **LAN Server Sharing**: Kongsi konfigurasi pelayan — Pengirim pilih pelayan dan hantar ke peranti yang dipilih, Penerima masukkan kod untuk nyahsulit dan import
 - **DNS & Rangkaian**: A, AAAA, MX, TXT, SPF, CNAME, NS, SOA, PTR, Ping, Traceroute, port TCP, HTTP/HTTPS, SMTP, Senarai Hitam, WHOIS, ARIN
 - **Pengurus DNS Cloudflare**: Urus domain, rekod DNS, proksi Cloudflare
 - **Pengurus Kunci SSH**: Jana RSA-4096, Ed25519, ECDSA-521, import/eksport kunci

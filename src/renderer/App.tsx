@@ -10,6 +10,10 @@ import ThemeSelector from './components/ThemeSelector';
 import LanguageSelector from './components/LanguageSelector';
 import SSHFingerprintModal from './components/SSHFingerprintModal';
 import SSHKeyManager from './components/SSHKeyManager';
+import LANShareModal from './components/LANShareModal';
+import LANFileTransferModal from './components/LANFileTransferModal';
+import LANFileTransferPage from './components/LANFileTransferPage';
+import PairCodePopup from './components/PairCodePopup';
 import KnownHostsPage from './components/KnownHostsPage';
 import TwoFactorPage from './components/TwoFactorPage';
 import PortForwardingPage from './components/PortForwardingPage';
@@ -62,7 +66,7 @@ const App: React.FC = () => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [currentTheme, setCurrentTheme] = useState('Dracula');
   const [appTheme, setAppTheme] = useState<'dark' | 'light'>('dark');
-  const [activeMenu, setActiveMenu] = useState<'hosts' | 'settings' | 'cloudflare' | 'nettools' | 'tools' | 'sshkeys' | 'knownhosts' | 'twofactor' | 'portforward' | 'about'>('hosts');
+  const [activeMenu, setActiveMenu] = useState<'hosts' | 'settings' | 'cloudflare' | 'nettools' | 'tools' | 'sshkeys' | 'knownhosts' | 'twofactor' | 'portforward' | 'about' | 'sendfiles'>('hosts');
   const [activeTag, setActiveTag] = useState<string | null>(null);  // Filter by tag
   const [tagSearch, setTagSearch] = useState('');  // Search tags
   const [tagColors, setTagColors] = useState<{ [key: string]: string }>({});  // Tag colors
@@ -154,7 +158,7 @@ const App: React.FC = () => {
     hasUpdate?: boolean;
   }>({ checking: false });
   const [showUpdateNotification, setShowUpdateNotification] = useState(false);
-  const APP_VERSION = '1.0.2';
+  const APP_VERSION = '1.0.3';
   const APP_AUTHOR = 'Đạt Vũ (Marix)';
   const GITHUB_REPO = 'https://github.com/marixdev/marix';
   
@@ -166,6 +170,17 @@ const App: React.FC = () => {
   
   // SSH Key Manager state
   const [showSSHKeyManager, setShowSSHKeyManager] = useState(false);
+  
+  // LAN Share Modal state
+  const [showLANShareModal, setShowLANShareModal] = useState(false);
+  const [selectedServerIdsForShare, setSelectedServerIdsForShare] = useState<string[]>([]);
+  const [lanShareMode, setLanShareMode] = useState<'send' | 'receive'>('send'); // send or receive mode
+  const [lanDiscoveryEnabled, setLanDiscoveryEnabled] = useState(false); // LAN discovery toggle
+  const [pendingIncomingShare, setPendingIncomingShare] = useState<any>(null); // Store incoming share for modal
+  const [showServerSelectionModal, setShowServerSelectionModal] = useState(false); // Server selection before share
+  const [showPairCodePopup, setShowPairCodePopup] = useState(false); // Inline popup for entering pair code
+  const [showLANFileTransfer, setShowLANFileTransfer] = useState(false); // File transfer modal
+  const [lanPeers, setLanPeers] = useState<{id: string; name: string; address: string; port: number}[]>([]); // LAN discovered peers
   
   // Connecting state (for UI feedback)
   const [connectingServerId, setConnectingServerId] = useState<string | null>(null);
@@ -258,6 +273,93 @@ const App: React.FC = () => {
       document.body.classList.remove('light-theme');
     }
   }, [appTheme]);
+
+  // Start/stop LAN discovery service based on toggle
+  useEffect(() => {
+    if (lanDiscoveryEnabled) {
+      console.log('[App] Starting LAN discovery service...');
+      ipcRenderer.invoke('lan-share:start').then(result => {
+        if (result.success) {
+          console.log('[App] LAN discovery service started');
+        } else {
+          console.error('[App] Failed to start LAN discovery:', result.error);
+        }
+      });
+    } else {
+      console.log('[App] Stopping LAN discovery service...');
+      ipcRenderer.invoke('lan-share:stop');
+    }
+  }, [lanDiscoveryEnabled]);
+
+  // Global LAN Share listener - show pair code popup when receiving share
+  useEffect(() => {
+    const handleIncomingShare = (_: any, data: any) => {
+      console.log('[App] Incoming share detected:', data);
+      
+      // Only process if LAN discovery is enabled
+      if (!lanDiscoveryEnabled) {
+        console.log('[App] LAN discovery disabled, ignoring incoming share');
+        return;
+      }
+      
+      // Store the incoming share data and show pair code popup
+      setPendingIncomingShare(data);
+      setShowPairCodePopup(true);
+      
+      // Show system notification
+      new Notification('Marix - Incoming Share', {
+        body: `${data.from} wants to share servers with you. Enter pairing code to import.`,
+        icon: 'icon/icon.png'
+      });
+    };
+
+    ipcRenderer.on('lan-share:share-received', handleIncomingShare);
+
+    return () => {
+      ipcRenderer.removeListener('lan-share:share-received', handleIncomingShare);
+    };
+  }, [lanDiscoveryEnabled]); // Re-register when toggle changes
+
+  // Listen for LAN peer discovery
+  useEffect(() => {
+    const handlePeerFound = (_: any, peer: any) => {
+      console.log('[App] Peer found:', peer);
+      setLanPeers(prev => {
+        const exists = prev.find(p => p.id === peer.id);
+        if (exists) return prev;
+        return [...prev, peer];
+      });
+    };
+
+    const handlePeerLost = (_: any, peerId: string) => {
+      console.log('[App] Peer lost:', peerId);
+      setLanPeers(prev => prev.filter(p => p.id !== peerId));
+    };
+
+    ipcRenderer.on('lan-share:peer-found', handlePeerFound);
+    ipcRenderer.on('lan-share:peer-lost', handlePeerLost);
+
+    // Get initial peers
+    if (lanDiscoveryEnabled) {
+      ipcRenderer.invoke('lan-share:getPeers').then(peers => {
+        setLanPeers(peers);
+      });
+    }
+
+    return () => {
+      ipcRenderer.removeListener('lan-share:peer-found', handlePeerFound);
+      ipcRenderer.removeListener('lan-share:peer-lost', handlePeerLost);
+    };
+  }, [lanDiscoveryEnabled]);
+
+  // Listen for main menu commands
+  useEffect(() => {
+    const handleSendFiles = () => setShowLANFileTransfer(true);
+    ipcRenderer.on('menu:send-files', handleSendFiles);
+    return () => {
+      ipcRenderer.removeListener('menu:send-files', handleSendFiles);
+    };
+  }, []);
 
   // Check GitLab/Box connection when backup modal opens
   useEffect(() => {
@@ -1801,6 +1903,17 @@ const App: React.FC = () => {
 
         {/* Window controls - not draggable */}
         <div className="flex items-center h-full" style={{ WebkitAppRegion: 'no-drag' } as any}>
+          {/* LAN Discovery toggle - only toggle, no icon */}
+          <div className="flex items-center px-2 h-full" title="LAN Discovery">
+            <button
+              onClick={() => setLanDiscoveryEnabled(!lanDiscoveryEnabled)}
+              className={`relative w-9 h-5 rounded-full transition-colors ${lanDiscoveryEnabled ? 'bg-teal-500' : 'bg-gray-600'}`}
+            >
+              <div 
+                className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-md transition-all duration-200 ${lanDiscoveryEnabled ? 'left-[18px]' : 'left-0.5'}`}
+              />
+            </button>
+          </div>
           {/* Language selector */}
           <LanguageSelector />
           {/* Theme toggle button */}
@@ -1941,6 +2054,21 @@ const App: React.FC = () => {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                 </svg>
                 <span className="text-sm font-medium">{t('tools')}</span>
+              </button>
+              
+              {/* Send Files via LAN */}
+              <button
+                onClick={() => { setActiveMenu('sendfiles'); setActiveSessionId(null); }}
+                className={`w-full px-3 py-2.5 rounded-lg flex items-center gap-3 mb-1 transition ${
+                  activeMenu === 'sendfiles' && !activeSessionId
+                    ? 'bg-cyan-600 !text-white'
+                    : appTheme === 'light' ? 'text-gray-600 hover:text-gray-900 hover:bg-gray-100' : 'text-gray-400 hover:text-white hover:bg-navy-700'
+                }`}
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                </svg>
+                <span className="text-sm font-medium">Send Files</span>
               </button>
               
               {/* Lookup */}
@@ -2090,6 +2218,13 @@ const App: React.FC = () => {
                   onConnect={handleConnect}
                   onEdit={handleEditServer}
                   onDelete={handleDeleteServer}
+                  onShareOnLAN={(serverIds) => {
+                    // Pre-select the server(s) and open selection modal
+                    setSelectedServerIdsForShare(serverIds);
+                    setShowServerSelectionModal(true);
+                  }}
+                  selectedServerIds={selectedServerIdsForShare}
+                  onSelectionChange={setSelectedServerIdsForShare}
                 />
               </div>
             </div>
@@ -3408,6 +3543,11 @@ const App: React.FC = () => {
             </div>
           )}
 
+          {/* Send Files Page */}
+          {activeMenu === 'sendfiles' && !activeSessionId && (
+            <LANFileTransferPage peers={lanPeers} appTheme={appTheme} />
+          )}
+
           {/* SSH Keys Page */}
           {activeMenu === 'sshkeys' && !activeSessionId && (
             <SSHKeyManager 
@@ -4063,6 +4203,173 @@ const App: React.FC = () => {
       {showSSHKeyManager && (
         <SSHKeyManager
           onClose={() => setShowSSHKeyManager(false)}
+        />
+      )}
+
+      {/* LAN Share Modal */}
+      {/* Server Selection Modal - Step before Share on LAN */}
+      {showServerSelectionModal && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className={`w-full max-w-2xl rounded-xl shadow-2xl border ${appTheme === 'light' ? 'bg-white border-gray-200' : 'bg-gray-900 border-gray-700'}`}>
+            <div className={`p-4 border-b ${appTheme === 'light' ? 'border-gray-200' : 'border-gray-700'}`}>
+              <h2 className={`text-lg font-bold ${appTheme === 'light' ? 'text-gray-900' : 'text-white'}`}>
+                Select Servers to Share
+              </h2>
+              <p className={`text-sm ${appTheme === 'light' ? 'text-gray-500' : 'text-gray-400'}`}>
+                Choose one or more servers to share via LAN
+              </p>
+            </div>
+            
+            <div className="p-4 max-h-[400px] overflow-y-auto">
+              {/* Quick select by tag */}
+              {allTags.length > 0 && (
+                <div className="mb-4">
+                  <p className={`text-xs font-medium mb-2 ${appTheme === 'light' ? 'text-gray-600' : 'text-gray-400'}`}>Quick select by tag:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {allTags.map(tag => (
+                      <button
+                        key={tag}
+                        onClick={() => {
+                          const serversByTag = servers.filter(s => s.tags?.includes(tag)).map(s => s.id);
+                          setSelectedServerIdsForShare(prev => [...new Set([...prev, ...serversByTag])]);
+                        }}
+                        className={`text-xs px-2 py-1 rounded-full border transition ${
+                          appTheme === 'light' 
+                            ? 'border-gray-300 text-gray-600 hover:bg-gray-100' 
+                            : 'border-gray-600 text-gray-300 hover:bg-gray-800'
+                        }`}
+                      >
+                        {tag} ({servers.filter(s => s.tags?.includes(tag)).length})
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
+              {/* Server list */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {servers.map(server => (
+                  <button
+                    key={server.id}
+                    onClick={() => {
+                      setSelectedServerIdsForShare(prev => 
+                        prev.includes(server.id) 
+                          ? prev.filter(id => id !== server.id)
+                          : [...prev, server.id]
+                      );
+                    }}
+                    className={`p-3 rounded-lg border text-left transition ${
+                      selectedServerIdsForShare.includes(server.id)
+                        ? 'border-teal-500 bg-teal-500/10'
+                        : appTheme === 'light' 
+                          ? 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                          : 'border-gray-700 hover:border-gray-600 hover:bg-gray-800'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      {selectedServerIdsForShare.includes(server.id) && (
+                        <svg className="w-4 h-4 text-teal-500" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                        </svg>
+                      )}
+                      <span className={`font-medium text-sm ${appTheme === 'light' ? 'text-gray-900' : 'text-white'}`}>
+                        {server.name}
+                      </span>
+                    </div>
+                    <p className={`text-xs mt-1 ${appTheme === 'light' ? 'text-gray-500' : 'text-gray-400'}`}>
+                      {server.host}:{server.port}
+                    </p>
+                  </button>
+                ))}
+              </div>
+            </div>
+            
+            <div className={`p-4 border-t flex justify-between items-center ${appTheme === 'light' ? 'border-gray-200' : 'border-gray-700'}`}>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setSelectedServerIdsForShare(servers.map(s => s.id))}
+                  className={`text-xs px-3 py-1.5 rounded ${appTheme === 'light' ? 'text-teal-600 hover:bg-teal-50' : 'text-teal-400 hover:bg-teal-900/20'}`}
+                >
+                  Select All
+                </button>
+                <button
+                  onClick={() => setSelectedServerIdsForShare([])}
+                  className={`text-xs px-3 py-1.5 rounded ${appTheme === 'light' ? 'text-gray-600 hover:bg-gray-100' : 'text-gray-400 hover:bg-gray-800'}`}
+                >
+                  Clear
+                </button>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    setShowServerSelectionModal(false);
+                    setSelectedServerIdsForShare([]);
+                  }}
+                  className={`px-4 py-2 rounded-lg ${appTheme === 'light' ? 'bg-gray-100 text-gray-700 hover:bg-gray-200' : 'bg-gray-700 text-white hover:bg-gray-600'}`}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    setShowServerSelectionModal(false);
+                    setLanShareMode('send');
+                    setShowLANShareModal(true);
+                  }}
+                  disabled={selectedServerIdsForShare.length === 0}
+                  className="px-4 py-2 bg-teal-600 hover:bg-teal-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded-lg flex items-center gap-2"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                  </svg>
+                  Share ({selectedServerIdsForShare.length})
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Pair Code Popup - Inline popup for receiver */}
+      {showPairCodePopup && pendingIncomingShare && (
+        <PairCodePopup
+          incomingShare={pendingIncomingShare}
+          onClose={() => {
+            setShowPairCodePopup(false);
+            setPendingIncomingShare(null);
+          }}
+          onSuccess={() => {
+            setShowPairCodePopup(false);
+            setPendingIncomingShare(null);
+            loadServers(); // Refresh server list
+          }}
+        />
+      )}
+
+      {showLANShareModal && (
+        <LANShareModal
+          servers={servers}
+          selectedServerIds={selectedServerIdsForShare}
+          mode={lanShareMode}
+          onClose={() => {
+            setShowLANShareModal(false);
+            setLanShareMode('send');
+            setSelectedServerIdsForShare([]);
+            setPendingIncomingShare(null);
+          }}
+          onServersImported={() => {
+            // Reload servers from storage
+            loadServers();
+          }}
+          initialIncomingShare={pendingIncomingShare}
+          onClearIncomingShare={() => setPendingIncomingShare(null)}
+        />
+      )}
+
+      {/* LAN File Transfer Modal */}
+      {showLANFileTransfer && (
+        <LANFileTransferModal
+          onClose={() => setShowLANFileTransfer(false)}
+          peers={lanPeers}
         />
       )}
 

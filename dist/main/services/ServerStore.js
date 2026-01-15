@@ -23,10 +23,11 @@ class ServerStore {
     }
     addServer(server) {
         const servers = this.getAllServers();
+        // If server already has id and createdAt (e.g., from LAN import), use them
         const newServer = {
             ...server,
-            id: Date.now().toString(),
-            createdAt: Date.now(),
+            id: server.id || Date.now().toString(),
+            createdAt: server.createdAt || Date.now(),
         };
         servers.push(newServer);
         this.store.set('servers', servers);
