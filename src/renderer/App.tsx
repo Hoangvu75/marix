@@ -164,7 +164,7 @@ const App: React.FC = () => {
     hasUpdate?: boolean;
   }>({ checking: false });
   const [showUpdateNotification, setShowUpdateNotification] = useState(false);
-  const APP_VERSION = '1.0.4';
+  const APP_VERSION = '1.0.5';
   const APP_AUTHOR = 'Đạt Vũ (Marix)';
   const GITHUB_REPO = 'https://github.com/marixdev/marix';
   
@@ -279,6 +279,43 @@ const App: React.FC = () => {
       document.body.classList.remove('light-theme');
     }
   }, [appTheme]);
+
+  // Global keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ctrl/Cmd + K for Quick Connect
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        setQuickConnectOpen(true);
+      }
+      // Ctrl/Cmd + Shift + L for LAN Discovery toggle
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'L') {
+        e.preventDefault();
+        setLanDiscoveryEnabled(prev => !prev);
+      }
+      // Ctrl/Cmd + Shift + O for Terminal/SFTP switch
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'O') {
+        e.preventDefault();
+        if (activeSession && activeSession.server.id !== 'local' && (activeSession.server.protocol === 'ssh' || !activeSession.server.protocol)) {
+          toggleSessionType();
+        }
+      }
+      // Ctrl/Cmd + Shift + A for Add New Host
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'A') {
+        e.preventDefault();
+        setEditingServer(null);
+        setShowModal(true);
+      }
+      // Ctrl/Cmd + Shift + T for Local Terminal
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'T') {
+        e.preventDefault();
+        openLocalTerminal();
+      }
+    };
+    
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [activeSession]);
 
   // Start/stop LAN discovery service based on toggle
   useEffect(() => {
@@ -1800,6 +1837,105 @@ const App: React.FC = () => {
   };
   
   // Separate function for SSH connection (called after fingerprint verification)
+  // Handle connect to SFTP directly (for SSH servers)
+  const handleConnectSFTP = async (server: Server) => {
+    try {
+      // Check if already connected to this server
+      const existingSession = sessions.find(s => s.server.id === server.id);
+      if (existingSession) {
+        // Switch to existing session and change to SFTP mode
+        setActiveSessionId(existingSession.id);
+        setSessions(sessions.map(s => 
+          s.id === existingSession.id ? { ...s, type: 'sftp' } : s
+        ));
+        setSidebarOpen(false);
+        return;
+      }
+
+      // Only SSH supports direct SFTP
+      const protocol = server.protocol || 'ssh';
+      if (protocol !== 'ssh') {
+        alert('Direct SFTP connection is only supported for SSH servers');
+        return;
+      }
+
+      setConnectingServerId(server.id);
+
+      // Check fingerprint first
+      const fingerprintResult = await ipcRenderer.invoke('knownhosts:check', server.host, server.port || 22);
+      
+      if (fingerprintResult.status === 'unknown' || fingerprintResult.status === 'changed') {
+        setFingerprintModal({
+          server,
+          onProceed: () => {
+            setFingerprintModal(null);
+            performSSHConnectSFTP(server);
+          },
+        });
+        return;
+      }
+      
+      await performSSHConnectSFTP(server);
+    } catch (err: any) {
+      setConnectingServerId(null);
+      alert('Error: ' + err.message);
+    }
+  };
+
+  // Perform SSH connection and open SFTP directly
+  const performSSHConnectSFTP = async (server: Server) => {
+    try {
+      console.log('[App] Performing SSH connection (SFTP mode) to:', server.host);
+      
+      const result = await ipcRenderer.invoke('ssh:connect', {
+        host: server.host,
+        port: server.port,
+        username: server.username,
+        password: server.password,
+        privateKey: server.privateKey,
+        passphrase: server.passphrase,
+        authType: server.authType || 'password',
+      });
+
+      if (!result.success) {
+        let errorMsg = result.error || 'Unknown error';
+        if (errorMsg.includes('ENOTFOUND')) {
+          errorMsg = `Cannot resolve hostname: ${server.host}`;
+        } else if (errorMsg.includes('ETIMEDOUT')) {
+          errorMsg = `Connection timed out to ${server.host}:${server.port}`;
+        } else if (errorMsg.includes('ECONNREFUSED')) {
+          errorMsg = `Connection refused by ${server.host}:${server.port}`;
+        } else if (errorMsg.includes('authentication')) {
+          errorMsg = `Authentication failed`;
+        }
+        setConnectingServerId(null);
+        alert('Connection failed:\n\n' + errorMsg);
+        return;
+      }
+
+      // Create session with SFTP mode directly
+      const sftpSession: Session = {
+        id: `term-${Date.now()}`,
+        server,
+        connectionId: result.connectionId,
+        type: 'sftp',  // Open SFTP directly
+        theme: currentTheme,
+      };
+
+      setSessions(prev => [...prev, sftpSession]);
+      setActiveSessionId(sftpSession.id);
+      setSidebarOpen(false);
+      setConnectingServerId(null);
+      
+      console.log('[App] SFTP Session created:', sftpSession.id);
+      fetchOsInfo(sftpSession.id, result.connectionId);
+    } catch (err: any) {
+      console.error('[App] SSH SFTP Connection error:', err);
+      setConnectingServerId(null);
+      alert('Error: ' + (err.message || 'Unknown error'));
+    }
+  };
+
   const performSSHConnect = async (server: Server) => {
     try {
       console.log('[App] Performing SSH connection to:', server.host);
@@ -2054,11 +2190,8 @@ const App: React.FC = () => {
           </div>
         </div>
         
-        {/* Draggable spacer for macOS */}
-        <div className="flex-1 h-full min-w-[50px]" style={{ WebkitAppRegion: 'drag' } as any} />
-        
         {/* Tabs - not draggable */}
-        <div className="flex items-center h-full overflow-x-auto max-w-[calc(100%-200px)]" style={{ WebkitAppRegion: 'no-drag' } as any}>
+        <div className="flex items-center h-full overflow-x-auto" style={{ WebkitAppRegion: 'no-drag' } as any}>
           {sessions.map(session => {
             const protocol = session.server.protocol || 'ssh';
             const protocolConfig = {
@@ -2109,17 +2242,20 @@ const App: React.FC = () => {
             );
           })}
           
-          {/* New tab button */}
+          {/* New tab button (Quick Connect) - after tabs */}
           <button
             onClick={() => setQuickConnectOpen(true)}
-            className="px-3 h-full text-gray-500 hover:text-white hover:bg-navy-700 transition"
-            title={t('quickConnect')}
+            className="px-3 h-full text-gray-500 hover:text-white hover:bg-navy-700 transition flex items-center gap-1"
+            title={`${t('quickConnect')} (${navigator.platform.includes('Mac') ? '⌘' : 'Ctrl'}+K)`}
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
           </button>
         </div>
+        
+        {/* Draggable spacer for macOS */}
+        <div className="flex-1 h-full min-w-[50px]" style={{ WebkitAppRegion: 'drag' } as any} />
 
         {/* Window controls - not draggable */}
         <div className="flex items-center h-full" style={{ WebkitAppRegion: 'no-drag' } as any}>
@@ -2436,6 +2572,7 @@ const App: React.FC = () => {
                 <ServerList
                   servers={filteredServers}
                   onConnect={handleConnect}
+                  onConnectSFTP={handleConnectSFTP}
                   onEdit={handleEditServer}
                   onDelete={handleDeleteServer}
                   onShareOnLAN={(serverIds) => {

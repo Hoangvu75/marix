@@ -112,6 +112,7 @@ export interface Translations {
   newFile: string;
   delete: string;
   rename: string;
+  enterNewName: string;
   back: string;
   forward: string;
   parent: string;

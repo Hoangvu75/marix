@@ -151,6 +151,38 @@ class SFTPManager {
             });
         });
     }
+    async rename(connectionId, oldPath, newPath) {
+        const sftp = this.sftpConnections.get(connectionId);
+        if (!sftp) {
+            throw new Error('SFTP connection not found');
+        }
+        return new Promise((resolve, reject) => {
+            sftp.rename(oldPath, newPath, (err) => {
+                if (err) {
+                    reject(err);
+                    return;
+                }
+                console.log('[SFTPManager] Renamed:', oldPath, '->', newPath);
+                resolve();
+            });
+        });
+    }
+    async deleteDirectory(connectionId, remotePath) {
+        const sftp = this.sftpConnections.get(connectionId);
+        if (!sftp) {
+            throw new Error('SFTP connection not found');
+        }
+        return new Promise((resolve, reject) => {
+            sftp.rmdir(remotePath, (err) => {
+                if (err) {
+                    reject(err);
+                    return;
+                }
+                console.log('[SFTPManager] Deleted directory:', remotePath);
+                resolve();
+            });
+        });
+    }
     disconnect(connectionId) {
         const sftp = this.sftpConnections.get(connectionId);
         if (sftp) {

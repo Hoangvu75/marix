@@ -632,6 +632,28 @@ electron_1.ipcMain.handle('sftp:chmod', async (event, connectionId, remotePath, 
         return { success: false, error: error.message };
     }
 });
+electron_1.ipcMain.handle('sftp:rename', async (event, connectionId, oldPath, newPath) => {
+    try {
+        console.log('[Main] sftp:rename', connectionId, oldPath, '->', newPath);
+        await sftpManager.rename(connectionId, oldPath, newPath);
+        return { success: true };
+    }
+    catch (error) {
+        console.error('[Main] sftp:rename error:', error.message);
+        return { success: false, error: error.message };
+    }
+});
+electron_1.ipcMain.handle('sftp:deleteDir', async (event, connectionId, remotePath) => {
+    try {
+        console.log('[Main] sftp:deleteDir', connectionId, remotePath);
+        await sftpManager.deleteDirectory(connectionId, remotePath);
+        return { success: true };
+    }
+    catch (error) {
+        console.error('[Main] sftp:deleteDir error:', error.message);
+        return { success: false, error: error.message };
+    }
+});
 // Server storage handlers
 electron_1.ipcMain.handle('servers:getAll', async () => {
     try {

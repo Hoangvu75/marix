@@ -268,7 +268,7 @@ export const BackupModal: React.FC<BackupModalProps> = ({
               <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M2 5.5C2 4.67 2.67 4 3.5 4h17c.83 0 1.5.67 1.5 1.5v13c0 .83-.67 1.5-1.5 1.5h-17c-.83 0-1.5-.67-1.5-1.5v-13zm2 1.5v11h16V7H4z"/>
               </svg>
-              Box
+              Box.net
             </div>
           </button>
         </div>

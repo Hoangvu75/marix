@@ -2,6 +2,33 @@
 
 All notable changes to Marix SSH Client will be documented in this file.
 
+## [1.0.5] - 2026-01-16
+
+### Added
+- **Comprehensive English User Guide**: 1,300+ lines step-by-step documentation covering all features
+  - 17 detailed sections with visual diagrams
+  - Step-by-step instructions for every feature
+  - Tables showing all form fields and options
+  - Troubleshooting guides for common issues
+  - Keyboard shortcuts reference
+  - Tips and best practices
+- **Keyboard Shortcuts**: Global keyboard shortcuts for common actions
+  - `Ctrl/⌘+K`: Quick Connect
+  - `Ctrl/⌘+Shift+A`: Add New Host
+  - `Ctrl/⌘+Shift+T`: Open Local Terminal
+  - `Ctrl/⌘+Shift+L`: Toggle LAN Discovery
+  - `Ctrl/⌘+Shift+O`: Toggle Terminal/SFTP view
+- **Direct SFTP Connect**: Right-click SSH server → "SFTP" to open file browser directly without terminal
+
+### Changed
+- **Backup Provider Names**: Changed "Box" to "Box.net" across all 14 languages for clarity
+
+### Technical
+- Updated all locale files (14 languages) to use "Box.net" instead of "Box"
+- Added `onConnectSFTP` prop to ServerList component
+- Implemented `handleConnectSFTP` function in App.tsx
+- Added context menu item "SFTP" for SSH protocol servers only
+
 ## [1.0.4] - 2026-01-16
 
 ### Added
