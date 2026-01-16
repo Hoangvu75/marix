@@ -171,6 +171,28 @@
 - 🛡️ **抗暴力破解** — Argon2id每次尝试需要16-64MB内存
 - ✅ **防篡改** — AES-GCM检测任何修改
 
+### Google Drive 备份 (零知识)
+
+Marix 现在支持加密的端到端备份到您的 Google Drive。除了您的主密码，没有人可以访问您的数据——甚至 Google 也不行。
+
+> 📘 **设置指南**: [../docs/google/GOOGLE_DRIVE_SETUP.zh.md](../docs/google/GOOGLE_DRIVE_SETUP.zh.md)
+
+1. **创建 Google Cloud 项目**并启用 Drive API
+2. **创建 OAuth 2.0 凭据**（桌面应用）
+3. **下载 JSON 文件**并保存为 `google-credentials.json`
+4. **在 Marix 中连接** → 应用将打开浏览器进行身份验证
+
+#### 工作原理
+
+```
+[您的密码] → Argon2id KDF → AES-256-GCM → [加密文件] → Google Drive
+```
+
+- ✅ **零知识**：密码永远不会离开您的设备
+- ✅ **端到端加密**：Google 只能看到加密的二进制数据
+- ✅ **无服务器**：数据直接从 PC 流向 Drive
+- ✅ **恢复**：使用密码从任何地方恢复
+
 ### GitHub备份（零知识）
 
 1. **用GitHub登录** → 设备码出现 → 浏览器打开 → 授权 → 自动创建`marix-backup`仓库

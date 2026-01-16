@@ -171,6 +171,50 @@ Toutes les sauvegardes utilisent **Argon2id** et **AES-256-GCM** :
 - 🛡️ **Résistant au brute-force** — Argon2id nécessite 16-64 Mo de RAM par tentative
 - ✅ **Anti-falsification** — AES-GCM détecte toute modification
 
+### Sauvegarde Google Drive (Zero-Knowledge)
+
+Marix prend désormais en charge les sauvegardes chiffrées de bout en bout vers votre Google Drive. Personne ne peut accéder à vos données—même pas Google—sans votre mot de passe maître.
+
+> 📘 **Guide de configuration**: [../docs/google/GOOGLE_DRIVE_SETUP.fr.md](../docs/google/GOOGLE_DRIVE_SETUP.fr.md)
+
+1. **Créer un projet Google Cloud** et activer l'API Drive
+2. **Créer des identifiants OAuth 2.0** (application de bureau)
+3. **Télécharger le fichier JSON** et l'enregistrer sous `google-credentials.json`
+4. **Se connecter dans Marix** → l'application ouvrira le navigateur pour l'authentification
+
+#### Fonctionnement
+
+```
+[Votre mot de passe] → Argon2id KDF → AES-256-GCM → [Fichier chiffré] → Google Drive
+```
+
+- ✅ **Zero-knowledge**: Le mot de passe ne quitte jamais votre appareil
+- ✅ **Chiffrement de bout en bout**: Google ne voit que des données chiffrées
+- ✅ **Sans serveur**: Les données vont directement du PC au Drive
+- ✅ **Récupération**: Restauration depuis n'importe où avec le mot de passe
+
+### Sauvegarde Google Drive (Zero-Knowledge)
+
+Marix prend désormais en charge les sauvegardes chiffrées de bout en bout vers votre Google Drive. Personne ne peut accéder à vos données—même pas Google—sans votre mot de passe maître.
+
+> 📘 **Guide de configuration**: [../docs/google/GOOGLE_DRIVE_SETUP.fr.md](../docs/google/GOOGLE_DRIVE_SETUP.fr.md)
+
+1. **Créer un projet Google Cloud** et activer l'API Drive
+2. **Créer des identifiants OAuth 2.0** (application de bureau)
+3. **Télécharger le fichier JSON** et l'enregistrer sous `google-credentials.json`
+4. **Se connecter dans Marix** → l'application ouvrira le navigateur pour l'authentification
+
+#### Fonctionnement
+
+```
+[Votre mot de passe] → Argon2id KDF → AES-256-GCM → [Fichier chiffré] → Google Drive
+```
+
+- ✅ **Zero-knowledge**: Le mot de passe ne quitte jamais votre appareil
+- ✅ **Chiffrement de bout en bout**: Google ne voit que des données chiffrées
+- ✅ **Sans serveur**: Les données vont directement du PC au Drive
+- ✅ **Récupération**: Restauration depuis n'importe où avec le mot de passe
+
 ### Sauvegarde GitHub (Zero-Knowledge)
 
 1. **Connexion avec GitHub** → Code d'appareil affiché → Navigateur s'ouvre → Autoriser → Dépôt `marix-backup` créé automatiquement

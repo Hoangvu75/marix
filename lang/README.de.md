@@ -171,6 +171,28 @@ Alle Backups verwenden **Argon2id** und **AES-256-GCM**:
 - 🛡️ **Brute-Force-resistent** — Argon2id benötigt 16-64 MB RAM pro Versuch
 - ✅ **Manipulationssicher** — AES-GCM erkennt jede Änderung
 
+### Google Drive Backup (Zero-Knowledge)
+
+Marix unterstützt jetzt verschlüsselte Ende-zu-Ende-Backups in Ihr Google Drive. Niemand kann auf Ihre Daten zugreifen—nicht einmal Google—ohne Ihr Master-Passwort.
+
+> 📘 **Setup-Anleitung**: [../docs/google/GOOGLE_DRIVE_SETUP.de.md](../docs/google/GOOGLE_DRIVE_SETUP.de.md)
+
+1. **Google Cloud-Projekt erstellen** und Drive-API aktivieren
+2. **OAuth 2.0-Anmeldedaten erstellen** (Desktop-App)
+3. **JSON-Datei herunterladen** und als `google-credentials.json` speichern
+4. **In Marix verbinden** → App öffnet Browser zur Authentifizierung
+
+#### Funktionsweise
+
+```
+[Ihr Passwort] → Argon2id KDF → AES-256-GCM → [Verschlüsselte Datei] → Google Drive
+```
+
+- ✅ **Zero-Knowledge**: Passwort verlässt nie Ihr Gerät
+- ✅ **Ende-zu-Ende-Verschlüsselung**: Google sieht nur verschlüsselte Daten
+- ✅ **Kein Server**: Daten fließen direkt vom PC zum Drive
+- ✅ **Wiederherstellung**: Von überall mit Passwort wiederherstellen
+
 ### GitHub-Backup (Zero-Knowledge)
 
 1. **Mit GitHub anmelden** → Gerätecode erscheint → Browser öffnet → Autorisieren → `marix-backup` Repository wird automatisch erstellt

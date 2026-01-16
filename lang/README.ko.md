@@ -171,6 +171,28 @@
 - 🛡️ **브루트 포스 저항** — Argon2id는 시도당 16-64MB RAM 필요
 - ✅ **변조 방지** — AES-GCM이 모든 수정 감지
 
+### Google Drive 백업 (제로 지식)
+
+Marix는 이제 Google Drive에 대한 암호화된 엔드투엔드 백업을 지원합니다. 마스터 비밀번호 없이는 아무도 데이터에 접근할 수 없습니다—Google도 마찬가지입니다.
+
+> 📘 **설정 가이드**: [../docs/google/GOOGLE_DRIVE_SETUP.ko.md](../docs/google/GOOGLE_DRIVE_SETUP.ko.md)
+
+1. **Google Cloud 프로젝트 생성** 및 Drive API 활성화
+2. **OAuth 2.0 인증 정보 생성** (데스크톱 앱)
+3. **JSON 파일 다운로드** 후 `google-credentials.json`으로 저장
+4. **Marix에서 연결** → 앱이 인증을 위해 브라우저를 엽니다
+
+#### 작동 방식
+
+```
+[비밀번호] → Argon2id KDF → AES-256-GCM → [암호화된 파일] → Google Drive
+```
+
+- ✅ **제로 지식**: 비밀번호는 장치를 떠나지 않습니다
+- ✅ **엔드투엔드 암호화**: Google은 암호화된 데이터만 봅니다
+- ✅ **서버 없음**: 데이터가 PC에서 Drive로 직접 전송됩니다
+- ✅ **복구**: 비밀번호로 어디서나 복원 가능
+
 ### GitHub 백업 (제로-놀리지)
 
 1. **GitHub으로 로그인** → 기기 코드 표시 → 브라우저 열림 → 승인 → `marix-backup` 저장소 자동 생성

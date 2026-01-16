@@ -16,7 +16,7 @@
   <img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue" alt="Platform">
   <img src="https://img.shields.io/badge/license-GPL--3.0-blue" alt="License">
   <img src="https://img.shields.io/badge/zero--knowledge-🔒-critical" alt="Zero Knowledge">
-  <img src="https://img.shields.io/badge/version-1.0.0-orange" alt="Version">
+  <img src="https://img.shields.io/badge/version-1.0.4-orange" alt="Version">
 </p>
 
 <p align="center">
@@ -308,6 +308,52 @@ Export all your data as an encrypted \`.marix\` file:
    - 1 uppercase, 1 lowercase, 1 number, 1 special character
 3. **Export** - File is encrypted before saving
 4. **Store safely** - Keep the backup file and remember your password
+
+### Google Drive Backup (Zero-Knowledge)
+
+Securely sync your encrypted backup to your Google Drive:
+
+#### Setup
+
+> 📘 **Setup Guide**: [Google Drive Setup Documentation](docs/google/GOOGLE_DRIVE_SETUP.en.md)
+
+1. **Configure OAuth Credentials**:
+   - Create a Google Cloud Project
+   - Enable Google Drive API
+   - Create OAuth 2.0 Client ID
+   - Download credentials JSON file
+   - Save as `src/main/services/google-credentials.json`
+
+2. **Connect in Marix**:
+   - Go to Settings → Backup & Restore → Google Drive
+   - Click "Connect to Google Drive"
+   - Browser opens for Google OAuth
+   - Grant permissions
+   - App receives secure token
+
+3. **Create Backup**:
+   - Enter encryption password (10+ characters)
+   - Click "Create Backup"
+   - File uploaded to "Marix Backups" folder on Drive
+
+4. **Restore Backup**:
+   - Click "Restore from Google Drive"
+   - Enter your backup password
+   - All servers and settings restored
+
+#### How It Works
+
+```
+[Your Data] → [Argon2id + AES-256] → [Encrypted Blob] → [Google Drive]
+                   ↑
+            Your Password
+            (never uploaded)
+```
+
+- ✅ **End-to-end encrypted** - Data encrypted before leaving your device
+- ✅ **Zero-knowledge** - Google only sees encrypted blobs
+- ✅ **Your keys only** - OAuth tokens stored locally
+- ✅ **Private backup folder** - Files only accessible by your app
 
 ### GitHub Backup (Zero-Knowledge)
 

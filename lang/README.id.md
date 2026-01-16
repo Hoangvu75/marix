@@ -171,6 +171,28 @@ Semua backup menggunakan **Argon2id** dan **AES-256-GCM**:
 - 🛡️ **Tahan brute-force** — Argon2id membutuhkan 16-64MB RAM per percobaan
 - ✅ **Tahan manipulasi** — AES-GCM mendeteksi modifikasi apapun
 
+### Google Drive Backup (Zero-Knowledge)
+
+Marix sekarang mendukung backup terenkripsi end-to-end ke Google Drive Anda. Tidak ada yang bisa mengakses data Anda—bahkan Google—tanpa password master Anda.
+
+> 📘 **Panduan Pengaturan**: [../docs/google/GOOGLE_DRIVE_SETUP.id.md](../docs/google/GOOGLE_DRIVE_SETUP.id.md)
+
+1. **Buat Google Cloud Project** dan aktifkan Drive API
+2. **Buat OAuth 2.0 Credentials** (Desktop app)
+3. **Download file JSON** dan simpan sebagai `google-credentials.json`
+4. **Koneksi di Marix** → app akan membuka browser untuk autentikasi
+
+#### Cara Kerjanya
+
+```
+[Password Anda] → Argon2id KDF → AES-256-GCM → [File Terenkripsi] → Google Drive
+```
+
+- ✅ **Zero-knowledge**: Password tidak pernah meninggalkan perangkat Anda
+- ✅ **End-to-end encryption**: Google hanya melihat blob terenkripsi
+- ✅ **Tidak ada server**: Data mengalir langsung dari PC → Drive
+- ✅ **Recovery**: Restore dari mana saja dengan password
+
 ### Backup GitHub (Zero-Knowledge)
 
 1. **Login dengan GitHub** → Kode perangkat muncul → Browser terbuka → Izinkan → Repository `marix-backup` otomatis dibuat

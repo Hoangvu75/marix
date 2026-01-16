@@ -1,11 +1,11 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { ipcRenderer } from 'electron';
 
 interface BackupModalProps {
   mode: 'create' | 'restore';
   onClose: () => void;
-  backupMethod: 'local' | 'github' | 'gitlab' | 'box';
-  onMethodChange: (method: 'local' | 'github' | 'gitlab' | 'box') => void;
+  backupMethod: 'local' | 'gdrive' | 'github' | 'gitlab' | 'box';
+  onMethodChange: (method: 'local' | 'gdrive' | 'github' | 'gitlab' | 'box') => void;
   password: string;
   onPasswordChange: (password: string) => void;
   confirmPassword: string;
@@ -30,6 +30,14 @@ interface BackupModalProps {
   onGitHubLogout: () => void;
   onGitHubBackup: () => void;
   onGitHubRestore: () => void;
+  gdriveConnected: boolean;
+  gdriveConnecting: boolean;
+  gdriveBackupInfo: { exists: boolean; metadata?: any } | null;
+  gdriveUser: { displayName: string; emailAddress: string; photoLink?: string } | null;
+  onGDriveConnect: () => void;
+  onGDriveDisconnect: () => void;
+  onGDriveBackup: () => void;
+  onGDriveRestore: () => void;
   boxConnected: boolean;
   boxConnecting: boolean;
   boxBackupInfo: { exists: boolean; metadata?: any } | null;
@@ -69,6 +77,14 @@ export const BackupModal: React.FC<BackupModalProps> = ({
   onGitHubLogout,
   onGitHubBackup,
   onGitHubRestore,
+  gdriveConnected,
+  gdriveConnecting,
+  gdriveBackupInfo,
+  gdriveUser,
+  onGDriveConnect,
+  onGDriveDisconnect,
+  onGDriveBackup,
+  onGDriveRestore,
   boxConnected,
   boxConnecting,
   boxBackupInfo,
@@ -78,12 +94,41 @@ export const BackupModal: React.FC<BackupModalProps> = ({
   onBoxRestore,
   t
 }) => {
+  const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
+
+  // Listen for file selection events to update UI
+  useEffect(() => {
+    const handleFileSelected = () => {
+      const file = (window as any).selectedBackupFile;
+      if (file && typeof file === 'string') {
+        // Handle both Unix and Windows path separators
+        const fileName = file.split('/').pop() || file.split('\\').pop() || file;
+        setSelectedFileName(fileName);
+      } else {
+        setSelectedFileName(null);
+      }
+    };
+
+    // Initial check
+    handleFileSelected();
+
+    // Listen for custom events
+    window.addEventListener('backup-file-selected', handleFileSelected);
+    return () => window.removeEventListener('backup-file-selected', handleFileSelected);
+  }, []);
+
   const handleAction = () => {
     if (backupMethod === 'gitlab') {
       if (mode === 'create') {
         onGitLabBackup();
       } else {
         onGitLabRestore();
+      }
+    } else if (backupMethod === 'gdrive') {
+      if (mode === 'create') {
+        onGDriveBackup();
+      } else {
+        onGDriveRestore();
       }
     } else if (backupMethod === 'github') {
       if (mode === 'create') {
@@ -167,6 +212,21 @@ export const BackupModal: React.FC<BackupModalProps> = ({
             </div>
           </button>
           <button
+            onClick={() => onMethodChange('gdrive')}
+            className={`flex-1 px-6 py-3 text-sm font-medium transition ${
+              backupMethod === 'gdrive'
+                ? 'text-teal-400 border-b-2 border-teal-400 bg-navy-800'
+                : 'text-gray-400 hover:text-white hover:bg-navy-800/50'
+            }`}
+          >
+            <div className="flex items-center justify-center gap-2">
+              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M12.01 1.485c-.258 0-.516.073-.746.22l-7.27 4.62c-.42.276-.753.728-.753 1.23v8.763c0 .51.323.968.746 1.236l7.27 4.615c.476.302.997.302 1.473 0l7.27-4.615c.423-.268.746-.726.746-1.236V7.555c0-.502-.333-.954-.753-1.23l-7.27-4.62c-.23-.147-.488-.22-.746-.22z"/>
+              </svg>
+              {t('gdriveBackup')}
+            </div>
+          </button>
+          <button
             onClick={() => onMethodChange('github')}
             className={`flex-1 px-6 py-3 text-sm font-medium transition ${
               backupMethod === 'github'
@@ -225,23 +285,50 @@ export const BackupModal: React.FC<BackupModalProps> = ({
                   <label className="block text-sm font-medium text-gray-300 mb-2">
                     {t('backupFile') || 'Backup File'}
                   </label>
-                  <button
-                    onClick={async () => {
-                      const result = await ipcRenderer.invoke('dialog:openFile', {
-                        title: 'Select Backup File',
-                        filters: [{ name: 'Marix Backup', extensions: ['marix', 'arix'] }]
-                      });
-                      if (result) {
-                        (window as any).selectedBackupFile = result;
-                      }
-                    }}
-                    className="w-full p-3 bg-navy-700 hover:bg-navy-600 border border-navy-600 rounded-lg text-left text-gray-300 transition flex items-center gap-2"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-                    </svg>
-                    {t('selectFile') || 'Select File'}
-                  </button>
+                  <div className="space-y-2">
+                    <button
+                      onClick={async () => {
+                        const result = await ipcRenderer.invoke('dialog:openFile', {
+                          title: 'Select Backup File',
+                          filters: [{ name: 'Marix Backup', extensions: ['marix', 'arix'] }]
+                        });
+                        if (result && result.path) {
+                          (window as any).selectedBackupFile = result.path;
+                          // Force re-render to show file name
+                          const event = new CustomEvent('backup-file-selected');
+                          window.dispatchEvent(event);
+                        }
+                      }}
+                      className="w-full p-3 bg-navy-700 hover:bg-navy-600 border border-navy-600 rounded-lg text-left text-gray-300 transition flex items-center gap-2"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                      </svg>
+                      {t('selectFile') || 'Select File'}
+                    </button>
+                    {selectedFileName && (
+                      <div className="flex items-center gap-2 p-2 bg-teal-500/10 border border-teal-500/30 rounded-lg">
+                        <svg className="w-4 h-4 text-teal-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <span className="text-xs text-teal-400 truncate flex-1">
+                          {selectedFileName}
+                        </span>
+                        <button
+                          onClick={() => {
+                            (window as any).selectedBackupFile = null;
+                            const event = new CustomEvent('backup-file-selected');
+                            window.dispatchEvent(event);
+                          }}
+                          className="p-1 hover:bg-navy-700 rounded text-gray-400 hover:text-white transition"
+                        >
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 
@@ -293,6 +380,129 @@ export const BackupModal: React.FC<BackupModalProps> = ({
                     <li>Include special characters</li>
                   </ul>
                 </div>
+              )}
+            </div>
+          )}
+
+          {/* Google Drive Backup Tab */}
+          {backupMethod === 'gdrive' && (
+            <div className="space-y-4">
+              {/* Connection Status */}
+              <div className={`p-4 rounded-lg border ${
+                gdriveConnected 
+                  ? 'bg-green-500/10 border-green-500/30' 
+                  : 'bg-gray-500/10 border-gray-500/30'
+              }`}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <svg className={`w-5 h-5 ${gdriveConnected ? 'text-green-400' : 'text-gray-400'}`} fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M12.01 1.485c-.258 0-.516.073-.746.22l-7.27 4.62c-.42.276-.753.728-.753 1.23v8.763c0 .51.323.968.746 1.236l7.27 4.615c.476.302.997.302 1.473 0l7.27-4.615c.423-.268.746-.726.746-1.236V7.555c0-.502-.333-.954-.753-1.23l-7.27-4.62c-.23-.147-.488-.22-.746-.22z"/>
+                    </svg>
+                    <div>
+                      <p className="text-sm font-medium text-white">
+                        {gdriveConnected ? (gdriveUser?.displayName || gdriveUser?.emailAddress || t('gdriveConnected')) : t('gdriveNotConnected')}
+                      </p>
+                      {gdriveBackupInfo?.exists && (
+                        <p className="text-xs text-gray-400 mt-0.5">
+                          {t('gdriveLastBackup')}: {gdriveBackupInfo.metadata?.lastModified ? new Date(gdriveBackupInfo.metadata.lastModified).toLocaleString() : 'Unknown'}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  {gdriveConnected ? (
+                    <button
+                      onClick={onGDriveDisconnect}
+                      className="px-3 py-1.5 text-xs bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg transition"
+                    >
+                      {t('gdriveDisconnect')}
+                    </button>
+                  ) : (
+                    <button
+                      onClick={onGDriveConnect}
+                      disabled={gdriveConnecting}
+                      className="px-3 py-1.5 text-xs bg-teal-600 hover:bg-teal-700 text-white rounded-lg transition flex items-center gap-1"
+                    >
+                      {gdriveConnecting ? (
+                        <>
+                          <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                          {t('gdriveConnecting')}
+                        </>
+                      ) : (
+                        t('gdriveConnect')
+                      )}
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {!gdriveConnected && (
+                <div className="p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+                  <p className="text-xs text-blue-400">
+                    💡 {t('gdriveAuthPrompt')}
+                  </p>
+                </div>
+              )}
+
+              {gdriveConnected && (
+                <>
+                  {/* Password Input */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      {t('backupPassword')}
+                    </label>
+                    <input
+                      type="password"
+                      value={password}
+                      onChange={(e) => onPasswordChange(e.target.value)}
+                      placeholder={mode === 'create' ? 'Strong password (10+ chars)...' : 'Enter password...'}
+                      className="w-full p-3 bg-navy-700 border border-navy-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                    />
+                  </div>
+
+                  {/* Confirm Password */}
+                  {mode === 'create' && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-2">
+                        {t('confirmPassword')}
+                      </label>
+                      <input
+                        type="password"
+                        value={confirmPassword}
+                        onChange={(e) => onConfirmPasswordChange(e.target.value)}
+                        placeholder="Confirm password..."
+                        className="w-full p-3 bg-navy-700 border border-navy-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                      />
+                    </div>
+                  )}
+
+                  {/* Security Warning */}
+                  <div className="p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
+                    <p className="text-xs text-yellow-400">
+                      ⚠️ {t('gdriveSecurityWarning')}
+                    </p>
+                  </div>
+
+                  {/* Password Requirements */}
+                  {mode === 'create' && (
+                    <div className="p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+                      <p className="text-xs font-semibold text-blue-400 mb-1">{t('passwordRequirements') || 'Password Requirements'}:</p>
+                      <ul className="text-xs text-blue-400 space-y-0.5 list-disc list-inside">
+                        <li>At least 10 characters</li>
+                        <li>Mix of uppercase and lowercase</li>
+                        <li>Include numbers</li>
+                        <li>Include special characters</li>
+                      </ul>
+                    </div>
+                  )}
+
+                  {mode === 'restore' && (
+                    <div className="p-3 bg-orange-500/10 border border-orange-500/30 rounded-lg">
+                      <p className="text-xs text-orange-400">
+                        ℹ️ {t('gdriveRestoreWarning')}
+                      </p>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           )}

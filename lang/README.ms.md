@@ -171,6 +171,50 @@ Semua sandaran menggunakan **Argon2id** dan **AES-256-GCM**:
 - 🛡️ **Tahan brute-force** — Argon2id memerlukan 16-64 MB RAM setiap percubaan
 - ✅ **Tahan gangguan** — AES-GCM mengesan sebarang pengubahsuaian
 
+### Sandaran Google Drive (Zero-Knowledge)
+
+Marix kini menyokong sandaran disulitkan end-to-end ke Google Drive anda. Tiada siapa boleh mengakses data anda—walaupun Google—tanpa kata laluan induk anda.
+
+> 📘 **Panduan Persediaan**: [../docs/google/GOOGLE_DRIVE_SETUP.ms.md](../docs/google/GOOGLE_DRIVE_SETUP.ms.md)
+
+1. **Cipta projek Google Cloud** dan aktifkan Drive API
+2. **Cipta kelayakan OAuth 2.0** (apl desktop)
+3. **Muat turun fail JSON** dan simpan sebagai `google-credentials.json`
+4. **Sambung di Marix** → apl akan membuka penyemak imbas untuk pengesahan
+
+#### Cara Ia Berfungsi
+
+```
+[Kata Laluan Anda] → Argon2id KDF → AES-256-GCM → [Fail Disulitkan] → Google Drive
+```
+
+- ✅ **Zero-knowledge**: Kata laluan tidak pernah meninggalkan peranti anda
+- ✅ **Penyulitan end-to-end**: Google hanya melihat data disulitkan
+- ✅ **Tiada pelayan**: Data mengalir terus dari PC ke Drive
+- ✅ **Pemulihan**: Pulihkan dari mana-mana sahaja dengan kata laluan
+
+### Sandaran Google Drive (Zero-Knowledge)
+
+Marix kini menyokong sandaran disulitkan end-to-end ke Google Drive anda. Tiada siapa boleh mengakses data anda—walaupun Google—tanpa kata laluan induk anda.
+
+> 📘 **Panduan Persediaan**: [../docs/google/GOOGLE_DRIVE_SETUP.ms.md](../docs/google/GOOGLE_DRIVE_SETUP.ms.md)
+
+1. **Cipta projek Google Cloud** dan aktifkan Drive API
+2. **Cipta kelayakan OAuth 2.0** (apl desktop)
+3. **Muat turun fail JSON** dan simpan sebagai `google-credentials.json`
+4. **Sambung di Marix** → apl akan membuka penyemak imbas untuk pengesahan
+
+#### Cara Ia Berfungsi
+
+```
+[Kata Laluan Anda] → Argon2id KDF → AES-256-GCM → [Fail Disulitkan] → Google Drive
+```
+
+- ✅ **Zero-knowledge**: Kata laluan tidak pernah meninggalkan peranti anda
+- ✅ **Penyulitan end-to-end**: Google hanya melihat data disulitkan
+- ✅ **Tiada pelayan**: Data mengalir terus dari PC ke Drive
+- ✅ **Pemulihan**: Pulihkan dari mana-mana sahaja dengan kata laluan
+
 ### Sandaran GitHub (Zero-Knowledge)
 
 1. **Log masuk dengan GitHub** → Kod peranti muncul → Pelayar terbuka → Benarkan → Repositori `marix-backup` dicipta secara automatik

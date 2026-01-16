@@ -191,7 +191,15 @@ const WSSViewer: React.FC<WSSViewerProps> = ({
         style={{ backgroundColor: headerBg, borderColor: themeColors.black }}
       >
         <div className="flex items-center gap-3">
-          <img src="./icon/wss.svg" alt="WSS" className="w-8 h-8" />
+          {/* WSS Protocol Icon */}
+          <div 
+            className="w-9 h-9 rounded-lg flex items-center justify-center"
+            style={{ backgroundColor: '#8b5cf620', color: '#8b5cf6' }}
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+            </svg>
+          </div>
           <div>
             <h3 className="text-sm font-medium" style={{ color: themeColors.foreground }}>{serverName || 'WebSocket'}</h3>
             <p className="text-xs truncate max-w-md" style={{ color: themeColors.cyan }}>{url}</p>

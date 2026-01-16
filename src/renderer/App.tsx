@@ -75,7 +75,7 @@ const App: React.FC = () => {
   const [quickConnectOpen, setQuickConnectOpen] = useState(false);  // Quick connect dropdown
   const [quickConnectSearch, setQuickConnectSearch] = useState('');  // Quick connect search
   const [backupModalOpen, setBackupModalOpen] = useState<'create' | 'restore' | null>(null);  // Backup modal
-  const [backupMethod, setBackupMethod] = useState<'local' | 'github' | 'gitlab' | 'box'>('local');  // Backup method
+  const [backupMethod, setBackupMethod] = useState<'local' | 'gdrive' | 'github' | 'gitlab' | 'box'>('local');  // Backup method
   const [backupPassword, setBackupPassword] = useState('');  // Backup password
   const [backupConfirmPassword, setBackupConfirmPassword] = useState('');  // Confirm password
   const [backupError, setBackupError] = useState<string | null>(null);  // Backup error
@@ -91,6 +91,12 @@ const App: React.FC = () => {
   const [boxConnected, setBoxConnected] = useState(false);
   const [boxConnecting, setBoxConnecting] = useState(false);
   const [boxBackupInfo, setBoxBackupInfo] = useState<{ exists: boolean; metadata?: any } | null>(null);
+  
+  // Google Drive backup states
+  const [gdriveConnected, setGdriveConnected] = useState(false);
+  const [gdriveConnecting, setGdriveConnecting] = useState(false);
+  const [gdriveBackupInfo, setGdriveBackupInfo] = useState<{ exists: boolean; metadata?: any } | null>(null);
+  const [gdriveUser, setGdriveUser] = useState<{ displayName: string; emailAddress: string; photoLink?: string } | null>(null);
   
   // Cloudflare state
   const [cfHasToken, setCfHasToken] = useState(false);
@@ -158,7 +164,7 @@ const App: React.FC = () => {
     hasUpdate?: boolean;
   }>({ checking: false });
   const [showUpdateNotification, setShowUpdateNotification] = useState(false);
-  const APP_VERSION = '1.0.3';
+  const APP_VERSION = '1.0.4';
   const APP_AUTHOR = 'Đạt Vũ (Marix)';
   const GITHUB_REPO = 'https://github.com/marixdev/marix';
   
@@ -361,12 +367,14 @@ const App: React.FC = () => {
     };
   }, []);
 
-  // Check GitLab/Box connection when backup modal opens
+  // Check GitLab/Box/Google Drive connection when backup modal opens
   useEffect(() => {
     if (backupModalOpen && backupMethod === 'gitlab') {
       checkGitLabConnection();
     } else if (backupModalOpen && backupMethod === 'box') {
       checkBoxConnection();
+    } else if (backupModalOpen && backupMethod === 'gdrive') {
+      checkGoogleDriveConnection();
     }
   }, [backupModalOpen, backupMethod]);
 
@@ -513,17 +521,15 @@ const App: React.FC = () => {
     setBackupError(null);
 
     try {
-      // Ask for file location
-      const fileResult = await ipcRenderer.invoke('backup:selectFile');
-      if (!fileResult.success) {
-        if (!fileResult.canceled) {
-          setBackupError(fileResult.error || 'Failed to select file');
-        }
+      // Use the already selected file from BackupModal
+      const selectedFile = (window as any).selectedBackupFile;
+      if (!selectedFile) {
+        setBackupError('Please select a backup file first');
         setBackupLoading(false);
         return;
       }
 
-      const result = await ipcRenderer.invoke('backup:restore', fileResult.filePath, backupPassword);
+      const result = await ipcRenderer.invoke('backup:restore', selectedFile, backupPassword);
       
       if (result.success && result.data) {
         // Restore servers
@@ -924,6 +930,193 @@ const App: React.FC = () => {
       setBackupError(err.message);
     }
     setBackupLoading(false);
+  };
+
+  // ==================== Google Drive Backup Handlers ====================
+  
+  const checkGoogleDriveConnection = async () => {
+    try {
+      const authResult = await ipcRenderer.invoke('gdrive:isAuthenticated');
+      if (authResult.success && authResult.authenticated) {
+        setGdriveConnected(true);
+        
+        // Get user info
+        const userResult = await ipcRenderer.invoke('gdrive:getUserInfo');
+        if (userResult.success && userResult.data) {
+          setGdriveUser({
+            displayName: userResult.data.displayName,
+            emailAddress: userResult.data.emailAddress,
+            photoLink: userResult.data.photoLink
+          });
+        }
+        
+        // Check if backup exists
+        const backupCheck = await ipcRenderer.invoke('gdrive:checkBackup');
+        setGdriveBackupInfo(backupCheck);
+      } else {
+        setGdriveConnected(false);
+        setGdriveUser(null);
+        setGdriveBackupInfo(null);
+      }
+    } catch (error) {
+      console.error('[App] Error checking Google Drive connection:', error);
+      setGdriveConnected(false);
+    }
+  };
+
+  const handleGoogleDriveConnect = async () => {
+    setGdriveConnecting(true);
+    setBackupError(null);
+    
+    try {
+      const result = await ipcRenderer.invoke('gdrive:startAuth');
+      
+      if (result.success) {
+        setGdriveConnected(true);
+        await checkGoogleDriveConnection();
+        setBackupSuccess('Successfully connected to Google Drive!');
+      } else {
+        setBackupError(result.error || 'Failed to connect to Google Drive');
+      }
+    } catch (error: any) {
+      setBackupError(error.message || 'Error connecting to Google Drive');
+    } finally {
+      setGdriveConnecting(false);
+    }
+  };
+
+  const handleGoogleDriveDisconnect = async () => {
+    try {
+      await ipcRenderer.invoke('gdrive:disconnect');
+      setGdriveConnected(false);
+      setGdriveUser(null);
+      setGdriveBackupInfo(null);
+      setBackupSuccess('Disconnected from Google Drive');
+    } catch (error: any) {
+      setBackupError(error.message);
+    }
+  };
+
+  const handleGoogleDriveBackup = async () => {
+    if (!backupPassword) {
+      setBackupError('Please enter a backup password');
+      return;
+    }
+
+    if (backupPassword !== backupConfirmPassword) {
+      setBackupError('Passwords do not match');
+      return;
+    }
+
+    setBackupLoading(true);
+    setBackupError(null);
+    setBackupSuccess(null);
+
+    try {
+      const result = await ipcRenderer.invoke('gdrive:createBackup', backupPassword);
+      
+      if (result.success) {
+        setBackupSuccess(`Backup uploaded to Google Drive successfully! (${result.serverCount} servers)`);
+        setBackupPassword('');
+        setBackupConfirmPassword('');
+        
+        // Refresh backup info
+        await checkGoogleDriveConnection();
+      } else {
+        setBackupError(result.error || 'Failed to upload backup to Google Drive');
+      }
+    } catch (error: any) {
+      setBackupError(error.message);
+    } finally {
+      setBackupLoading(false);
+    }
+  };
+
+  const handleGoogleDriveRestore = async () => {
+    if (!backupPassword) {
+      setBackupError('Please enter the backup password');
+      return;
+    }
+
+    setBackupLoading(true);
+    setBackupError(null);
+
+    try {
+      const result = await ipcRenderer.invoke('gdrive:restoreBackup', backupPassword);
+      
+      if (result.success && result.data) {
+        // Restore servers
+        if (result.data.servers && Array.isArray(result.data.servers)) {
+          setServers(result.data.servers);
+          await ipcRenderer.invoke('servers:importAll', result.data.servers);
+        }
+        
+        // Restore tag colors
+        if (result.data.tagColors) {
+          setTagColors(result.data.tagColors);
+          await ipcRenderer.invoke('tags:saveColors', result.data.tagColors);
+        }
+        
+        // Restore settings
+        if (result.data.settings) {
+          if (result.data.settings.currentTheme) {
+            setCurrentTheme(result.data.settings.currentTheme);
+          }
+          if (result.data.settings.appTheme) {
+            setAppTheme(result.data.settings.appTheme);
+          }
+        }
+        
+        // Restore Cloudflare token
+        if (result.data.cloudflareToken) {
+          await ipcRenderer.invoke('cloudflare:setToken', result.data.cloudflareToken);
+          setCfHasToken(true);
+        }
+        
+        // Restore SSH keys
+        let sshKeyCount = 0;
+        if (result.data.sshKeys && result.data.sshKeys.length > 0) {
+          const importResult = await ipcRenderer.invoke('sshkey:importFromBackup', result.data.sshKeys);
+          sshKeyCount = importResult?.imported || 0;
+        }
+        
+        // Restore 2FA TOTP
+        let totpCount = 0;
+        if (result.data.totpEntries && result.data.totpEntries.length > 0) {
+          localStorage.setItem('totp_entries', JSON.stringify(result.data.totpEntries));
+          totpCount = result.data.totpEntries.length;
+        }
+        
+        // Restore Port Forwards
+        let portForwardCount = 0;
+        if (result.data.portForwards && result.data.portForwards.length > 0) {
+          localStorage.setItem('port_forwards', JSON.stringify(result.data.portForwards));
+          portForwardCount = result.data.portForwards.length;
+        }
+        
+        const serverCount = result.data.servers?.length || 0;
+        let successMessage = `Backup restored from Google Drive successfully!\n${serverCount} servers`;
+        if (sshKeyCount > 0) successMessage += `, ${sshKeyCount} SSH keys`;
+        if (totpCount > 0) successMessage += `, ${totpCount} 2FA entries`;
+        if (portForwardCount > 0) successMessage += `, ${portForwardCount} port forwards`;
+        
+        setBackupSuccess(successMessage);
+        setBackupPassword('');
+        
+        // Reload servers
+        await loadServers();
+        
+        setTimeout(() => {
+          setBackupModalOpen(null);
+        }, 2000);
+      } else {
+        setBackupError(result.error || 'Failed to restore backup from Google Drive');
+      }
+    } catch (error: any) {
+      setBackupError(error.message);
+    } finally {
+      setBackupLoading(false);
+    }
   };
 
   // GitHub OAuth functions
@@ -1863,31 +2056,55 @@ const App: React.FC = () => {
         
         {/* Tabs - not draggable */}
         <div className="flex-1 flex items-center h-full overflow-x-auto" style={{ WebkitAppRegion: 'no-drag' } as any}>
-          {sessions.map(session => (
-            <div
-              key={session.id}
-              onClick={() => setActiveSessionId(session.id)}
-              className={`group flex items-center gap-2 px-3 h-full border-r border-navy-700 cursor-pointer transition text-xs ${
-                session.id === activeSessionId
-                  ? 'bg-navy-900 text-white'
-                  : 'text-gray-400 hover:text-white hover:bg-navy-700'
-              }`}
-            >
-              <div className="w-2 h-2 rounded-full bg-green-500" />
-              <span className="font-medium max-w-[100px] truncate">{session.server.name}</span>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleCloseSession(session.id);
-                }}
-                className="opacity-50 hover:opacity-100 hover:text-red-400 transition ml-1"
+          {sessions.map(session => {
+            const protocol = session.server.protocol || 'ssh';
+            const protocolConfig = {
+              ssh: { color: '#10b981', bgColor: 'bg-emerald-500/10' },
+              rdp: { color: '#3b82f6', bgColor: 'bg-blue-500/10' },
+              ftp: { color: '#f59e0b', bgColor: 'bg-amber-500/10' },
+              ftps: { color: '#f97316', bgColor: 'bg-orange-500/10' },
+              wss: { color: '#8b5cf6', bgColor: 'bg-violet-500/10' }
+            };
+            const config = protocolConfig[protocol as keyof typeof protocolConfig] || { color: '#6b7280', bgColor: 'bg-gray-500/10' };
+            
+            return (
+              <div
+                key={session.id}
+                onClick={() => setActiveSessionId(session.id)}
+                className={`group flex items-center gap-2 px-3 h-full border-r border-navy-700 cursor-pointer transition text-xs ${
+                  session.id === activeSessionId
+                    ? 'bg-navy-900 text-white'
+                    : 'text-gray-400 hover:text-white hover:bg-navy-700'
+                }`}
               >
-                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-          ))}
+                {/* Protocol icon matching ServerList */}
+                <div 
+                  className={`w-5 h-5 rounded ${config.bgColor} flex items-center justify-center flex-shrink-0`}
+                  style={{ color: config.color }}
+                >
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    {protocol === 'ssh' && <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />}
+                    {protocol === 'rdp' && <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />}
+                    {protocol === 'ftp' && <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />}
+                    {protocol === 'ftps' && <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />}
+                    {protocol === 'wss' && <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />}
+                  </svg>
+                </div>
+                <span className="font-medium max-w-[100px] truncate">{session.server.name}</span>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleCloseSession(session.id);
+                  }}
+                  className="opacity-50 hover:opacity-100 hover:text-red-400 transition ml-1"
+                >
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            );
+          })}
           
           {/* New tab button */}
           <button
@@ -4069,6 +4286,16 @@ const App: React.FC = () => {
                 .map(server => {
                   const isConnected = sessions.some(s => s.server.id === server.id);
                   const protocol = server.protocol || 'ssh';
+                  // Protocol config matching ServerList
+                  const protocolConfig = {
+                    ssh: { color: '#10b981', bgColor: 'bg-emerald-500/10' },
+                    rdp: { color: '#3b82f6', bgColor: 'bg-blue-500/10' },
+                    ftp: { color: '#f59e0b', bgColor: 'bg-amber-500/10' },
+                    ftps: { color: '#f97316', bgColor: 'bg-orange-500/10' },
+                    wss: { color: '#8b5cf6', bgColor: 'bg-violet-500/10' }
+                  };
+                  const config = protocolConfig[protocol as keyof typeof protocolConfig] || { color: '#6b7280', bgColor: 'bg-gray-500/10' };
+                  
                   return (
                     <button
                       key={server.id}
@@ -4079,13 +4306,19 @@ const App: React.FC = () => {
                       }}
                       className="w-full px-4 py-3 flex items-center gap-3 hover:bg-navy-700 transition text-left border-b border-navy-700/50"
                     >
-                      {server.icon ? (
-                        <img src={`./icon/${server.icon}.png`} alt="" className="w-8 h-8 object-contain" />
-                      ) : (
-                        <div className="w-8 h-8 rounded-lg bg-navy-600 flex items-center justify-center">
-                          <span className="text-sm text-gray-400">{(server.name || server.host).charAt(0).toUpperCase()}</span>
-                        </div>
-                      )}
+                      {/* Protocol icon matching ServerList style */}
+                      <div 
+                        className={`w-9 h-9 rounded-lg ${config.bgColor} flex items-center justify-center`}
+                        style={{ color: config.color }}
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          {protocol === 'ssh' && <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />}
+                          {protocol === 'rdp' && <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />}
+                          {protocol === 'ftp' && <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />}
+                          {protocol === 'ftps' && <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />}
+                          {protocol === 'wss' && <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />}
+                        </svg>
+                      </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           <span className="text-sm font-medium text-white truncate">{server.name || server.host}</span>
@@ -4404,6 +4637,14 @@ const App: React.FC = () => {
           onGitHubLogout={handleGitHubLogout}
           onGitHubBackup={handleGitHubUpload}
           onGitHubRestore={handleGitHubDownload}
+          gdriveConnected={gdriveConnected}
+          gdriveConnecting={gdriveConnecting}
+          gdriveBackupInfo={gdriveBackupInfo}
+          gdriveUser={gdriveUser}
+          onGDriveConnect={handleGoogleDriveConnect}
+          onGDriveDisconnect={handleGoogleDriveDisconnect}
+          onGDriveBackup={handleGoogleDriveBackup}
+          onGDriveRestore={handleGoogleDriveRestore}
           boxConnected={boxConnected}
           boxConnecting={boxConnecting}
           boxBackupInfo={boxBackupInfo}

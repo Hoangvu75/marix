@@ -23,6 +23,7 @@ import { BoxApiService } from './services/BoxApiService';
 import { PortKnockService } from './services/PortKnockService';
 import { LANSharingService } from './services/LANSharingService';
 import { lanFileTransferService } from './services/LANFileTransferService';
+import { getGoogleDriveService } from './services/GoogleDriveService';
 
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
@@ -35,6 +36,7 @@ const wssManager = new WSSManager();  // For WebSocket Secure
 const serverStore = new ServerStore();  // For persistent server storage
 const backupService = new BackupService();  // For backup/restore
 const githubAuthService = new GitHubAuthService();  // For GitHub OAuth
+const googleDriveService = getGoogleDriveService();  // For Google Drive backup
 const lanSharingService = new LANSharingService();  // For LAN sharing
 
 function createAppMenu() {
@@ -1148,6 +1150,132 @@ ipcMain.handle('github:createBackupRepo', async (event, repoName?: string) => {
 
 ipcMain.handle('github:listRepos', async () => {
   return await githubAuthService.listRepos();
+});
+
+// ==================== Google Drive Backup Handlers ====================
+
+ipcMain.handle('gdrive:hasCredentials', async () => {
+  return { success: true, hasCredentials: googleDriveService.hasCredentials() };
+});
+
+ipcMain.handle('gdrive:saveCredentials', async (event, credentials) => {
+  try {
+    googleDriveService.saveCredentials(credentials);
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('gdrive:startAuth', async () => {
+  return await googleDriveService.startAuthFlow();
+});
+
+ipcMain.handle('gdrive:handleAuthCode', async (event, code: string) => {
+  return await googleDriveService.handleAuthCallback(code);
+});
+
+ipcMain.handle('gdrive:isAuthenticated', async () => {
+  return { success: true, authenticated: googleDriveService.isAuthenticated() };
+});
+
+ipcMain.handle('gdrive:getUserInfo', async () => {
+  return await googleDriveService.getUserInfo();
+});
+
+ipcMain.handle('gdrive:disconnect', async () => {
+  googleDriveService.disconnect();
+  return { success: true };
+});
+
+ipcMain.handle('gdrive:checkBackup', async () => {
+  return await googleDriveService.checkBackup();
+});
+
+ipcMain.handle('gdrive:createBackup', async (event, password: string) => {
+  try {
+    const servers = serverStore.getAllServers();
+    const tagColors = serverStore.getTagColors();
+    const cloudflareToken = cloudflareService.getToken() || undefined;
+    
+    // Get SSH keys
+    const sshKeys = sshKeyService.exportAllKeysForBackup();
+    
+    // Get 2FA TOTP entries
+    const totpJson = await mainWindow?.webContents.executeJavaScript('localStorage.getItem("totp_entries")');
+    const totpEntries = totpJson ? JSON.parse(totpJson) : [];
+    
+    // Get Port Forwards
+    const pfJson = await mainWindow?.webContents.executeJavaScript('localStorage.getItem("port_forwards")');
+    const portForwards = pfJson ? JSON.parse(pfJson) : [];
+
+    // Create encrypted backup
+    const result = await backupService.createBackupContent(
+      password,
+      servers,
+      tagColors,
+      cloudflareToken,
+      sshKeys,
+      totpEntries,
+      portForwards
+    );
+    
+    if (!result.success || !result.content) {
+      return { success: false, error: result.error || 'Failed to create backup content' };
+    }
+
+    // Upload to Google Drive
+    const fileName = 'marix-backup.marix';
+    const uploadResult = await googleDriveService.uploadBackup(fileName, result.content);
+
+    if (uploadResult.success) {
+      return {
+        success: true,
+        serverCount: servers.length,
+        fileId: uploadResult.fileId,
+      };
+    }
+
+    return result;
+  } catch (error: any) {
+    console.error('[Main] gdrive:createBackup error:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('gdrive:restoreBackup', async (event, password: string) => {
+  try {
+    // Download backup from Google Drive
+    const downloadResult = await googleDriveService.downloadBackup();
+    
+    if (!downloadResult.success || !downloadResult.data) {
+      return { success: false, error: downloadResult.error || 'Failed to download backup' };
+    }
+
+    // Parse and decrypt backup
+    const result = await backupService.restoreBackupContent(downloadResult.data, password);
+
+    if (result.success && result.data) {
+      // Restore data
+      serverStore.setServers(result.data.servers);
+      serverStore.setTagColors(result.data.tagColors);
+      
+      if (result.data.cloudflareToken) {
+        cloudflareService.setToken(result.data.cloudflareToken);
+      }
+
+      return {
+        success: true,
+        serverCount: result.data.servers.length,
+        metadata: downloadResult.metadata,
+      };
+    }
+
+    return result;
+  } catch (error: any) {
+    console.error('[Main] gdrive:restoreBackup error:', error);
+    return { success: false, error: error.message };
+  }
 });
 
 ipcMain.handle('github:getRepoName', async () => {

@@ -2,6 +2,37 @@
 
 All notable changes to Marix SSH Client will be documented in this file.
 
+## [1.0.4] - 2026-01-16
+
+### Added
+- **Google Drive Backup**: Zero-knowledge cloud backup with OAuth2 authentication
+  - End-to-end encryption with Argon2id + AES-256-GCM
+  - OAuth 2.0 flow with local callback server (no manual code entry)
+  - Upload encrypted backups to "Marix Backups" folder
+  - Automatic folder creation and management
+  - User info display (name, email) in connection status
+  - Last backup timestamp display
+  - Disconnect option to remove stored tokens
+  - [Setup Guide](docs/GOOGLE_DRIVE_SETUP.md) with detailed Google Cloud Console configuration
+  - Translations added for all 14 supported languages
+
+### Fixed
+- **Quick Connect**: Fixed icon display to show protocol icons (SSH/RDP/FTP/FTPS/WSS) matching server list
+- **Session Tabs**: Updated to show protocol icons with colored backgrounds
+- **WSS Modal**: Fixed broken icon by using inline SVG instead of missing image file
+- **Backup Restore**: Fixed double file selection prompt - now only asks once
+- **Google Drive Service**: Fixed credential loading from multiple paths for better portability
+- **Webpack Build**: Increased memory limit to 4GB to prevent out-of-memory errors
+
+### Technical
+- Added `googleapis` package for Google Drive API v3
+- Implemented `GoogleDriveService` with OAuth2 client management
+- Created `OAuth2CallbackServer` for handling browser authentication callbacks
+- Added 11 IPC handlers for Google Drive operations
+- Updated BackupModal UI with new Google Drive tab (between Local and GitHub)
+- Integrated with existing backup encryption system (BackupService)
+- Professional OAuth callback pages with dark theme matching app design
+
 ## [1.0.3] - 2026-01-14
 
 ### Added

@@ -171,6 +171,50 @@ Todos los respaldos usan **Argon2id** y **AES-256-GCM**:
 - 🛡️ **Resistente a fuerza bruta** — Argon2id requiere 16-64 MB de RAM por intento
 - ✅ **A prueba de manipulación** — AES-GCM detecta cualquier modificación
 
+### Copia de seguridad de Google Drive (Zero-Knowledge)
+
+Marix ahora admite copias de seguridad cifradas de extremo a extremo en su Google Drive. Nadie puede acceder a sus datos—ni siquiera Google—sin su contraseña maestra.
+
+> 📘 **Guía de configuración**: [../docs/google/GOOGLE_DRIVE_SETUP.es.md](../docs/google/GOOGLE_DRIVE_SETUP.es.md)
+
+1. **Crear proyecto de Google Cloud** y habilitar API de Drive
+2. **Crear credenciales OAuth 2.0** (aplicación de escritorio)
+3. **Descargar archivo JSON** y guardarlo como `google-credentials.json`
+4. **Conectar en Marix** → la aplicación abrirá el navegador para autenticación
+
+#### Cómo funciona
+
+```
+[Su contraseña] → Argon2id KDF → AES-256-GCM → [Archivo cifrado] → Google Drive
+```
+
+- ✅ **Zero-knowledge**: La contraseña nunca sale de su dispositivo
+- ✅ **Cifrado de extremo a extremo**: Google solo ve datos cifrados
+- ✅ **Sin servidor**: Los datos fluyen directamente del PC al Drive
+- ✅ **Recuperación**: Restaurar desde cualquier lugar con la contraseña
+
+### Copia de seguridad de Google Drive (Zero-Knowledge)
+
+Marix ahora admite copias de seguridad cifradas de extremo a extremo en su Google Drive. Nadie puede acceder a sus datos—ni siquiera Google—sin su contraseña maestra.
+
+> 📘 **Guía de configuración**: [../docs/google/GOOGLE_DRIVE_SETUP.es.md](../docs/google/GOOGLE_DRIVE_SETUP.es.md)
+
+1. **Crear proyecto de Google Cloud** y habilitar API de Drive
+2. **Crear credenciales OAuth 2.0** (aplicación de escritorio)
+3. **Descargar archivo JSON** y guardarlo como `google-credentials.json`
+4. **Conectar en Marix** → la aplicación abrirá el navegador para autenticación
+
+#### Cómo funciona
+
+```
+[Su contraseña] → Argon2id KDF → AES-256-GCM → [Archivo cifrado] → Google Drive
+```
+
+- ✅ **Zero-knowledge**: La contraseña nunca sale de su dispositivo
+- ✅ **Cifrado de extremo a extremo**: Google solo ve datos cifrados
+- ✅ **Sin servidor**: Los datos fluyen directamente del PC al Drive
+- ✅ **Recuperación**: Restaurar desde cualquier lugar con la contraseña
+
 ### Respaldo en GitHub (Zero-Knowledge)
 
 1. **Iniciar sesión con GitHub** → Código de dispositivo aparece → Navegador se abre → Autorizar → Repositorio `marix-backup` se crea automáticamente

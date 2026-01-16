@@ -171,6 +171,52 @@ Tất cả backup sử dụng **Argon2id** và **AES-256-GCM**:
 - 🛡️ **Brute-force resistant** — Argon2id yêu cầu 16-64MB RAM mỗi attempt
 - ✅ **Tamper-proof** — AES-GCM detect mọi modification
 
+### Google Drive Backup (Zero-Knowledge)
+
+Sao lưu an toàn lên Google Drive của bạn:
+
+#### Cài đặt
+
+> 📘 **Hướng dẫn**: [Tài liệu cấu hình Google Drive](../docs/google/GOOGLE_DRIVE_SETUP.vi.md)
+
+1. **Cấu hình OAuth Credentials**:
+   - Tạo Google Cloud Project
+   - Bật Google Drive API
+   - Tạo OAuth 2.0 Client ID
+   - Download file credentials JSON
+   - Lưu thành `src/main/services/google-credentials.json`
+
+2. **Kết nối trong Marix**:
+   - Vào Settings → Backup & Restore → Google Drive
+   - Click "Kết nối Google Drive"
+   - Browser mở để OAuth với Google
+   - Cấp quyền truy cập
+   - App nhận token bảo mật
+
+3. **Tạo Backup**:
+   - Nhập mật khẩu mã hóa (10+ ký tự)
+   - Click "Tạo Backup"
+   - File được upload vào thư mục "Marix Backups" trên Drive
+
+4. **Khôi phục Backup**:
+   - Click "Khôi phục từ Google Drive"
+   - Nhập mật khẩu backup
+   - Tất cả server và settings được khôi phục
+
+#### Cách hoạt động
+
+```
+[Dữ liệu] → [Argon2id + AES-256] → [Blob mã hóa] → [Google Drive]
+                   ↑
+            Mật khẩu của bạn
+            (không upload)
+```
+
+- ✅ **Mã hóa đầu cuối** - Dữ liệu được mã hóa trước khi rời thiết bị
+- ✅ **Zero-knowledge** - Google chỉ thấy blob mã hóa
+- ✅ **Chỉ bạn có key** - OAuth token lưu local
+- ✅ **Thư mục riêng** - File chỉ app của bạn truy cập được
+
 ### GitHub Backup (Zero-Knowledge)
 
 1. **Login với GitHub** → Device code xuất hiện → Browser mở → Authorize → Repository `marix-backup` tự động tạo

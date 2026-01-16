@@ -685,6 +685,24 @@ export interface Translations {
   boxSecurityWarning: string;
   boxPasswordWarning: string;
   
+  // Google Drive Backup
+  gdriveBackup: string;
+  gdriveConnect: string;
+  gdriveConnected: string;
+  gdriveDisconnect: string;
+  gdriveConnecting: string;
+  gdriveAuthPrompt: string;
+  gdriveSecurityWarning: string;
+  gdriveRestoreWarning: string;
+  gdriveLastBackup: string;
+  gdriveNotConnected: string;
+  
+  // OAuth Callback
+  oauthSuccess: string;
+  oauthSuccessMessage: string;
+  oauthFailed: string;
+  oauthCanClose: string;
+  
   backupAndRestore: string;
   passwordRequirements: string;
   localSecurityWarning: string;

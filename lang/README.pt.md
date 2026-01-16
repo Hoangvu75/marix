@@ -171,6 +171,50 @@ Todos os backups usam **Argon2id** e **AES-256-GCM**:
 - 🛡️ **Resistente a brute-force** — Argon2id requer 16-64 MB de RAM por tentativa
 - ✅ **À prova de adulteração** — AES-GCM detecta qualquer modificação
 
+### Backup do Google Drive (Zero-Knowledge)
+
+O Marix agora suporta backups criptografados de ponta a ponta para o seu Google Drive. Ninguém pode acessar seus dados—nem mesmo o Google—sem sua senha mestra.
+
+> 📘 **Guia de Configuração**: [../docs/google/GOOGLE_DRIVE_SETUP.pt.md](../docs/google/GOOGLE_DRIVE_SETUP.pt.md)
+
+1. **Crie um projeto Google Cloud** e ative a API do Drive
+2. **Crie credenciais OAuth 2.0** (aplicativo de desktop)
+3. **Baixe o arquivo JSON** e salve como `google-credentials.json`
+4. **Conecte no Marix** → o aplicativo abrirá o navegador para autenticação
+
+#### Como Funciona
+
+```
+[Sua Senha] → Argon2id KDF → AES-256-GCM → [Arquivo Criptografado] → Google Drive
+```
+
+- ✅ **Zero-knowledge**: A senha nunca sai do seu dispositivo
+- ✅ **Criptografia de ponta a ponta**: O Google só vê dados criptografados
+- ✅ **Sem servidor**: Os dados fluem diretamente do PC para o Drive
+- ✅ **Recuperação**: Restaure de qualquer lugar com a senha
+
+### Backup do Google Drive (Zero-Knowledge)
+
+O Marix agora suporta backups criptografados de ponta a ponta para o seu Google Drive. Ninguém pode acessar seus dados—nem mesmo o Google—sem sua senha mestra.
+
+> 📘 **Guia de Configuração**: [../docs/google/GOOGLE_DRIVE_SETUP.pt.md](../docs/google/GOOGLE_DRIVE_SETUP.pt.md)
+
+1. **Crie um projeto Google Cloud** e ative a API do Drive
+2. **Crie credenciais OAuth 2.0** (aplicativo de desktop)
+3. **Baixe o arquivo JSON** e salve como `google-credentials.json`
+4. **Conecte no Marix** → o aplicativo abrirá o navegador para autenticação
+
+#### Como Funciona
+
+```
+[Sua Senha] → Argon2id KDF → AES-256-GCM → [Arquivo Criptografado] → Google Drive
+```
+
+- ✅ **Zero-knowledge**: A senha nunca sai do seu dispositivo
+- ✅ **Criptografia de ponta a ponta**: O Google só vê dados criptografados
+- ✅ **Sem servidor**: Os dados fluem diretamente do PC para o Drive
+- ✅ **Recuperação**: Restaure de qualquer lugar com a senha
+
 ### Backup GitHub (Zero-Knowledge)
 
 1. **Entrar com GitHub** → Código do dispositivo aparece → Navegador abre → Autorizar → Repositório `marix-backup` criado automaticamente

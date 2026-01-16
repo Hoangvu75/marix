@@ -1,6 +1,6 @@
 {
   "name": "marix",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Marix - Modern Zero-Knowledge SSH Client with SFTP, FTP, RDP, WSS support",
   "main": "dist/main/index.js",
   "homepage": "https://github.com/marixdev/marix",
@@ -13,7 +13,7 @@
   },
   "scripts": {
     "build:main": "tsc --project tsconfig.main.json",
-    "build:renderer": "webpack --mode production",
+    "build:renderer": "node --max-old-space-size=4096 ./node_modules/webpack/bin/webpack.js --mode production",
     "build": "npm run build:main && npm run build:renderer",
     "start": "npm run build && electron . --disable-renderer-backgrounding --js-flags=\"--max-old-space-size=256\"",
     "start:quick": "electron . --disable-renderer-backgrounding --js-flags=\"--max-old-space-size=256\"",
@@ -88,6 +88,7 @@
     "bonjour-service": "^1.3.0",
     "cloudflare": "^5.2.0",
     "electron-store": "^11.0.2",
+    "googleapis": "^170.1.0",
     "hash-wasm": "^4.12.0",
     "node-pty": "^1.1.0",
     "node-rdpjs-2": "^0.3.5",
