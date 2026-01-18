@@ -4,7 +4,7 @@ import * as http from 'http';
 import * as https from 'https';
 import { exec } from 'child_process';
 import { promisify } from 'util';
-const whois = require('whois');
+import { whoisService } from './WhoisService';
 
 const execAsync = promisify(exec);
 const dnsResolve = promisify(dns.resolve);
@@ -681,82 +681,30 @@ export class NetworkToolsService {
     });
   }
 
-  // WHOIS Lookup
+  // WHOIS Lookup - delegates to WhoisService
   async whoisLookup(domain: string): Promise<NetworkToolResult> {
-    return new Promise((resolve) => {
-      // Clean up domain
-      const cleanDomain = domain.trim().toLowerCase().replace(/^(https?:\/\/)?(www\.)?/, '').split('/')[0];
-      
-      whois.lookup(cleanDomain, (err: any, data: any) => {
-        if (err) {
-          resolve({
-            success: false,
-            tool: 'whois',
-            target: cleanDomain,
-            error: err.message || 'WHOIS lookup failed',
-            timestamp: new Date().toISOString()
-          });
-          return;
-        }
-        
-        try {
-          const rawData = Array.isArray(data) ? data.map((d: any) => d.data || d).join('\n') : String(data);
-          const parsed = this.parseWhoisData(cleanDomain, rawData);
-          resolve({
-            success: true,
-            tool: 'whois',
-            target: cleanDomain,
-            data: parsed,
-            timestamp: new Date().toISOString()
-          });
-        } catch (parseError: any) {
-          const rawData = Array.isArray(data) ? data.map((d: any) => d.data || d).join('\n') : String(data);
-          resolve({
-            success: true,
-            tool: 'whois',
-            target: cleanDomain,
-            data: { domain: cleanDomain, rawData },
-            timestamp: new Date().toISOString()
-          });
-        }
-      });
-    });
-  }
-
-  // Parse WHOIS data
-  private parseWhoisData(domain: string, rawData: string): any {
-    const result: any = {
-      domain,
-      rawData,
-      status: [],
-      nameServers: [],
-    };
-
-    const lines = rawData.split('\n');
+    // Clean up domain
+    const cleanDomain = domain.trim().toLowerCase().replace(/^(https?:\/\/)?(www\.)?/, '').split('/')[0];
     
-    for (const line of lines) {
-      const colonIndex = line.indexOf(':');
-      if (colonIndex === -1) continue;
-      
-      const key = line.substring(0, colonIndex).trim().toLowerCase();
-      const value = line.substring(colonIndex + 1).trim();
-      
-      if (!value) continue;
-
-      if (key === 'registrar' || key === 'sponsoring registrar') result.registrar = value;
-      if (key === 'registrar url' || key === 'referral url') result.registrarUrl = value;
-      if (key === 'creation date' || key === 'created' || key === 'domain registration date') result.creationDate = value;
-      if (key === 'expiration date' || key === 'expiry date' || key === 'registry expiry date') result.expirationDate = value;
-      if (key === 'updated date' || key === 'last updated') result.updatedDate = value;
-      if (key === 'domain status' || key === 'status') result.status.push(value.split(' ')[0]);
-      if (key === 'name server' || key === 'nserver') result.nameServers.push(value.toLowerCase());
-      if (key === 'dnssec') result.dnssec = value;
-      if (key === 'registrant name') result.registrantName = value;
-      if (key === 'registrant organization') result.registrantOrg = value;
-      if (key === 'registrant country') result.registrantCountry = value;
+    const result = await whoisService.lookup(cleanDomain);
+    
+    if (!result.success) {
+      return {
+        success: false,
+        tool: 'whois',
+        target: cleanDomain,
+        error: result.error || 'WHOIS lookup failed',
+        timestamp: new Date().toISOString()
+      };
     }
-
-    return result;
+    
+    return {
+      success: true,
+      tool: 'whois',
+      target: cleanDomain,
+      data: result.result,
+      timestamp: new Date().toISOString()
+    };
   }
 
   // Combined HTTP/HTTPS Check

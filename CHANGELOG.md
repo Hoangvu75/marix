@@ -2,6 +2,58 @@
 
 All notable changes to Marix SSH Client will be documented in this file.
 
+## [1.0.7] - 2026-01-18
+
+### Security Improvements (Major)
+- **Auto-Tuned KDF** (Best Practice):
+  - KDF now automatically calibrates to take ~1 second on user's machine
+  - Target time: 800-1200ms (adapts to both weak and strong machines)
+  - Parameters (memory, iterations) are auto-tuned at first run and cached
+  - Calibration runs in background on app start for optimal UX
+  - Parameters stored with encrypted data (v2.2) for cross-machine decryption
+  - Eliminates need to guess "standard" parameters - each machine uses optimal settings
+  - Minimum security floor: 64MB memory, 2 iterations (above OWASP 47MB recommendation)
+  - **Backward compatible**: Legacy backups (v2.0) use fixed defaults for correct decryption
+
+- **OS-Level Credential Encryption** (safeStorage):
+  - All sensitive data (passwords, private keys, passphrases, API tokens) now encrypted using OS keychain
+  - macOS: Uses Keychain
+  - Windows: Uses DPAPI (Data Protection API)
+  - Linux: Uses libsecret (GNOME Keyring, KWallet, etc.)
+  - Credentials are tied to the device - copying `config.json` to another machine won't expose passwords
+  - Automatic migration: existing plaintext passwords are encrypted on first launch
+  - Cloudflare API tokens now encrypted using safeStorage
+
+### Changed
+- **Custom WHOIS Implementation**: Replaced `whois` npm module with custom implementation
+  - Built-in WHOIS server list for 400+ TLDs (no external dependencies)
+  - Direct TCP socket queries to WHOIS servers (port 43)
+  - Automatic referral following for .com, .net domains
+  - Google Registry TLDs (.dev, .app, .page, .new, .google, .youtube, .zip, etc.) now use Google RDAP API
+  - RDAP responses formatted as readable text instead of raw JSON
+  - Separated WHOIS servers into dedicated file (`whois-servers.ts`) for maintainability
+  - Grouped TLDs by provider (Donuts, Afilias, Verisign, etc.) for cleaner code
+
+### Fixed
+- **Backup Restore Compatibility**: Fixed potential issue where restoring legacy backups (v2.0) on different machines could fail
+  - Legacy backups now use fixed KDF defaults (64MB, 3 iterations) instead of auto-tuned values
+  - New backups (v2.2) store all KDF parameters for guaranteed cross-machine compatibility
+
+- **macOS Title Bar**: Fixed title bar overlapping with system traffic light buttons (close, minimize, maximize)
+  - Added 70px left padding on macOS to accommodate native window controls
+  - Title bar now displays correctly without overlapping system buttons
+
+### Technical
+- New `SecureStorage` service for centralized encryption/decryption
+- Automatic migration system for existing unencrypted credentials
+- `ServerStore` now encrypts `password`, `privateKey`, and `passphrase` fields
+- `CloudflareService` encrypts API tokens before storing
+- Encryption prefix `enc:` used to identify already-encrypted values
+- Migration flag prevents re-encrypting already encrypted data
+- `WhoisService` rewritten with custom TCP socket client
+- `NetworkToolsService.whoisLookup()` now delegates to `WhoisService`
+- Removed `whois` npm dependency
+
 ## [1.0.6] - 2026-01-17
 
 ### Added

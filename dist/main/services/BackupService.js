@@ -47,33 +47,152 @@ const KEY_LENGTH = 32; // 256 bits
 const IV_LENGTH = 16; // 128 bits for GCM
 const AUTH_TAG_LENGTH = 16;
 const SALT_LENGTH = 32;
+// Auto-tune configuration
+const TARGET_TIME_MS = 1000; // Target ~1 second for KDF
+const TARGET_TIME_MIN = 800; // Minimum acceptable time
+const TARGET_TIME_MAX = 1200; // Maximum acceptable time
+const CALIBRATION_TIMEOUT = 5000; // Max calibration time
 // Password validation regex
 // At least 10 chars, 1 uppercase, 1 lowercase, 1 number, 1 special character
 const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?~`]).{10,}$/;
 /**
- * Get optimal Argon2 memory cost based on system RAM
- * - >= 8GB RAM: 64 MB (high security)
- * - >= 4GB RAM: 32 MB (medium security)
- * - < 4GB RAM: 16 MB (low memory mode)
+ * Get baseline Argon2 memory cost based on system RAM
+ * This is the STARTING point for auto-tuning
+ * - >= 16GB RAM: Start at 512 MB
+ * - >= 8GB RAM: Start at 256 MB
+ * - >= 4GB RAM: Start at 128 MB
+ * - < 4GB RAM: Start at 64 MB (minimum floor)
  */
-function getOptimalMemoryCost() {
+function getBaselineMemoryCost() {
     const totalMemoryGB = os.totalmem() / (1024 * 1024 * 1024);
-    if (totalMemoryGB >= 8) {
-        return 65536; // 64 MB - recommended for modern machines
+    if (totalMemoryGB >= 16) {
+        return 524288; // 512 MB
+    }
+    else if (totalMemoryGB >= 8) {
+        return 262144; // 256 MB
     }
     else if (totalMemoryGB >= 4) {
-        return 32768; // 32 MB - balanced
+        return 131072; // 128 MB
     }
     else {
-        return 16384; // 16 MB - for low memory machines
+        return 65536; // 64 MB minimum
     }
 }
-const getArgon2Options = () => ({
-    memoryCost: getOptimalMemoryCost(),
-    timeCost: 3, // 3 iterations
-    parallelism: Math.min(4, os.cpus().length), // Use available cores, max 4
-    hashLength: KEY_LENGTH,
-});
+// Cache for calibrated parameters (avoid re-calibrating every time)
+let cachedOptions = null;
+let lastCalibrationTime = 0;
+const CALIBRATION_CACHE_TTL = 3600000; // Re-calibrate after 1 hour
+/**
+ * Auto-tune Argon2id parameters to achieve ~1 second KDF time
+ *
+ * Best practice in applied cryptography:
+ * - KDF should take ~500ms-1s on user's machine at key creation time
+ * - This adapts to both weak and strong machines automatically
+ * - Parameters are stored with encrypted data for decryption
+ *
+ * Strategy:
+ * 1. Start with baseline memory based on system RAM
+ * 2. Benchmark with timeCost=1, then scale up timeCost to hit target
+ * 3. If still too fast, increase memory; if too slow, decrease
+ */
+async function calibrateArgon2Options() {
+    // Return cached options if still valid
+    if (cachedOptions && (Date.now() - lastCalibrationTime) < CALIBRATION_CACHE_TTL) {
+        return cachedOptions;
+    }
+    console.log('[BackupService] Auto-tuning Argon2id parameters for ~1s KDF time...');
+    const testPassword = 'calibration-test-password';
+    const testSalt = crypto.randomBytes(SALT_LENGTH);
+    const parallelism = Math.min(4, os.cpus().length);
+    let memoryCost = getBaselineMemoryCost();
+    let timeCost = 1;
+    // Helper function to benchmark one iteration
+    const benchmark = async (mem, time) => {
+        const start = Date.now();
+        await (0, hash_wasm_1.argon2id)({
+            password: testPassword,
+            salt: testSalt,
+            parallelism: parallelism,
+            iterations: time,
+            memorySize: mem,
+            hashLength: KEY_LENGTH,
+            outputType: 'binary',
+        });
+        return Date.now() - start;
+    };
+    try {
+        // Phase 1: Find baseline time with timeCost=1
+        let baseTime = await benchmark(memoryCost, 1);
+        console.log(`[BackupService] Baseline: ${memoryCost / 1024}MB, timeCost=1 → ${baseTime}ms`);
+        // Phase 2: Adjust memory if baseline is way off
+        // If single iteration already takes >500ms, reduce memory
+        while (baseTime > TARGET_TIME_MS * 0.6 && memoryCost > 65536) {
+            memoryCost = Math.floor(memoryCost / 2);
+            baseTime = await benchmark(memoryCost, 1);
+            console.log(`[BackupService] Reduced memory: ${memoryCost / 1024}MB → ${baseTime}ms`);
+        }
+        // If single iteration is very fast (<100ms), try increasing memory first
+        while (baseTime < 100 && memoryCost < 1048576) { // Max 1GB
+            memoryCost = Math.min(memoryCost * 2, 1048576);
+            baseTime = await benchmark(memoryCost, 1);
+            console.log(`[BackupService] Increased memory: ${memoryCost / 1024}MB → ${baseTime}ms`);
+        }
+        // Phase 3: Scale timeCost to hit target
+        if (baseTime > 0) {
+            // Estimate required iterations
+            const estimatedIterations = Math.ceil(TARGET_TIME_MS / baseTime);
+            timeCost = Math.max(1, Math.min(estimatedIterations, 20)); // Cap at 20 iterations
+            // Verify with actual benchmark
+            let actualTime = await benchmark(memoryCost, timeCost);
+            console.log(`[BackupService] Estimated timeCost=${timeCost} → ${actualTime}ms`);
+            // Fine-tune: increase/decrease timeCost if needed
+            let attempts = 0;
+            while (attempts < 5 && (actualTime < TARGET_TIME_MIN || actualTime > TARGET_TIME_MAX)) {
+                if (actualTime < TARGET_TIME_MIN) {
+                    timeCost = Math.min(timeCost + 1, 20);
+                }
+                else if (actualTime > TARGET_TIME_MAX) {
+                    timeCost = Math.max(timeCost - 1, 1);
+                }
+                actualTime = await benchmark(memoryCost, timeCost);
+                console.log(`[BackupService] Fine-tune timeCost=${timeCost} → ${actualTime}ms`);
+                attempts++;
+            }
+        }
+        // Ensure minimum security floor
+        memoryCost = Math.max(memoryCost, 65536); // Min 64MB
+        timeCost = Math.max(timeCost, 2); // Min 2 iterations
+        const finalOptions = {
+            memoryCost,
+            timeCost,
+            parallelism,
+            hashLength: KEY_LENGTH,
+        };
+        // Cache the result
+        cachedOptions = finalOptions;
+        lastCalibrationTime = Date.now();
+        // Final verification
+        const finalTime = await benchmark(memoryCost, timeCost);
+        console.log(`[BackupService] ✅ Calibrated: ${memoryCost / 1024}MB, timeCost=${timeCost}, parallelism=${parallelism} → ${finalTime}ms`);
+        return finalOptions;
+    }
+    catch (error) {
+        console.error('[BackupService] Calibration failed, using safe defaults:', error);
+        // Fallback to safe defaults if calibration fails
+        return {
+            memoryCost: 65536, // 64MB
+            timeCost: 4,
+            parallelism: parallelism,
+            hashLength: KEY_LENGTH,
+        };
+    }
+}
+/**
+ * Get Argon2 options - uses cached calibrated values or calibrates
+ */
+const getArgon2Options = async () => {
+    return calibrateArgon2Options();
+};
 /**
  * Validate password strength
  * Requirements:
@@ -107,13 +226,20 @@ function validatePassword(password) {
 }
 class BackupService {
     constructor() {
+        this.calibrationPromise = null;
         // Store backups in user data directory
         this.backupDir = path.join(electron_1.app.getPath('userData'), 'backups');
         this.ensureBackupDir();
-        // Log system info
+        // Log system info and start calibration in background
         const memGB = (os.totalmem() / (1024 * 1024 * 1024)).toFixed(1);
-        const memoryCost = getOptimalMemoryCost();
-        console.log(`[BackupService] System RAM: ${memGB}GB, Argon2 memoryCost: ${memoryCost / 1024}MB`);
+        const baselineMemory = getBaselineMemoryCost();
+        console.log(`[BackupService] System RAM: ${memGB}GB, Baseline memory: ${baselineMemory / 1024}MB`);
+        // Pre-calibrate in background so first backup is fast
+        this.calibrationPromise = calibrateArgon2Options().then(() => {
+            console.log('[BackupService] Background calibration complete');
+        }).catch(err => {
+            console.error('[BackupService] Background calibration failed:', err);
+        });
     }
     ensureBackupDir() {
         if (!fs.existsSync(this.backupDir)) {
@@ -133,12 +259,14 @@ class BackupService {
      * @param kdfOptions - KDF options from backup file (for cross-machine compatibility)
      */
     async deriveKey(password, salt, kdfOptions) {
-        const defaultOptions = getArgon2Options();
-        // Use stored options from backup (for decryption) or auto-detected values (for encryption)
+        // Get auto-tuned options (or use provided options for decryption)
+        const defaultOptions = await getArgon2Options();
+        // Use stored options from backup (for decryption) or auto-tuned values (for encryption)
         const memoryCost = kdfOptions?.memoryCost || defaultOptions.memoryCost;
         const parallelism = kdfOptions?.parallelism || defaultOptions.parallelism;
         const timeCost = kdfOptions?.timeCost || defaultOptions.timeCost;
         console.log(`[BackupService] Argon2id: memoryCost=${memoryCost / 1024}MB, parallelism=${parallelism}, timeCost=${timeCost}`);
+        const startTime = Date.now();
         const hash = await (0, hash_wasm_1.argon2id)({
             password: password,
             salt: salt,
@@ -148,13 +276,14 @@ class BackupService {
             hashLength: KEY_LENGTH,
             outputType: 'binary',
         });
+        console.log(`[BackupService] Key derivation took ${Date.now() - startTime}ms`);
         return Buffer.from(hash);
     }
     /**
      * Encrypt data with password using Argon2id + AES-256-GCM
      */
     async encrypt(data, password) {
-        const options = getArgon2Options();
+        const options = await getArgon2Options();
         const salt = crypto.randomBytes(SALT_LENGTH);
         const key = await this.deriveKey(password, salt, {
             memoryCost: options.memoryCost,
@@ -168,7 +297,7 @@ class BackupService {
         encrypted += cipher.final('base64');
         const authTag = cipher.getAuthTag();
         return {
-            version: '2.1', // Version 2.1 stores all KDF params for cross-machine compatibility
+            version: '2.2', // Version 2.2: Auto-tuned KDF params stored for cross-machine compatibility
             encrypted,
             salt: salt.toString('base64'),
             iv: iv.toString('base64'),
@@ -187,15 +316,31 @@ class BackupService {
             const salt = Buffer.from(encryptedBackup.salt, 'base64');
             const iv = Buffer.from(encryptedBackup.iv, 'base64');
             const authTag = Buffer.from(encryptedBackup.authTag, 'base64');
-            // Use stored KDF options from backup for cross-machine compatibility
-            // For old backups (v2.0), use defaults that match the original encryption machine
-            const defaultOptions = getArgon2Options();
-            const kdfOptions = {
-                memoryCost: encryptedBackup.memoryCost || defaultOptions.memoryCost,
-                parallelism: encryptedBackup.parallelism || defaultOptions.parallelism,
-                timeCost: encryptedBackup.timeCost || defaultOptions.timeCost,
-            };
-            console.log(`[BackupService] Decrypting backup v${encryptedBackup.version} with KDF options:`, kdfOptions);
+            // IMPORTANT: For cross-machine compatibility, we MUST use stored KDF params from backup
+            // If backup has stored params (v2.1+), use them exactly
+            // If backup is old (v2.0), use FIXED legacy defaults (not auto-tuned values!)
+            let kdfOptions;
+            if (encryptedBackup.memoryCost && encryptedBackup.timeCost) {
+                // New backup format (v2.1+) - use stored params exactly
+                kdfOptions = {
+                    memoryCost: encryptedBackup.memoryCost,
+                    parallelism: encryptedBackup.parallelism || 4,
+                    timeCost: encryptedBackup.timeCost,
+                };
+                console.log(`[BackupService] Using stored KDF params from backup v${encryptedBackup.version}`);
+            }
+            else {
+                // Legacy backup (v2.0 or earlier) - use FIXED legacy defaults
+                // These were the hardcoded values used before auto-tune was implemented
+                // DO NOT use auto-tuned values here, as they would differ from encryption machine!
+                kdfOptions = {
+                    memoryCost: 65536, // 64MB - the old default
+                    parallelism: 4, // the old default
+                    timeCost: 3, // the old default (before we changed to 4)
+                };
+                console.warn(`[BackupService] Legacy backup v${encryptedBackup.version} detected - using fixed legacy KDF params`);
+            }
+            console.log(`[BackupService] Decrypting with KDF options:`, kdfOptions);
             const key = await this.deriveKey(password, salt, kdfOptions);
             const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
             decipher.setAuthTag(authTag);

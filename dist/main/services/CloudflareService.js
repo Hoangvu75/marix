@@ -6,23 +6,28 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.cloudflareService = exports.CloudflareService = void 0;
 const cloudflare_1 = __importDefault(require("cloudflare"));
 const electron_store_1 = __importDefault(require("electron-store"));
+const SecureStorage_1 = require("./SecureStorage");
 const store = new electron_store_1.default();
 class CloudflareService {
     constructor() {
         this.client = null;
     }
     /**
-     * Get stored API token (encrypted)
+     * Get stored API token (decrypted)
      */
     getToken() {
-        return store.get('cloudflare.token', null);
+        const encrypted = store.get('cloudflare.token', null);
+        if (!encrypted)
+            return null;
+        return SecureStorage_1.SecureStorage.decrypt(encrypted);
     }
     /**
-     * Save API token (will be encrypted in backup)
+     * Save API token (encrypted with OS keychain)
      */
     setToken(token) {
-        console.log('[CloudflareService] Setting new token');
-        store.set('cloudflare.token', token);
+        console.log('[CloudflareService] Setting new token (encrypted)');
+        const encrypted = SecureStorage_1.SecureStorage.encrypt(token);
+        store.set('cloudflare.token', encrypted);
         this.client = null; // Reset client to use new token
     }
     /**
