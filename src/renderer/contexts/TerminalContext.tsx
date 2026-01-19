@@ -119,7 +119,14 @@ export const TerminalProvider: React.FC<{ children: ReactNode }> = ({ children }
     let isPasting = false;
 
     // Handle keyboard shortcuts for copy/paste
+    // Important: Only return false for keydown events we explicitly handle
+    // to prevent modifier keys from getting stuck
     xterm.attachCustomKeyEventHandler((event) => {
+      // Only handle keydown events
+      if (event.type !== 'keydown') {
+        return true;  // Let keyup events pass through normally
+      }
+      
       // Ctrl+Shift+C for copy
       if (event.ctrlKey && event.shiftKey && event.key === 'C') {
         const selection = xterm.getSelection();
@@ -132,16 +139,14 @@ export const TerminalProvider: React.FC<{ children: ReactNode }> = ({ children }
       // Ctrl+Shift+V or Ctrl+V for paste
       if ((event.ctrlKey && event.shiftKey && event.key === 'V') || 
           (event.ctrlKey && !event.shiftKey && event.key === 'v')) {
-        if (event.type === 'keydown') {
-          isPasting = true;
-          navigator.clipboard.readText().then(text => {
-            if (text) {
-              ipcRenderer.invoke('ssh:writeShell', connectionId, text);
-            }
-            // Reset flag after a short delay
-            setTimeout(() => { isPasting = false; }, 50);
-          }).catch(() => { isPasting = false; });
-        }
+        isPasting = true;
+        navigator.clipboard.readText().then(text => {
+          if (text) {
+            ipcRenderer.invoke('ssh:writeShell', connectionId, text);
+          }
+          // Reset flag after a short delay
+          setTimeout(() => { isPasting = false; }, 50);
+        }).catch(() => { isPasting = false; });
         return false;
       }
       

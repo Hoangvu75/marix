@@ -2,6 +2,73 @@
 
 All notable changes to Marix SSH Client will be documented in this file.
 
+## [1.0.8] - 2026-01-19
+
+### Added
+- **Source Installer - Dynamic Version Fetching**: Framework versions are now fetched from official sources in real-time
+  - **Laravel**: Fetches versions 11+ dynamically from GitHub Releases API, versions 8-10 from static data
+  - **WordPress**: Fetches versions 6.x+ from GitHub Tags API, versions 4.x-5.x from static data
+  - **Symfony**: Fetches versions from `symfony.com/releases.json`
+  - **CodeIgniter 3/4**: Fetches versions from GitHub Releases API
+  - **Node.js Frameworks**: Fetches versions from npm registry
+    - Express.js, NestJS, Fastify, Vue.js, Nuxt.js, React, Next.js, TypeScript
+  - Sub-version selection: After selecting major version, fetch and display available patch versions
+  - Loading spinners during version fetching
+  - "Latest" option highlighted as recommended
+  - **Static data fallback**: Complete version history for Laravel 8-10 and WordPress 4.x-5.x stored locally for instant access
+
+- **Source Installer - Multi-language Support**: UI text now fully localized
+  - Added translations for all Source Installer strings
+  - Supports all 14 languages (English, Vietnamese, Chinese, Japanese, Korean, French, German, Spanish, Portuguese, Russian, Thai, Malay, Indonesian, Filipino)
+
+- **Source Installer - Realtime Installation Progress**: Installation output now streams in realtime
+  - Uses PTY mode for proper terminal output with ANSI colors
+  - XTermLogViewer component renders ANSI escape codes correctly
+  - No more waiting for command to complete - see progress as it happens
+  - Streaming via IPC events (`ssh:executeStream` + `ssh:streamData`)
+
+- **Source Installer - Official Framework Icons**: Replaced emoji icons with official SVG logos
+  - Laravel (red flame logo)
+  - WordPress (blue W logo)
+  - Symfony (black logo)
+  - CodeIgniter (flame logo)
+  - Express.js, NestJS, Fastify
+  - Vue.js, Nuxt.js
+  - React, Next.js
+  - TypeScript
+
+- **SFTP Compress/Extract Feature**: Right-click context menu now supports archive operations
+  - **Compress folders/files to**:
+    - `.zip` (using `zip` command)
+    - `.tar.gz` (using `tar -czvf`)
+    - `.tar` (using `tar -cvf`)
+  - **Extract archives** ("Extract Here" option):
+    - `.zip` (unzip)
+    - `.tar`, `.tar.gz`, `.tgz` (tar)
+    - `.tar.bz2`, `.tbz2` (tar + bzip2)
+    - `.tar.xz`, `.txz` (tar + xz)
+    - `.gz`, `.bz2`, `.xz` (gunzip, bunzip2, unxz)
+    - `.7z` (7z)
+    - `.rar` (unrar)
+
+### Fixed
+- **Keyboard Stuck Issue**: Fixed issue where keyboard keys (spacebar, capitals, numpad) would stop working after extended use
+  - Added automatic keyboard state reset when window regains focus
+  - Added visibility change handler to reset modifier keys when returning to app
+  - Fixed xterm key event handler to only block keydown events, allowing keyup events to pass through normally
+  - This prevents Ctrl, Shift, Alt, and Meta keys from getting "stuck" in pressed state
+
+- **Laravel 8/9/10 Installation Error**: Fixed "Could not find package laravel/laravel with version v10.50.0" error
+  - Root cause: Was using `laravel/framework` versions instead of `laravel/laravel` package versions
+  - Solution: Updated `legacy-versions.json` with correct Packagist versions for `laravel/laravel`
+  - Laravel 10: 10.3.3, 10.3.2, ..., 10.0.0 (25 versions)
+  - Laravel 9: 9.5.2, 9.5.1, ..., 9.0.0 (33 versions)
+  - Laravel 8: 8.6.12, 8.6.11, ..., 8.0.0 (49 versions)
+
+- **Composer Root User Permission**: Fixed "Composer plugins disabled when running as root" warning
+  - Added `COMPOSER_ALLOW_SUPERUSER=1` prefix to all composer commands
+
+
 ## [1.0.7] - 2026-01-18
 
 ### Security Improvements (Major)
@@ -30,9 +97,12 @@ All notable changes to Marix SSH Client will be documented in this file.
   - Direct TCP socket queries to WHOIS servers (port 43)
   - Automatic referral following for .com, .net domains
   - Google Registry TLDs (.dev, .app, .page, .new, .google, .youtube, .zip, etc.) now use Google RDAP API
+  - **IANA Bootstrap Registry**: Automatically fetches RDAP servers from IANA for all supported TLDs
+  - **Registrar RDAP Follow**: Follows referrals to registrar RDAP servers (like namerdap.systems) for detailed info
   - RDAP responses formatted as readable text instead of raw JSON
   - Separated WHOIS servers into dedicated file (`whois-servers.ts`) for maintainability
   - Grouped TLDs by provider (Donuts, Afilias, Verisign, etc.) for cleaner code
+  - Bootstrap registry cached for 24 hours to minimize IANA requests
 
 ### Fixed
 - **Backup Restore Compatibility**: Fixed potential issue where restoring legacy backups (v2.0) on different machines could fail

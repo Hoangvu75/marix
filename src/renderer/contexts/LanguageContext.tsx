@@ -373,6 +373,41 @@ export interface Translations {
   sftpConnectionFailed: string;
   sftpDropToDownload: string;
   sftpDropToUpload: string;
+  sftpInstallSource: string;
+  sftpCompressTo: string;
+  sftpExtractHere: string;
+  
+  // Source Installer
+  sourceInstallerTitle: string;
+  sourceInstallerDesc: string;
+  sourceSelectFramework: string;
+  sourceSelectVersion: string;
+  sourceSelectMajorVersion: string;
+  sourceSelectSpecificVersion: string;
+  sourceLatestRecommended: string;
+  sourceLoadingVersions: string;
+  sourceCouldNotFetchVersions: string;
+  sourcePHPVersion: string;
+  sourceCheckingPHP: string;
+  sourcePHPNotDetected: string;
+  sourceRequiresPHP: string;
+  sourceLTS: string;
+  sourceLatest: string;
+  sourceContinue: string;
+  sourceBack: string;
+  sourceInstalling: string;
+  sourceLaravelDesc: string;
+  sourceWordPressDesc: string;
+  sourceSymfonyDesc: string;
+  sourceCodeIgniterDesc: string;
+  sourceExpressDesc: string;
+  sourceNestJSDesc: string;
+  sourceFastifyDesc: string;
+  sourceVueDesc: string;
+  sourceNuxtDesc: string;
+  sourceReactDesc: string;
+  sourceNextJSDesc: string;
+  sourceTypeScriptDesc: string;
   
   // WebSocket
   wssTypeMessage: string;

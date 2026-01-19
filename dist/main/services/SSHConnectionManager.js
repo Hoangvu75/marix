@@ -244,6 +244,32 @@ class SSHConnectionManager {
             });
         });
     }
+    /**
+     * Execute command with streaming output via callback
+     */
+    async executeCommandStream(connectionId, command, onData) {
+        const connData = this.connections.get(connectionId);
+        if (!connData) {
+            throw new Error('Connection not found');
+        }
+        return new Promise((resolve, reject) => {
+            connData.client.exec(command, { pty: true }, (err, stream) => {
+                if (err) {
+                    reject(err);
+                    return;
+                }
+                stream.on('close', (code) => {
+                    resolve({ success: code === 0, exitCode: code });
+                });
+                stream.on('data', (data) => {
+                    onData(data.toString(), false);
+                });
+                stream.stderr.on('data', (data) => {
+                    onData(data.toString(), true);
+                });
+            });
+        });
+    }
     getAllConnections() {
         return Array.from(this.connections.keys());
     }

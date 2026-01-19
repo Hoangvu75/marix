@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { ipcRenderer } from 'electron';
+import { version as APP_VERSION } from '../../package.json';
 import ServerList from './components/ServerList';
 import XTermTerminal from './components/XTermTerminal';
 import DualPaneSFTP from './components/DualPaneSFTP';
@@ -166,7 +167,6 @@ const App: React.FC = () => {
     hasUpdate?: boolean;
   }>({ checking: false });
   const [showUpdateNotification, setShowUpdateNotification] = useState(false);
-  const APP_VERSION = '1.0.7';
   const APP_AUTHOR = 'Đạt Vũ (Marix)';
   const GITHUB_REPO = 'https://github.com/marixdev/marix';
   
@@ -318,6 +318,39 @@ const App: React.FC = () => {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [activeSession]);
+
+  // Fix keyboard stuck issue - reset keyboard state when window regains focus
+  // This prevents modifier keys from being "stuck" after extended use
+  useEffect(() => {
+    const resetKeyboardState = () => {
+      // Dispatch key up events for all modifier keys to reset their state
+      const modifierKeys = ['Control', 'Shift', 'Alt', 'Meta'];
+      modifierKeys.forEach(key => {
+        window.dispatchEvent(new KeyboardEvent('keyup', { 
+          key, 
+          code: key === 'Control' ? 'ControlLeft' : key === 'Shift' ? 'ShiftLeft' : key === 'Alt' ? 'AltLeft' : 'MetaLeft',
+          bubbles: true 
+        }));
+      });
+      console.log('[App] Keyboard state reset on focus');
+    };
+
+    // Reset when window gains focus (user returns to app)
+    window.addEventListener('focus', resetKeyboardState);
+    
+    // Also reset when visibility changes (tab becomes visible again)
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        resetKeyboardState();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener('focus', resetKeyboardState);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, []);
 
   // Start/stop LAN discovery service based on toggle
   useEffect(() => {
@@ -2494,6 +2527,21 @@ const App: React.FC = () => {
                 <span className="text-sm font-medium">{t('portForwarding') || 'Port Forward'}</span>
               </button>
               
+              {/* Send Files via LAN */}
+              <button
+                onClick={() => { setActiveMenu('sendfiles'); setActiveSessionId(null); }}
+                className={`w-full px-3 py-2.5 rounded-lg flex items-center gap-3 mb-1 transition ${
+                  activeMenu === 'sendfiles' && !activeSessionId
+                    ? 'bg-cyan-600 !text-white'
+                    : appTheme === 'light' ? 'text-gray-600 hover:text-gray-900 hover:bg-gray-100' : 'text-gray-400 hover:text-white hover:bg-navy-700'
+                }`}
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                </svg>
+                <span className="text-sm font-medium">Send Files</span>
+              </button>
+              
               {/* Tools */}
               <button
                 onClick={() => { setActiveMenu('tools'); setActiveSessionId(null); }}
@@ -2508,21 +2556,6 @@ const App: React.FC = () => {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                 </svg>
                 <span className="text-sm font-medium">{t('tools')}</span>
-              </button>
-              
-              {/* Send Files via LAN */}
-              <button
-                onClick={() => { setActiveMenu('sendfiles'); setActiveSessionId(null); }}
-                className={`w-full px-3 py-2.5 rounded-lg flex items-center gap-3 mb-1 transition ${
-                  activeMenu === 'sendfiles' && !activeSessionId
-                    ? 'bg-cyan-600 !text-white'
-                    : appTheme === 'light' ? 'text-gray-600 hover:text-gray-900 hover:bg-gray-100' : 'text-gray-400 hover:text-white hover:bg-navy-700'
-                }`}
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                </svg>
-                <span className="text-sm font-medium">Send Files</span>
               </button>
               
               {/* Lookup */}

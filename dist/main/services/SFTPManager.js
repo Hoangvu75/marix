@@ -1,9 +1,12 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.SFTPManager = void 0;
+const electron_1 = require("electron");
 class SFTPManager {
     constructor() {
         this.sftpConnections = new Map();
+        // Track delete count for progress reporting
+        this.deleteCount = 0;
     }
     async connect(connectionId, sshClient) {
         if (!sshClient) {
@@ -80,12 +83,30 @@ class SFTPManager {
         if (!sftp) {
             throw new Error('SFTP connection not found');
         }
+        // First check if it's a file or directory
+        const stats = await new Promise((resolve, reject) => {
+            sftp.stat(remotePath, (err, stats) => {
+                if (err) {
+                    reject(err);
+                    return;
+                }
+                resolve(stats);
+            });
+        });
+        // If it's a directory, use deleteDirectory (with recursive support)
+        if (stats.isDirectory()) {
+            console.log('[SFTPManager] Target is a directory, using deleteDirectory:', remotePath);
+            await this.deleteDirectory(connectionId, remotePath);
+            return;
+        }
+        // Otherwise delete as file
         return new Promise((resolve, reject) => {
             sftp.unlink(remotePath, (err) => {
                 if (err) {
                     reject(err);
                     return;
                 }
+                console.log('[SFTPManager] Deleted file:', remotePath);
                 resolve();
             });
         });
@@ -172,9 +193,84 @@ class SFTPManager {
         if (!sftp) {
             throw new Error('SFTP connection not found');
         }
-        return new Promise((resolve, reject) => {
+        // First, try to delete directly (works for empty directories)
+        try {
+            await new Promise((resolve, reject) => {
+                sftp.rmdir(remotePath, (err) => {
+                    if (err) {
+                        reject(err);
+                        return;
+                    }
+                    console.log('[SFTPManager] Deleted empty directory:', remotePath);
+                    resolve();
+                });
+            });
+            return;
+        }
+        catch (err) {
+            // If directory not empty, we need to delete recursively
+            if (err.message?.includes('Failure') || err.code === 4) {
+                console.log('[SFTPManager] Directory not empty, deleting recursively:', remotePath);
+                await this.deleteDirectoryRecursive(connectionId, remotePath);
+                return;
+            }
+            throw err;
+        }
+    }
+    // Emit delete progress to renderer
+    emitDeleteProgress(connectionId, path, type, count) {
+        const windows = electron_1.BrowserWindow.getAllWindows();
+        for (const win of windows) {
+            win.webContents.send('sftp:delete-progress', { connectionId, path, type, count });
+        }
+    }
+    // Recursive delete for non-empty directories
+    async deleteDirectoryRecursive(connectionId, remotePath, isRoot = true) {
+        const sftp = this.sftpConnections.get(connectionId);
+        if (!sftp) {
+            throw new Error('SFTP connection not found');
+        }
+        // Reset count on root call
+        if (isRoot) {
+            this.deleteCount = 0;
+        }
+        // List all files and directories
+        const items = await this.listFiles(connectionId, remotePath);
+        // Delete each item
+        for (const item of items) {
+            const itemPath = remotePath.endsWith('/')
+                ? `${remotePath}${item.name}`
+                : `${remotePath}/${item.name}`;
+            if (item.type === 'directory') {
+                // Recursively delete subdirectory
+                await this.deleteDirectoryRecursive(connectionId, itemPath, false);
+            }
+            else {
+                // Send progress event
+                this.deleteCount++;
+                this.emitDeleteProgress(connectionId, itemPath, 'file', this.deleteCount);
+                // Delete file
+                await new Promise((resolve, reject) => {
+                    sftp.unlink(itemPath, (err) => {
+                        if (err) {
+                            console.error('[SFTPManager] Failed to delete file:', itemPath, err.message);
+                            reject(err);
+                            return;
+                        }
+                        console.log('[SFTPManager] Deleted file:', itemPath);
+                        resolve();
+                    });
+                });
+            }
+        }
+        // Send progress for directory
+        this.deleteCount++;
+        this.emitDeleteProgress(connectionId, remotePath, 'directory', this.deleteCount);
+        // Now delete the empty directory
+        await new Promise((resolve, reject) => {
             sftp.rmdir(remotePath, (err) => {
                 if (err) {
+                    console.error('[SFTPManager] Failed to delete directory:', remotePath, err.message);
                     reject(err);
                     return;
                 }

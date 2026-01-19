@@ -487,6 +487,29 @@ electron_1.ipcMain.handle('ssh:execute', async (event, connectionId, command) =>
         return { success: false, error: error.message };
     }
 });
+// Streaming execute - sends output line by line via event
+electron_1.ipcMain.handle('ssh:executeStream', async (event, connectionId, command, streamId) => {
+    try {
+        let client = sshManager.getConnection(connectionId);
+        let retries = 0;
+        while (!client && retries < 10) {
+            await new Promise(resolve => setTimeout(resolve, 300));
+            client = sshManager.getConnection(connectionId);
+            retries++;
+        }
+        if (!client) {
+            return { success: false, error: 'SSH2 not connected yet. Please try again.' };
+        }
+        const result = await sshManager.executeCommandStream(connectionId, command, (data, isError) => {
+            // Send each chunk of data to renderer
+            event.sender.send('ssh:streamData', streamId, data, isError);
+        });
+        return { success: result.success, exitCode: result.exitCode };
+    }
+    catch (error) {
+        return { success: false, error: error.message };
+    }
+});
 // Shell already created in ssh:connect, this is just for compatibility
 electron_1.ipcMain.handle('ssh:createShell', async (event, connectionId, cols, rows) => {
     try {

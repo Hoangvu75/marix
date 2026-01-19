@@ -4,6 +4,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import FileEditor from './FileEditor';
+import SourceInstaller from './SourceInstaller';
 import { useLanguage } from '../contexts/LanguageContext';
 
 interface FileInfo {
@@ -80,6 +81,13 @@ const DualPaneSFTP: React.FC<Props> = ({ connectionId, server, initialLocalPath,
   // File editor state
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingFile, setEditingFile] = useState<{ name: string; path: string } | null>(null);
+
+  // Source installer state
+  const [sourceInstallerOpen, setSourceInstallerOpen] = useState(false);
+  const [sourceInstallerPath, setSourceInstallerPath] = useState('');
+
+  // Delete progress state
+  const [deleteProgress, setDeleteProgress] = useState<{ deleting: boolean; currentItem: string; count: number } | null>(null);
 
   // Custom prompt function
   const showPrompt = (title: string, message: string, defaultValue = ''): Promise<string | null> => {
@@ -548,13 +556,33 @@ const DualPaneSFTP: React.FC<Props> = ({ connectionId, server, initialLocalPath,
     }
   };
 
+  // Listen for delete progress events
+  useEffect(() => {
+    const handleDeleteProgress = (_event: any, data: { connectionId: string; path: string; type: 'file' | 'directory'; count: number }) => {
+      if (data.connectionId === connectionId) {
+        setDeleteProgress({
+          deleting: true,
+          currentItem: data.path,
+          count: data.count,
+        });
+      }
+    };
+
+    ipcRenderer.on('sftp:delete-progress', handleDeleteProgress);
+    return () => {
+      ipcRenderer.removeListener('sftp:delete-progress', handleDeleteProgress);
+    };
+  }, [connectionId]);
+
   const deleteRemote = async (fileName: string) => {
     const confirmed = await showConfirm('Delete', `Delete "${fileName}"?`);
     if (confirmed) {
       const remoteFilePath = remotePath === '/' ? `/${fileName}` : `${remotePath}/${fileName}`;
       try {
+        setDeleteProgress({ deleting: true, currentItem: remoteFilePath, count: 0 });
         const deleteCmd = isFTP ? 'ftp:delete' : 'sftp:delete';
         const result = await ipcRenderer.invoke(deleteCmd, connectionId, remoteFilePath);
+        setDeleteProgress(null);
         if (result.success) {
           loadRemoteFiles(remotePath);
           setSelectedRemote(null);
@@ -562,6 +590,7 @@ const DualPaneSFTP: React.FC<Props> = ({ connectionId, server, initialLocalPath,
           alert('Failed to delete: ' + result.error);
         }
       } catch (err: any) {
+        setDeleteProgress(null);
         alert('Error: ' + err.message);
       }
     }
@@ -602,6 +631,103 @@ const DualPaneSFTP: React.FC<Props> = ({ connectionId, server, initialLocalPath,
     }
   };
 
+  // Compress file/folder to archive (remote)
+  const compressRemote = async (fileName: string, format: 'zip' | 'tar.gz' | 'tar') => {
+    const filePath = remotePath === '/' ? `/${fileName}` : `${remotePath}/${fileName}`;
+    const archiveName = format === 'zip' ? `${fileName}.zip` : 
+                        format === 'tar.gz' ? `${fileName}.tar.gz` : `${fileName}.tar`;
+    const archivePath = remotePath === '/' ? `/${archiveName}` : `${remotePath}/${archiveName}`;
+    
+    try {
+      setLoading(true);
+      let cmd: string;
+      if (format === 'zip') {
+        cmd = `cd "${remotePath}" && zip -r "${archiveName}" "${fileName}"`;
+      } else if (format === 'tar.gz') {
+        cmd = `cd "${remotePath}" && tar -czvf "${archiveName}" "${fileName}"`;
+      } else {
+        cmd = `cd "${remotePath}" && tar -cvf "${archiveName}" "${fileName}"`;
+      }
+      
+      const result = await ipcRenderer.invoke('ssh:execute', connectionId, cmd);
+      if (result.success) {
+        loadRemoteFiles(remotePath);
+      } else {
+        alert(`Failed to compress: ${result.error}`);
+      }
+    } catch (err: any) {
+      alert(`Error: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  // Extract archive (remote)
+  const extractRemote = async (fileName: string) => {
+    const filePath = remotePath === '/' ? `/${fileName}` : `${remotePath}/${fileName}`;
+    
+    // Determine extraction command based on file extension
+    const lowerName = fileName.toLowerCase();
+    let cmd: string;
+    
+    if (lowerName.endsWith('.zip')) {
+      cmd = `cd "${remotePath}" && unzip -o "${fileName}"`;
+    } else if (lowerName.endsWith('.tar.gz') || lowerName.endsWith('.tgz')) {
+      cmd = `cd "${remotePath}" && tar -xzvf "${fileName}"`;
+    } else if (lowerName.endsWith('.tar.bz2') || lowerName.endsWith('.tbz2')) {
+      cmd = `cd "${remotePath}" && tar -xjvf "${fileName}"`;
+    } else if (lowerName.endsWith('.tar.xz') || lowerName.endsWith('.txz')) {
+      cmd = `cd "${remotePath}" && tar -xJvf "${fileName}"`;
+    } else if (lowerName.endsWith('.tar')) {
+      cmd = `cd "${remotePath}" && tar -xvf "${fileName}"`;
+    } else if (lowerName.endsWith('.gz')) {
+      cmd = `cd "${remotePath}" && gunzip -k "${fileName}"`;
+    } else if (lowerName.endsWith('.bz2')) {
+      cmd = `cd "${remotePath}" && bunzip2 -k "${fileName}"`;
+    } else if (lowerName.endsWith('.xz')) {
+      cmd = `cd "${remotePath}" && unxz -k "${fileName}"`;
+    } else if (lowerName.endsWith('.7z')) {
+      cmd = `cd "${remotePath}" && 7z x "${fileName}"`;
+    } else if (lowerName.endsWith('.rar')) {
+      cmd = `cd "${remotePath}" && unrar x "${fileName}"`;
+    } else {
+      alert('Unsupported archive format');
+      return;
+    }
+    
+    try {
+      setLoading(true);
+      const result = await ipcRenderer.invoke('ssh:execute', connectionId, cmd);
+      if (result.success) {
+        loadRemoteFiles(remotePath);
+      } else {
+        alert(`Failed to extract: ${result.error}`);
+      }
+    } catch (err: any) {
+      alert(`Error: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  // Check if file is an archive
+  const isArchive = (fileName: string): boolean => {
+    const lowerName = fileName.toLowerCase();
+    return lowerName.endsWith('.zip') || 
+           lowerName.endsWith('.tar') ||
+           lowerName.endsWith('.tar.gz') || 
+           lowerName.endsWith('.tgz') ||
+           lowerName.endsWith('.tar.bz2') || 
+           lowerName.endsWith('.tbz2') ||
+           lowerName.endsWith('.tar.xz') || 
+           lowerName.endsWith('.txz') ||
+           lowerName.endsWith('.gz') ||
+           lowerName.endsWith('.bz2') ||
+           lowerName.endsWith('.xz') ||
+           lowerName.endsWith('.7z') ||
+           lowerName.endsWith('.rar');
+  };
+
   const handleContextMenu = (e: React.MouseEvent, type: 'local' | 'remote', file: FileInfo | null) => {
     e.preventDefault();
     e.stopPropagation();
@@ -614,7 +740,7 @@ const DualPaneSFTP: React.FC<Props> = ({ connectionId, server, initialLocalPath,
     }
     
     // Calculate position with boundary checking
-    const menuHeight = 200; // Approximate menu height
+    const menuHeight = 350; // Approximate menu height (more items now)
     const menuWidth = 200; // Approximate menu width
     const windowHeight = window.innerHeight;
     const windowWidth = window.innerWidth;
@@ -820,7 +946,7 @@ const DualPaneSFTP: React.FC<Props> = ({ connectionId, server, initialLocalPath,
   }
 
   return (
-    <div className="h-full flex flex-col bg-navy-900">
+    <div className="h-full flex flex-col bg-navy-900 relative">
       {/* Dual pane */}
       <div className="flex-1 flex overflow-hidden">
         {/* Local pane */}
@@ -1021,8 +1147,20 @@ const DualPaneSFTP: React.FC<Props> = ({ connectionId, server, initialLocalPath,
               </table>
             )}
           </div>
-          <div className="bg-navy-800 border-t border-navy-700 px-2 py-1 text-xs text-gray-500">
-            {remoteFiles.length} {t('sftpItems')}
+          <div className="bg-navy-800 border-t border-navy-700 px-2 py-1 text-xs text-gray-500 flex items-center justify-between">
+            <span>{remoteFiles.length} {t('sftpItems')}</span>
+            {deleteProgress && deleteProgress.deleting && (
+              <div className="flex items-center gap-2 text-red-400">
+                <svg className="animate-spin w-3 h-3" viewBox="0 0 24 24">
+                  <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" opacity="0.25" />
+                  <path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" opacity="0.75" />
+                </svg>
+                <span className="font-medium">Deleting... ({deleteProgress.count})</span>
+                <span className="text-gray-500 truncate max-w-[200px]" title={deleteProgress.currentItem}>
+                  {deleteProgress.currentItem.split('/').pop()}
+                </span>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -1063,7 +1201,20 @@ const DualPaneSFTP: React.FC<Props> = ({ connectionId, server, initialLocalPath,
               {contextMenu.file ? (
                 <>
                   {contextMenu.file.type === 'directory' && (
-                    <MenuItem icon="folder" onClick={() => { navigateRemote(remotePath === '/' ? `/${contextMenu.file!.name}` : `${remotePath}/${contextMenu.file!.name}`); setContextMenu(null); }}>{t('sftpOpen')}</MenuItem>
+                    <>
+                      <MenuItem icon="folder" onClick={() => { navigateRemote(remotePath === '/' ? `/${contextMenu.file!.name}` : `${remotePath}/${contextMenu.file!.name}`); setContextMenu(null); }}>{t('sftpOpen')}</MenuItem>
+                      <MenuItem icon="package" onClick={() => { 
+                        const targetDir = remotePath === '/' ? `/${contextMenu.file!.name}` : `${remotePath}/${contextMenu.file!.name}`;
+                        setSourceInstallerPath(targetDir);
+                        setSourceInstallerOpen(true);
+                        setContextMenu(null);
+                      }}>{t('sftpInstallSource')}</MenuItem>
+                      <div className="border-t border-navy-600 my-1"></div>
+                      <div className="px-3 py-1 text-xs text-gray-500 uppercase tracking-wide">Compress</div>
+                      <MenuItem icon="compress" onClick={() => { compressRemote(contextMenu.file!.name, 'zip'); setContextMenu(null); }}>Compress to .zip</MenuItem>
+                      <MenuItem icon="compress" onClick={() => { compressRemote(contextMenu.file!.name, 'tar.gz'); setContextMenu(null); }}>Compress to .tar.gz</MenuItem>
+                      <MenuItem icon="compress" onClick={() => { compressRemote(contextMenu.file!.name, 'tar'); setContextMenu(null); }}>Compress to .tar</MenuItem>
+                    </>
                   )}
                   {contextMenu.file.type === 'file' && (
                     <>
@@ -1071,8 +1222,23 @@ const DualPaneSFTP: React.FC<Props> = ({ connectionId, server, initialLocalPath,
                       {isEditable(contextMenu.file.name) && (
                         <MenuItem icon="edit" onClick={() => { openRemoteFile(contextMenu.file!.name); setContextMenu(null); }}>{t('sftpEditFile')}</MenuItem>
                       )}
+                      {isArchive(contextMenu.file.name) && (
+                        <>
+                          <div className="border-t border-navy-600 my-1"></div>
+                          <MenuItem icon="extract" onClick={() => { extractRemote(contextMenu.file!.name); setContextMenu(null); }}>Extract Here</MenuItem>
+                        </>
+                      )}
+                      {!isArchive(contextMenu.file.name) && (
+                        <>
+                          <div className="border-t border-navy-600 my-1"></div>
+                          <div className="px-3 py-1 text-xs text-gray-500 uppercase tracking-wide">Compress</div>
+                          <MenuItem icon="compress" onClick={() => { compressRemote(contextMenu.file!.name, 'zip'); setContextMenu(null); }}>Compress to .zip</MenuItem>
+                          <MenuItem icon="compress" onClick={() => { compressRemote(contextMenu.file!.name, 'tar.gz'); setContextMenu(null); }}>Compress to .tar.gz</MenuItem>
+                        </>
+                      )}
                     </>
                   )}
+                  <div className="border-t border-navy-600 my-1"></div>
                   <MenuItem icon="chmod" onClick={() => { chmodRemote(contextMenu.file!.name); setContextMenu(null); }}>{t('sftpChangePermissions')}</MenuItem>
                   <MenuItem icon="rename" onClick={() => { renameRemote(contextMenu.file!.name); setContextMenu(null); }}>{t('rename')}</MenuItem>
                   <div className="border-t border-navy-600 my-1"></div>
@@ -1082,6 +1248,11 @@ const DualPaneSFTP: React.FC<Props> = ({ connectionId, server, initialLocalPath,
                 <>
                   <MenuItem icon="folder-plus" onClick={() => { createRemoteFolder(); setContextMenu(null); }}>{t('newFolder')}</MenuItem>
                   <MenuItem icon="file-plus" onClick={() => { createRemoteFile(); setContextMenu(null); }}>{t('newFolder').replace('Folder', 'File')}</MenuItem>
+                  <MenuItem icon="package" onClick={() => { 
+                    setSourceInstallerPath(remotePath);
+                    setSourceInstallerOpen(true);
+                    setContextMenu(null);
+                  }}>{t('sftpInstallSource')}</MenuItem>
                   <div className="border-t border-navy-600 my-1"></div>
                   <MenuItem icon="refresh" onClick={() => { loadRemoteFiles(remotePath); setContextMenu(null); }}>{t('refresh')}</MenuItem>
                 </>
@@ -1148,6 +1319,17 @@ const DualPaneSFTP: React.FC<Props> = ({ connectionId, server, initialLocalPath,
           }}
         />
       )}
+
+      {/* Source Installer Modal */}
+      <SourceInstaller
+        isOpen={sourceInstallerOpen}
+        onClose={() => setSourceInstallerOpen(false)}
+        connectionId={connectionId}
+        targetPath={sourceInstallerPath}
+        onInstallComplete={() => {
+          loadRemoteFiles(remotePath);
+        }}
+      />
     </div>
   );
 };
@@ -1165,6 +1347,9 @@ const MenuItem: React.FC<{ icon: string; onClick: () => void; danger?: boolean; 
     'refresh': <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>,
     'edit': <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>,
     'rename': <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>,
+    'package': <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>,
+    'compress': <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12M8 12h.01M12 12h.01M16 12h.01" /></svg>,
+    'extract': <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>,
   };
 
   return (

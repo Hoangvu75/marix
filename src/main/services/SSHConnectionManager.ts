@@ -298,6 +298,41 @@ export class SSHConnectionManager {
     });
   }
 
+  /**
+   * Execute command with streaming output via callback
+   */
+  async executeCommandStream(
+    connectionId: string, 
+    command: string,
+    onData: (data: string, isError: boolean) => void
+  ): Promise<{ success: boolean; exitCode: number }> {
+    const connData = this.connections.get(connectionId);
+    if (!connData) {
+      throw new Error('Connection not found');
+    }
+
+    return new Promise((resolve, reject) => {
+      connData.client.exec(command, { pty: true }, (err, stream) => {
+        if (err) {
+          reject(err);
+          return;
+        }
+
+        stream.on('close', (code: number) => {
+          resolve({ success: code === 0, exitCode: code });
+        });
+
+        stream.on('data', (data: Buffer) => {
+          onData(data.toString(), false);
+        });
+
+        stream.stderr.on('data', (data: Buffer) => {
+          onData(data.toString(), true);
+        });
+      });
+    });
+  }
+
   getAllConnections(): string[] {
     return Array.from(this.connections.keys());
   }
