@@ -1,14 +1,12 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Terminal } from '@xterm/xterm';
-import { FitAddon } from '@xterm/addon-fit';
-import '@xterm/xterm/css/xterm.css';
+import React, { useState, useEffect } from 'react';
+import { useLanguage } from '../contexts/LanguageContext';
 
 const { ipcRenderer } = window.require('electron');
 
 interface Props {
   isOpen: boolean;
   onClose: () => void;
-  onInstallComplete: () => void;
+  onOpenTerminal: (command: string) => void;
   theme?: 'dark' | 'light';
 }
 
@@ -18,96 +16,26 @@ interface DependencyStatus {
   distro: 'debian' | 'fedora' | 'arch' | 'unknown';
 }
 
-const RDPDepsInstaller: React.FC<Props> = ({ isOpen, onClose, onInstallComplete, theme = 'dark' }) => {
+const RDPDepsInstaller: React.FC<Props> = ({ isOpen, onClose, onOpenTerminal, theme = 'dark' }) => {
+  const { t } = useLanguage();
   const [deps, setDeps] = useState<DependencyStatus | null>(null);
   const [checking, setChecking] = useState(true);
-  const [installing, setInstalling] = useState(false);
-  const [installComplete, setInstallComplete] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
-  const terminalRef = useRef<HTMLDivElement>(null);
-  const xtermRef = useRef<Terminal | null>(null);
-  const fitAddonRef = useRef<FitAddon | null>(null);
-
-  // Initialize xterm
-  useEffect(() => {
-    if (!isOpen || !terminalRef.current) return;
-
-    const term = new Terminal({
-      cursorBlink: false,
-      fontSize: 13,
-      fontFamily: 'JetBrains Mono, Menlo, Monaco, monospace',
-      theme: theme === 'dark' ? {
-        background: '#1e1e2e',
-        foreground: '#cdd6f4',
-        cursor: '#f5e0dc',
-        black: '#45475a',
-        red: '#f38ba8',
-        green: '#a6e3a1',
-        yellow: '#f9e2af',
-        blue: '#89b4fa',
-        magenta: '#f5c2e7',
-        cyan: '#94e2d5',
-        white: '#bac2de',
-      } : {
-        background: '#ffffff',
-        foreground: '#1e1e2e',
-        cursor: '#1e1e2e',
-        black: '#45475a',
-        red: '#d20f39',
-        green: '#40a02b',
-        yellow: '#df8e1d',
-        blue: '#1e66f5',
-        magenta: '#ea76cb',
-        cyan: '#179299',
-        white: '#4c4f69',
-      },
-      convertEol: true,
-      scrollback: 5000,
-    });
-
-    const fitAddon = new FitAddon();
-    term.loadAddon(fitAddon);
-    term.open(terminalRef.current);
-    
-    setTimeout(() => fitAddon.fit(), 100);
-
-    xtermRef.current = term;
-    fitAddonRef.current = fitAddon;
-
-    // Handle window resize
-    const handleResize = () => {
-      setTimeout(() => fitAddon.fit(), 100);
-    };
-    window.addEventListener('resize', handleResize);
-
-    return () => {
-      window.removeEventListener('resize', handleResize);
-      term.dispose();
-      xtermRef.current = null;
-      fitAddonRef.current = null;
-    };
-  }, [isOpen, theme]);
+  const [copied, setCopied] = useState(false);
 
   // Check dependencies when modal opens
   useEffect(() => {
     if (!isOpen) return;
 
     setChecking(true);
-    setInstalling(false);
-    setInstallComplete(false);
     setError(null);
+    setCopied(false);
 
     const checkDeps = async () => {
       try {
         const result = await ipcRenderer.invoke('rdp:checkDeps');
         if (result.success) {
           setDeps(result.deps);
-          
-          // If all deps installed, notify and close
-          if (result.deps.xfreerdp3 && result.deps.xdotool) {
-            onInstallComplete();
-          }
         } else {
           setError(result.error);
         }
@@ -121,68 +49,47 @@ const RDPDepsInstaller: React.FC<Props> = ({ isOpen, onClose, onInstallComplete,
     checkDeps();
   }, [isOpen]);
 
-  // Listen for installation output
-  useEffect(() => {
-    const handleOutput = (_event: any, data: string) => {
-      if (xtermRef.current) {
-        xtermRef.current.write(data);
-      }
-    };
-
-    ipcRenderer.on('rdp:installOutput', handleOutput);
-
-    return () => {
-      ipcRenderer.removeListener('rdp:installOutput', handleOutput);
-    };
-  }, []);
-
-  const handleInstall = async () => {
-    if (!deps) return;
-
-    setInstalling(true);
-    setError(null);
-
-    // Clear terminal
-    if (xtermRef.current) {
-      xtermRef.current.clear();
-      xtermRef.current.writeln('\x1b[33m🚀 Installing RDP dependencies...\x1b[0m\n');
+  const getInstallCommand = (): string => {
+    if (!deps) return '';
+    
+    const packages: string[] = [];
+    if (!deps.xfreerdp3) {
+      packages.push(deps.distro === 'debian' ? 'freerdp3-x11' : 'freerdp');
+    }
+    if (!deps.xdotool) {
+      packages.push('xdotool');
     }
 
-    try {
-      const result = await ipcRenderer.invoke('rdp:installDeps');
-      
-      if (result.success) {
-        setInstallComplete(true);
-        if (xtermRef.current) {
-          xtermRef.current.writeln('\n\x1b[32m✓ Installation complete! You can now connect to RDP servers.\x1b[0m');
-        }
-        
-        // Re-check dependencies
-        const checkResult = await ipcRenderer.invoke('rdp:checkDeps');
-        if (checkResult.success) {
-          setDeps(checkResult.deps);
-        }
-      } else {
-        setError(result.error || 'Installation failed');
-        if (xtermRef.current) {
-          xtermRef.current.writeln(`\n\x1b[31m✗ Installation failed: ${result.error}\x1b[0m`);
-        }
-      }
-    } catch (err: any) {
-      setError(err.message);
-      if (xtermRef.current) {
-        xtermRef.current.writeln(`\n\x1b[31m✗ Error: ${err.message}\x1b[0m`);
-      }
-    } finally {
-      setInstalling(false);
+    if (packages.length === 0) return '';
+
+    switch (deps.distro) {
+      case 'debian':
+        return `sudo apt update && sudo apt install -y ${packages.join(' ')}`;
+      case 'fedora':
+        return `sudo dnf install -y ${packages.join(' ')}`;
+      case 'arch':
+        return `sudo pacman -S --noconfirm ${packages.join(' ')}`;
+      default:
+        return `sudo apt update && sudo apt install -y ${packages.join(' ')}`;
     }
   };
 
-  const handleContinue = () => {
-    onInstallComplete();
+  const handleOpenTerminal = () => {
+    const cmd = getInstallCommand();
+    if (cmd) {
+      onOpenTerminal(cmd);
+      onClose();
+    }
   };
 
-  if (!isOpen) return null;
+  const handleCopyCommand = async () => {
+    const cmd = getInstallCommand();
+    if (cmd) {
+      await navigator.clipboard.writeText(cmd);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
 
   const isDark = theme === 'dark';
 
@@ -196,22 +103,11 @@ const RDPDepsInstaller: React.FC<Props> = ({ isOpen, onClose, onInstallComplete,
     }
   };
 
-  // Get package names for display
-  const getPackageNames = () => {
-    if (!deps) return '';
-    const packages: string[] = [];
-    if (!deps.xfreerdp3) {
-      packages.push(deps.distro === 'debian' ? 'freerdp3-x11' : 'freerdp');
-    }
-    if (!deps.xdotool) {
-      packages.push('xdotool');
-    }
-    return packages.join(', ');
-  };
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className={`relative w-[700px] max-h-[80vh] rounded-xl shadow-2xl border overflow-hidden ${
+      <div className={`relative w-[550px] rounded-xl shadow-2xl border overflow-hidden ${
         isDark 
           ? 'bg-gray-900 border-gray-700' 
           : 'bg-white border-gray-200'
@@ -221,28 +117,27 @@ const RDPDepsInstaller: React.FC<Props> = ({ isOpen, onClose, onInstallComplete,
           isDark ? 'border-gray-700' : 'border-gray-200'
         }`}>
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5 text-blue-400">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+            <div className="w-10 h-10 rounded-lg bg-amber-500/20 flex items-center justify-center">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5 text-amber-400">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
               </svg>
             </div>
             <div>
               <h2 className={`text-lg font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                RDP Dependencies Required
+                {t('rdpDepsRequired')}
               </h2>
               <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                {deps ? getDistroName(deps.distro) : 'Linux'} detected
+                {deps ? getDistroName(deps.distro) : 'Linux'} {t('rdpDepsDetected').replace('{distro}', '').trim() || 'detected'}
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            disabled={installing}
             className={`p-2 rounded-lg transition-colors ${
               isDark 
                 ? 'hover:bg-gray-700 text-gray-400' 
                 : 'hover:bg-gray-100 text-gray-500'
-            } ${installing ? 'opacity-50 cursor-not-allowed' : ''}`}
+            }`}
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5">
               <line x1="18" y1="6" x2="6" y2="18" />
@@ -258,96 +153,132 @@ const RDPDepsInstaller: React.FC<Props> = ({ isOpen, onClose, onInstallComplete,
               <div className="flex items-center gap-3">
                 <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
                 <span className={isDark ? 'text-gray-300' : 'text-gray-600'}>
-                  Checking dependencies...
+                  {t('rdpCheckingDeps')}
                 </span>
               </div>
             </div>
-          ) : error && !installing ? (
+          ) : error ? (
             <div className="py-4">
               <div className="p-4 rounded-lg bg-red-500/10 border border-red-500/20">
                 <p className="text-red-400">{error}</p>
               </div>
             </div>
           ) : deps && (!deps.xfreerdp3 || !deps.xdotool) ? (
-            <>
+            <div className="space-y-4">
+              <p className={`text-sm ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>
+                {t('rdpPackagesRequired')}
+              </p>
+              
               {/* Dependency status */}
-              <div className="space-y-3 mb-4">
-                <p className={`text-sm ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>
-                  The following packages are required for RDP connections:
-                </p>
-                
-                <div className="grid grid-cols-2 gap-3">
-                  {/* xfreerdp3 */}
-                  <div className={`p-3 rounded-lg border ${
-                    isDark ? 'bg-gray-800/50 border-gray-700' : 'bg-gray-50 border-gray-200'
-                  }`}>
-                    <div className="flex items-center gap-2">
-                      {deps.xfreerdp3 ? (
-                        <div className="w-5 h-5 rounded-full bg-green-500/20 flex items-center justify-center">
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className="w-3 h-3 text-green-400">
-                            <polyline points="20 6 9 17 4 12" />
-                          </svg>
-                        </div>
-                      ) : (
-                        <div className="w-5 h-5 rounded-full bg-amber-500/20 flex items-center justify-center">
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-3 h-3 text-amber-400">
-                            <path d="M12 9v2m0 4h.01" />
-                          </svg>
-                        </div>
-                      )}
-                      <span className={`font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                        xfreerdp3
-                      </span>
-                    </div>
-                    <p className={`text-xs mt-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                      FreeRDP client for RDP connections
-                    </p>
+              <div className="grid grid-cols-2 gap-3">
+                {/* xfreerdp3 */}
+                <div className={`p-3 rounded-lg border ${
+                  isDark ? 'bg-gray-800/50 border-gray-700' : 'bg-gray-50 border-gray-200'
+                }`}>
+                  <div className="flex items-center gap-2">
+                    {deps.xfreerdp3 ? (
+                      <div className="w-5 h-5 rounded-full bg-green-500/20 flex items-center justify-center">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className="w-3 h-3 text-green-400">
+                          <polyline points="20 6 9 17 4 12" />
+                        </svg>
+                      </div>
+                    ) : (
+                      <div className="w-5 h-5 rounded-full bg-red-500/20 flex items-center justify-center">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-3 h-3 text-red-400">
+                          <line x1="18" y1="6" x2="6" y2="18" />
+                          <line x1="6" y1="6" x2="18" y2="18" />
+                        </svg>
+                      </div>
+                    )}
+                    <span className={`font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                      xfreerdp3
+                    </span>
                   </div>
-
-                  {/* xdotool */}
-                  <div className={`p-3 rounded-lg border ${
-                    isDark ? 'bg-gray-800/50 border-gray-700' : 'bg-gray-50 border-gray-200'
-                  }`}>
-                    <div className="flex items-center gap-2">
-                      {deps.xdotool ? (
-                        <div className="w-5 h-5 rounded-full bg-green-500/20 flex items-center justify-center">
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className="w-3 h-3 text-green-400">
-                            <polyline points="20 6 9 17 4 12" />
-                          </svg>
-                        </div>
-                      ) : (
-                        <div className="w-5 h-5 rounded-full bg-amber-500/20 flex items-center justify-center">
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-3 h-3 text-amber-400">
-                            <path d="M12 9v2m0 4h.01" />
-                          </svg>
-                        </div>
-                      )}
-                      <span className={`font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                        xdotool
-                      </span>
-                    </div>
-                    <p className={`text-xs mt-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                      Window automation for RDP focus
-                    </p>
-                  </div>
+                  <p className={`text-xs mt-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                    {t('rdpXfreerdpDesc')}
+                  </p>
                 </div>
 
-                {!installComplete && (
-                  <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                    Click "Install" to automatically install: <code className={`px-1.5 py-0.5 rounded text-xs ${
-                      isDark ? 'bg-gray-800 text-cyan-400' : 'bg-gray-100 text-cyan-600'
-                    }`}>{getPackageNames()}</code>
+                {/* xdotool */}
+                <div className={`p-3 rounded-lg border ${
+                  isDark ? 'bg-gray-800/50 border-gray-700' : 'bg-gray-50 border-gray-200'
+                }`}>
+                  <div className="flex items-center gap-2">
+                    {deps.xdotool ? (
+                      <div className="w-5 h-5 rounded-full bg-green-500/20 flex items-center justify-center">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className="w-3 h-3 text-green-400">
+                          <polyline points="20 6 9 17 4 12" />
+                        </svg>
+                      </div>
+                    ) : (
+                      <div className="w-5 h-5 rounded-full bg-red-500/20 flex items-center justify-center">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-3 h-3 text-red-400">
+                          <line x1="18" y1="6" x2="6" y2="18" />
+                          <line x1="6" y1="6" x2="18" y2="18" />
+                        </svg>
+                      </div>
+                    )}
+                    <span className={`font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                      xdotool
+                    </span>
+                  </div>
+                  <p className={`text-xs mt-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                    {t('rdpXdotoolDesc')}
                   </p>
-                )}
+                </div>
               </div>
 
-              {/* Terminal output */}
-              <div className={`rounded-lg border overflow-hidden ${
-                isDark ? 'border-gray-700' : 'border-gray-300'
-              }`}>
-                <div ref={terminalRef} className="h-[250px]" />
+              {/* Install command */}
+              <div>
+                <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                  {t('rdpInstallCommand')}
+                </label>
+                <div className={`relative p-3 rounded-lg font-mono text-sm break-all ${
+                  isDark ? 'bg-gray-800 text-cyan-400' : 'bg-gray-100 text-cyan-700'
+                }`}>
+                  {getInstallCommand()}
+                  <button
+                    onClick={handleCopyCommand}
+                    className={`absolute top-2 right-2 p-1.5 rounded transition-colors ${
+                      isDark ? 'hover:bg-gray-700' : 'hover:bg-gray-200'
+                    }`}
+                    title="Copy command"
+                  >
+                    {copied ? (
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4 text-green-400">
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                    ) : (
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={`w-4 h-4 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                      </svg>
+                    )}
+                  </button>
+                </div>
               </div>
-            </>
+
+              {/* Instructions */}
+              <div className={`p-3 rounded-lg border ${
+                isDark ? 'bg-blue-500/10 border-blue-500/20' : 'bg-blue-50 border-blue-200'
+              }`}>
+                <div className="flex gap-2">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5">
+                    <circle cx="12" cy="12" r="10" />
+                    <path d="M12 16v-4M12 8h.01" />
+                  </svg>
+                  <div className={`text-sm ${isDark ? 'text-blue-300' : 'text-blue-700'}`}>
+                    <p className="font-medium mb-1">{t('rdpHowToInstall')}</p>
+                    <ol className="list-decimal list-inside space-y-1 text-xs opacity-90">
+                      <li>{t('rdpStep1')}</li>
+                      <li>{t('rdpStep2')}</li>
+                      <li>{t('rdpStep3')}</li>
+                      <li>{t('rdpStep4')}</li>
+                    </ol>
+                  </div>
+                </div>
+              </div>
+            </div>
           ) : (
             <div className="py-8 text-center">
               <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-green-500/20 flex items-center justify-center">
@@ -356,10 +287,10 @@ const RDPDepsInstaller: React.FC<Props> = ({ isOpen, onClose, onInstallComplete,
                 </svg>
               </div>
               <h3 className={`text-lg font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                All Dependencies Installed
+                {t('rdpAllDepsInstalled')}
               </h3>
               <p className={`mt-2 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                You're ready to connect to RDP servers!
+                {t('rdpReadyToConnect')}
               </p>
             </div>
           )}
@@ -371,39 +302,27 @@ const RDPDepsInstaller: React.FC<Props> = ({ isOpen, onClose, onInstallComplete,
         }`}>
           <button
             onClick={onClose}
-            disabled={installing}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
               isDark 
                 ? 'bg-gray-700 hover:bg-gray-600 text-gray-200' 
                 : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
-            } ${installing ? 'opacity-50 cursor-not-allowed' : ''}`}
+            }`}
           >
-            Cancel
+            {t('cancel')}
           </button>
           
-          {deps && (!deps.xfreerdp3 || !deps.xdotool) && !installComplete ? (
+          {deps && (!deps.xfreerdp3 || !deps.xdotool) && (
             <button
-              onClick={handleInstall}
-              disabled={installing || checking}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${
-                installing 
-                  ? 'bg-blue-600/50 cursor-not-allowed' 
-                  : 'bg-blue-600 hover:bg-blue-500'
-              } text-white`}
+              onClick={handleOpenTerminal}
+              className="px-4 py-2 rounded-lg text-sm font-medium bg-blue-600 hover:bg-blue-500 text-white transition-colors flex items-center gap-2"
             >
-              {installing && (
-                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              )}
-              {installing ? 'Installing...' : 'Install Dependencies'}
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4">
+                <polyline points="4 17 10 11 4 5" />
+                <line x1="12" y1="19" x2="20" y2="19" />
+              </svg>
+              {t('openTerminal')}
             </button>
-          ) : installComplete || (deps?.xfreerdp3 && deps?.xdotool) ? (
-            <button
-              onClick={handleContinue}
-              className="px-4 py-2 rounded-lg text-sm font-medium bg-green-600 hover:bg-green-500 text-white transition-colors"
-            >
-              Continue to Connect
-            </button>
-          ) : null}
+          )}
         </div>
       </div>
     </div>

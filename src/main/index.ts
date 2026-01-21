@@ -3,6 +3,19 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as dns from 'dns';
 import { promisify } from 'util';
+
+// ============================================================================
+// MEMORY OPTIMIZATION FLAGS (applied before app ready)
+// ============================================================================
+// Limit V8 memory for renderer process  
+app.commandLine.appendSwitch('js-flags', '--max-old-space-size=256 --optimize-for-size');
+// Disable GPU process if not needed (saves ~50MB)
+app.commandLine.appendSwitch('disable-gpu-compositing');
+// Reduce memory usage by limiting background processes
+app.commandLine.appendSwitch('disable-background-timer-throttling');
+// Disable hardware acceleration for lower memory (can enable if needed)
+// app.commandLine.appendSwitch('disable-hardware-acceleration');
+
 import { NativeSSHManager } from './services/NativeSSHManager';
 import { SSHConnectionManager } from './services/SSHConnectionManager';
 import { SFTPManager } from './services/SFTPManager';
@@ -179,6 +192,18 @@ function createWindow() {
   // Show window when ready to prevent white flash
   mainWindow.once('ready-to-show', () => {
     mainWindow?.show();
+    
+    // Setup periodic memory cleanup (every 5 minutes)
+    setInterval(() => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        // Trigger renderer garbage collection via low memory signal
+        mainWindow.webContents.session.clearCache();
+        
+        // Log memory usage periodically (debug)
+        const memUsage = process.memoryUsage();
+        console.log(`[Memory] Heap: ${Math.round(memUsage.heapUsed / 1024 / 1024)}MB / ${Math.round(memUsage.heapTotal / 1024 / 1024)}MB, RSS: ${Math.round(memUsage.rss / 1024 / 1024)}MB`);
+      }
+    }, 5 * 60 * 1000); // Every 5 minutes
   });
 
   // Optimize rendering
@@ -229,17 +254,9 @@ app.whenReady().then(() => {
   // Initialize database handlers
   initDatabaseHandlers();
   
-  // Start LAN sharing service on app startup for always-on discovery
-  lanSharingService.start().then(() => {
-    console.log('[App] LAN sharing service started on app ready');
-  }).catch((err) => {
-    console.error('[App] Failed to start LAN sharing on startup:', err);
-  });
-  
-  // Start file transfer service
-  lanFileTransferService.start().catch((err: any) => {
-    console.error('[FileTransfer] Failed to start:', err);
-  });
+  // LAN sharing and file transfer services are started on-demand
+  // when user enables LAN Discovery toggle in the UI
+  // (via 'lan-share:start' IPC handler)
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -461,6 +478,15 @@ ipcMain.handle('local:getOsInfo', async () => {
       ip: 'localhost',
       provider: null,
     };
+  }
+});
+
+ipcMain.handle('ssh:closeShell', async (event, connectionId) => {
+  try {
+    nativeSSH.disconnect(connectionId);
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message };
   }
 });
 
@@ -930,7 +956,7 @@ ipcMain.handle('rdp:checkDeps', async () => {
 });
 
 // Install RDP dependencies with streaming output
-ipcMain.handle('rdp:installDeps', async (event) => {
+ipcMain.handle('rdp:installDeps', async (event, password: string) => {
   try {
     const deps = rdpManager.checkDependencies();
     
@@ -938,17 +964,22 @@ ipcMain.handle('rdp:installDeps', async (event) => {
       return { success: true, message: 'All dependencies already installed' };
     }
 
+    if (!password) {
+      return { success: false, error: 'Password is required' };
+    }
+
     return new Promise((resolve) => {
       rdpManager.installDependencies(
         deps,
+        password,
         (data: string) => {
           // Stream data to renderer
           if (event.sender && !event.sender.isDestroyed()) {
             event.sender.send('rdp:installOutput', data);
           }
         },
-        (success: boolean) => {
-          resolve({ success });
+        (success: boolean, error?: string) => {
+          resolve({ success, error });
         }
       );
     });
@@ -1321,6 +1352,10 @@ ipcMain.handle('gdrive:createBackup', async (event, password: string) => {
     const pfJson = await mainWindow?.webContents.executeJavaScript('localStorage.getItem("port_forwards")');
     const portForwards = pfJson ? JSON.parse(pfJson) : [];
 
+    // Get Snippets
+    const snippetsJson = await mainWindow?.webContents.executeJavaScript('localStorage.getItem("command_snippets")');
+    const snippets = snippetsJson ? JSON.parse(snippetsJson) : [];
+
     // Create encrypted backup
     const result = await backupService.createBackupContent(
       password,
@@ -1329,7 +1364,8 @@ ipcMain.handle('gdrive:createBackup', async (event, password: string) => {
       cloudflareToken,
       sshKeys,
       totpEntries,
-      portForwards
+      portForwards,
+      snippets
     );
     
     if (!result.success || !result.content) {
@@ -1376,10 +1412,21 @@ ipcMain.handle('gdrive:restoreBackup', async (event, password: string) => {
         cloudflareService.setToken(result.data.cloudflareToken);
       }
 
+      // Restore SSH keys
+      let sshKeyCount = 0;
+      if (result.data.sshKeys && result.data.sshKeys.length > 0) {
+        const importResult = await sshKeyService.importKeysFromBackup(result.data.sshKeys);
+        sshKeyCount = importResult.imported;
+      }
+
       return {
         success: true,
         serverCount: result.data.servers.length,
+        sshKeyCount,
         metadata: downloadResult.metadata,
+        totpEntries: result.data.totpEntries,
+        portForwards: result.data.portForwards,
+        snippets: result.data.snippets
       };
     }
 
@@ -1399,7 +1446,7 @@ ipcMain.handle('github:saveRepoName', async (event, repoName: string) => {
   return { success: true };
 });
 
-ipcMain.handle('github:uploadBackup', async (event, password: string, totpEntries?: any[], portForwards?: any[]) => {
+ipcMain.handle('github:uploadBackup', async (event, password: string, totpEntries?: any[], portForwards?: any[], snippets?: any[]) => {
   // Validate password first (same as local backup)
   const validation = backupService.validatePassword(password);
   if (!validation.valid) {
@@ -1411,8 +1458,8 @@ ipcMain.handle('github:uploadBackup', async (event, password: string, totpEntrie
   const cloudflareToken = cloudflareService.getToken() || undefined;
   const sshKeys = sshKeyService.exportAllKeysForBackup();
   
-  // Create encrypted backup content (including 2FA and port forwards)
-  const backupResult = await backupService.createBackupContent(password, servers, tagColors, cloudflareToken, sshKeys, totpEntries, portForwards);
+  // Create encrypted backup content (including 2FA, port forwards and snippets)
+  const backupResult = await backupService.createBackupContent(password, servers, tagColors, cloudflareToken, sshKeys, totpEntries, portForwards, snippets);
   if (!backupResult.success || !backupResult.content) {
     return { success: false, error: backupResult.error };
   }
@@ -1460,7 +1507,8 @@ ipcMain.handle('github:downloadBackup', async (event, password: string) => {
     serverCount: restoreResult.data.servers.length, 
     sshKeyCount,
     totpEntries: restoreResult.data.totpEntries,
-    portForwards: restoreResult.data.portForwards
+    portForwards: restoreResult.data.portForwards,
+    snippets: restoreResult.data.snippets
   };
 });
 
@@ -1518,7 +1566,7 @@ ipcMain.handle('gitlab:logout', async () => {
   return { success: true };
 });
 
-ipcMain.handle('gitlab:uploadBackup', async (event, password: string, totpEntries?: any[], portForwards?: any[]) => {
+ipcMain.handle('gitlab:uploadBackup', async (event, password: string, totpEntries?: any[], portForwards?: any[], snippets?: any[]) => {
   try {
     // Validate password first
     const validation = backupService.validatePassword(password);
@@ -1546,7 +1594,8 @@ ipcMain.handle('gitlab:uploadBackup', async (event, password: string, totpEntrie
       cloudflareToken, 
       sshKeys, 
       totpEntries, 
-      portForwards
+      portForwards,
+      snippets
     );
     
     if (!backupResult.success || !backupResult.content) {
@@ -1599,7 +1648,8 @@ ipcMain.handle('gitlab:downloadBackup', async (event, password: string) => {
       serverCount: restoreResult.data.servers.length,
       sshKeyCount,
       totpEntries: restoreResult.data.totpEntries,
-      portForwards: restoreResult.data.portForwards
+      portForwards: restoreResult.data.portForwards,
+      snippets: restoreResult.data.snippets
     };
   } catch (error: any) {
     console.error('[GitLab] Download backup error:', error);
@@ -1665,7 +1715,7 @@ ipcMain.handle('box:logout', async () => {
   }
 });
 
-ipcMain.handle('box:uploadBackup', async (event, password: string, totpEntries?: any[], portForwards?: any[]) => {
+ipcMain.handle('box:uploadBackup', async (event, password: string, totpEntries?: any[], portForwards?: any[], snippets?: any[]) => {
   try {
     // Validate password
     const validation = backupService.validatePassword(password);
@@ -1692,7 +1742,8 @@ ipcMain.handle('box:uploadBackup', async (event, password: string, totpEntries?:
       cloudflareToken, 
       sshKeys, 
       totpEntries, 
-      portForwards
+      portForwards,
+      snippets
     );
     
     if (!backupResult.success || !backupResult.content) {
@@ -1745,7 +1796,8 @@ ipcMain.handle('box:downloadBackup', async (event, password: string) => {
       serverCount: restoreResult.data.servers.length,
       sshKeyCount,
       totpEntries: restoreResult.data.totpEntries,
-      portForwards: restoreResult.data.portForwards
+      portForwards: restoreResult.data.portForwards,
+      snippets: restoreResult.data.snippets
     };
   } catch (error: any) {
     console.error('[Box] Download backup error:', error);
@@ -2235,6 +2287,9 @@ ipcMain.handle('app:openUrl', async (event, url: string) => {
 ipcMain.handle('lan-share:start', async () => {
   try {
     await lanSharingService.start();
+    // Also start file transfer service
+    await lanFileTransferService.start();
+    console.log('[LANShare] Services started (sharing + file transfer)');
     return { success: true };
   } catch (error: any) {
     console.error('[LANShare] Start error:', error);
@@ -2246,6 +2301,8 @@ ipcMain.handle('lan-share:start', async () => {
 ipcMain.handle('lan-share:stop', () => {
   try {
     lanSharingService.stop();
+    lanFileTransferService.stop();
+    console.log('[LANShare] Services stopped');
     return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message };

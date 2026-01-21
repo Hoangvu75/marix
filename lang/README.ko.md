@@ -184,7 +184,7 @@ Marix는 Argon2id 매개변수에 **자동 보정**을 사용합니다—이것�
 <a href="https://github.com/user/marix/releases/latest/download/Marix-arm64.zip">Apple Silicon</a>
 </td>
 <td align="center" width="33%">
-<img src="https://img.icons8.com/fluency/96/linux.png" width="64"><br>
+<img src="https://img.icons8.com/external-tal-revivo-color-tal-revivo/64/external-linux-a-family-of-open-source-unix-like-operating-systems-based-on-the-linux-kernel-logo-color-tal-revivo.png" width="64"><br>
 <b>Linux</b><br>
 <a href="https://github.com/user/marix/releases/latest/download/Marix.AppImage">.AppImage</a> •
 <a href="https://github.com/user/marix/releases/latest/download/marix.deb">.deb</a> •
@@ -205,6 +205,7 @@ Marix는 Argon2id 매개변수에 **자동 보정**을 사용합니다—이것�
 | **SFTP** | 드래그 앤 드롭이 있는 듀얼 패널 파일 관리자 |
 | **FTP/FTPS** | 표준 및 보안 FTP 지원 |
 | **RDP** | 원격 데스크톱 (Linux에서는 xfreerdp3, Windows에서는 mstsc) |
+| **데이터베이스** | mysql2, pg, mongodb, redis, better-sqlite3 | MySQL, PostgreSQL, MongoDB, Redis, SQLite 연결 |
 
 ### 💻 터미널
 
@@ -277,6 +278,9 @@ Password → Argon2id(64-512MB memory) → 256비트 key → AES-256-GCM → Enc
 | SSH 개인 키 | ✅ | ✅ |
 | Cloudflare API 토큰 | ✅ | ✅ |
 | 앱 설정 및 기본 설정 | ✅ | ✅ |
+| 명령 스니펫 | ✅ | ✅ |
+| 2FA TOTP 항목 | ✅ | ✅ |
+| 포트 포워딩 설정 | ✅ | ✅ |
 | Known hosts | ✅ | ✅ |
 
 ### 보안 보장

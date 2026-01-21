@@ -82,6 +82,8 @@ function getBaselineMemoryCost() {
 let cachedOptions = null;
 let lastCalibrationTime = 0;
 const CALIBRATION_CACHE_TTL = 3600000; // Re-calibrate after 1 hour
+// Lock to prevent concurrent calibrations - stores the in-progress promise
+let calibrationInProgress = null;
 /**
  * Auto-tune Argon2id parameters to achieve ~1 second KDF time
  *
@@ -98,8 +100,29 @@ const CALIBRATION_CACHE_TTL = 3600000; // Re-calibrate after 1 hour
 async function calibrateArgon2Options() {
     // Return cached options if still valid
     if (cachedOptions && (Date.now() - lastCalibrationTime) < CALIBRATION_CACHE_TTL) {
+        console.log('[BackupService] Using cached Argon2id parameters');
         return cachedOptions;
     }
+    // If calibration is already in progress, wait for it instead of starting another
+    if (calibrationInProgress) {
+        console.log('[BackupService] Calibration already in progress, waiting...');
+        return calibrationInProgress;
+    }
+    // Start calibration and store the promise
+    calibrationInProgress = performCalibration();
+    try {
+        const result = await calibrationInProgress;
+        return result;
+    }
+    finally {
+        // Clear the lock after completion (success or failure)
+        calibrationInProgress = null;
+    }
+}
+/**
+ * Performs the actual calibration work
+ */
+async function performCalibration() {
     console.log('[BackupService] Auto-tuning Argon2id parameters for ~1s KDF time...');
     const testPassword = 'calibration-test-password';
     const testSalt = crypto.randomBytes(SALT_LENGTH);
@@ -449,10 +472,10 @@ class BackupService {
     /**
      * Create encrypted backup content for GitHub repo upload
      */
-    async createBackupContent(password, servers, tagColors, cloudflareToken, sshKeys, totpEntries, portForwards) {
+    async createBackupContent(password, servers, tagColors, cloudflareToken, sshKeys, totpEntries, portForwards, snippets) {
         try {
             const backupData = {
-                version: '2.1.0',
+                version: '2.2.0',
                 timestamp: Date.now(),
                 servers,
                 tagColors,
@@ -460,6 +483,7 @@ class BackupService {
                 sshKeys,
                 totpEntries,
                 portForwards,
+                snippets,
             };
             const encryptedContent = await this.encrypt(backupData, password);
             return { success: true, content: JSON.stringify(encryptedContent) };

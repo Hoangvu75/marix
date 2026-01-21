@@ -552,6 +552,12 @@ export interface Translations {
   dbExporting: string;
   dbDownloadSQL: string;
   dbExportInfo: string;
+  dbData: string;
+  dbSearchTables: string;
+  dbSmartDrop: string;
+  dbSmartDropDesc: string;
+  dbOperationLog: string;
+  dbMoreColumns: string;
   
   // WebSocket
   wssTypeMessage: string;
@@ -572,6 +578,33 @@ export interface Translations {
   rdpSessionClosedDesc: string;
   rdpConnectionError: string;
   rdpFailedConnect: string;
+  rdpEstablishing: string;
+  rdpDepsRequired: string;
+  rdpDepsDetected: string;
+  rdpCheckingDeps: string;
+  rdpPackagesRequired: string;
+  rdpXfreerdpDesc: string;
+  rdpXdotoolDesc: string;
+  rdpInstallCommand: string;
+  rdpHowToInstall: string;
+  rdpStep1: string;
+  rdpStep2: string;
+  rdpStep3: string;
+  rdpStep4: string;
+  rdpAllDepsInstalled: string;
+  rdpReadyToConnect: string;
+  openTerminal: string;
+  rdpErrorUnableConnect: string;
+  rdpErrorCheckAddress: string;
+  rdpErrorCheckOnline: string;
+  rdpErrorCheckFirewall: string;
+  rdpErrorAuthFailed: string;
+  rdpErrorNegoFailed: string;
+  rdpErrorTimeout: string;
+  rdpErrorDns: string;
+  rdpErrorCertificate: string;
+  rdpErrorClosed: string;
+  rdpErrorGeneric: string;
   
   // Common Ports
   commonPorts: string;

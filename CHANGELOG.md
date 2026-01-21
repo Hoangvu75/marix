@@ -2,6 +2,42 @@
 
 All notable changes to Marix SSH Client will be documented in this file.
 
+## [1.0.10] - 2026-01-21
+
+### Added
+- **Snippets in Backup**: Command snippets are now included in encrypted backups
+  - Backup version updated to 2.2.0
+  - Snippets backed up to: Local files, Google Drive, GitHub, GitLab, Box
+  - Automatic restore of snippets when restoring from any backup source
+  - Success message now shows snippet count on restore
+
+### Fixed
+- **Argon2id Double Calibration**: Fixed race condition where KDF calibration could run multiple times concurrently on app startup
+  - Added mutex lock (`calibrationInProgress`) to prevent concurrent calibrations
+  - Subsequent calls now await the in-progress calibration instead of starting a new one
+  - Significantly reduces startup delay from 60+ seconds to ~20-30 seconds on first launch
+
+- **LAN Sharing Auto-Start**: LAN Discovery and File Transfer services no longer start automatically on app launch
+  - Services now only start when user explicitly enables LAN Discovery toggle
+  - Both services (UDP multicast discovery + file transfer) start/stop together
+  - Reduces unnecessary network activity and resource usage on startup
+
+- **WSS Disconnect During Connecting**: Fixed lag and error message when disconnecting WebSocket while still connecting
+  - Added proper protocol handling in `handleCloseSession` for WSS and Database connections
+  - WSSManager now checks socket `readyState` before closing
+  - Uses `terminate()` for CONNECTING state, `close()` for OPEN state
+  - Removes event listeners before disconnect to prevent stale events
+
+### Changed
+- **Unified Database Icons**: Replaced vendor-specific database icons with consistent cylinder icon
+  - Applied to: Server List sidebar, Titlebar session tabs, Quick Connect modal, Database Client header
+  - Covers all database types: MySQL, PostgreSQL, MongoDB, Redis, SQLite
+  - Provides cleaner, more consistent visual appearance
+
+- **Snippet Import/Export Removed**: Standalone import/export buttons removed from Snippets page
+  - Snippets are now managed through the unified backup system
+  - Use Backup & Restore to transfer snippets between devices
+
 ## [1.0.9] - 2026-01-20
 
 ### Added
@@ -38,6 +74,12 @@ All notable changes to Marix SSH Client will be documented in this file.
   - Uses `pkexec` for secure GUI-based password authentication
   - Supported package managers:
     - **Debian/Ubuntu**: `apt install freerdp3-x11 xdotool`
+
+### Fixed
+- **Argon2id Double Calibration**: Fixed race condition where KDF calibration ran twice on app startup
+  - Added mutex/lock to prevent concurrent calibrations
+  - Subsequent calls now wait for in-progress calibration instead of starting a new one
+  - Reduces startup delay from 60+ seconds to ~20-30 seconds on first launch
     - **Fedora/RHEL**: `dnf install freerdp xdotool`
     - **Arch**: `pacman -S freerdp xdotool`
 

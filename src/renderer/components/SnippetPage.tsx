@@ -152,39 +152,6 @@ const SnippetPage: React.FC<Props> = ({ appTheme }) => {
     }
   }, [t, selectedSnippet]);
 
-  // Handle import
-  const handleImport = useCallback(() => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.json';
-    input.onchange = async (e) => {
-      const file = (e.target as HTMLInputElement).files?.[0];
-      if (!file) return;
-      try {
-        const text = await file.text();
-        const parsed = JSON.parse(text) as CommandSnippet[];
-        const count = snippetStore.import(parsed);
-        alert(`${t('snippetImported') || 'Imported'} ${count} ${t('snippets') || 'snippets'}`);
-      } catch (err) {
-        alert(t('snippetImportError') || 'Failed to import snippets');
-      }
-    };
-    input.click();
-  }, [t]);
-
-  // Handle export
-  const handleExport = useCallback(() => {
-    const data = snippetStore.export();
-    const json = JSON.stringify(data, null, 2);
-    const blob = new Blob([json], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `snippets-${new Date().toISOString().split('T')[0]}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }, []);
-
   // Get category icon and color
   const getCategoryStyle = (category: string) => {
     const styles: Record<string, { bg: string; text: string; icon: string }> = {
@@ -221,28 +188,6 @@ const SnippetPage: React.FC<Props> = ({ appTheme }) => {
           </div>
           
           <div className="flex items-center gap-2">
-            <button
-              onClick={handleImport}
-              className={`flex items-center gap-2 px-3 py-2 rounded-lg font-medium transition ${
-                isDark ? 'bg-navy-700 hover:bg-navy-600 text-gray-300' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
-              }`}
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-              </svg>
-              {t('import') || 'Import'}
-            </button>
-            <button
-              onClick={handleExport}
-              className={`flex items-center gap-2 px-3 py-2 rounded-lg font-medium transition ${
-                isDark ? 'bg-navy-700 hover:bg-navy-600 text-gray-300' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
-              }`}
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-              </svg>
-              {t('exportSnippets') || 'Export'}
-            </button>
             <button
               onClick={() => { resetForm(); setShowForm(!showForm); setSelectedSnippet(null); }}
               className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 !text-white rounded-lg font-medium transition"

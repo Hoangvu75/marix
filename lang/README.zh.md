@@ -184,7 +184,7 @@ Marix 对 Argon2id 参数使用**自动校准**——这是应用密码学中广
 <a href="https://github.com/user/marix/releases/latest/download/Marix-arm64.zip">Apple Silicon</a>
 </td>
 <td align="center" width="33%">
-<img src="https://img.icons8.com/fluency/96/linux.png" width="64"><br>
+<img src="https://img.icons8.com/external-tal-revivo-color-tal-revivo/64/external-linux-a-family-of-open-source-unix-like-operating-systems-based-on-the-linux-kernel-logo-color-tal-revivo.png" width="64"><br>
 <b>Linux</b><br>
 <a href="https://github.com/user/marix/releases/latest/download/Marix.AppImage">.AppImage</a> •
 <a href="https://github.com/user/marix/releases/latest/download/marix.deb">.deb</a> •
@@ -205,6 +205,7 @@ Marix 对 Argon2id 参数使用**自动校准**——这是应用密码学中广
 | **SFTP** | 双窗格文件管理器，支持拖放 |
 | **FTP/FTPS** | 标准和安全 FTP 支持 |
 | **RDP** | 远程桌面（Linux 上为 xfreerdp3，Windows 上为 mstsc） |
+| **数据库** | mysql2, pg, mongodb, redis, better-sqlite3 | 连接 MySQL、PostgreSQL、MongoDB、Redis、SQLite |
 
 ### 💻 终端
 
@@ -277,6 +278,9 @@ Password → Argon2id(64-512MB memory) → 256 位 key → AES-256-GCM → Encry
 | SSH 私钥 | ✅ | ✅ |
 | Cloudflare API 令牌 | ✅ | ✅ |
 | 应用设置和偏好 | ✅ | ✅ |
+| 命令片段 | ✅ | ✅ |
+| 2FA TOTP 条目 | ✅ | ✅ |
+| 端口转发配置 | ✅ | ✅ |
 | Known hosts | ✅ | ✅ |
 
 ### 安全保证

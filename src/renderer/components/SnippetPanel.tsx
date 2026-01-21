@@ -125,7 +125,7 @@ const SnippetPanel: React.FC<SnippetPanelProps> = ({
           className="text-xs mt-2 font-bold"
           style={{ writingMode: 'vertical-rl', color: 'white' }}
         >
-          Snippets
+          {t('snippets') || 'Snippets'}
         </span>
       </div>
     );
@@ -225,7 +225,7 @@ const SnippetPanel: React.FC<SnippetPanelProps> = ({
             color: isDark ? '#94a3b8' : '#475569'
           }}
         >
-          All
+          {t('snippetAll') || 'All'}
         </button>
         {DEFAULT_CATEGORIES.slice(0, 4).map(cat => (
           <button

@@ -184,7 +184,7 @@ Marix menggunakan **auto-calibration** untuk parameter Argon2id—amalan terbaik
 <a href="https://github.com/user/marix/releases/latest/download/Marix-arm64.zip">Apple Silicon</a>
 </td>
 <td align="center" width="33%">
-<img src="https://img.icons8.com/fluency/96/linux.png" width="64"><br>
+<img src="https://img.icons8.com/external-tal-revivo-color-tal-revivo/64/external-linux-a-family-of-open-source-unix-like-operating-systems-based-on-the-linux-kernel-logo-color-tal-revivo.png" width="64"><br>
 <b>Linux</b><br>
 <a href="https://github.com/user/marix/releases/latest/download/Marix.AppImage">.AppImage</a> •
 <a href="https://github.com/user/marix/releases/latest/download/marix.deb">.deb</a> •
@@ -205,6 +205,7 @@ Marix menggunakan **auto-calibration** untuk parameter Argon2id—amalan terbaik
 | **SFTP** | Pengurus fail panel berkembar dengan seret dan lepas |
 | **FTP/FTPS** | Sokongan FTP standard dan selamat |
 | **RDP** | Desktop jauh (xfreerdp3 di Linux, mstsc di Windows) |
+| **Pangkalan Data** | mysql2, pg, mongodb, redis, better-sqlite3 | Sambung ke MySQL, PostgreSQL, MongoDB, Redis, SQLite |
 
 ### 💻 Terminal
 
@@ -277,6 +278,9 @@ Kata laluan → Argon2id(memori 64-512MB) → Kunci 256-bit → AES-256-GCM → 
 | Kunci persendirian SSH | ✅ | ✅ |
 | Token API Cloudflare | ✅ | ✅ |
 | Tetapan & keutamaan aplikasi | ✅ | ✅ |
+| Snippet arahan | ✅ | ✅ |
+| Entri 2FA TOTP | ✅ | ✅ |
+| Konfigurasi pemajuan port | ✅ | ✅ |
 | Known hosts | ✅ | ✅ |
 
 ### Jaminan Keselamatan

@@ -184,7 +184,7 @@ Marix использует **автокалибровку** параметров
 <a href="https://github.com/user/marix/releases/latest/download/Marix-arm64.zip">Apple Silicon</a>
 </td>
 <td align="center" width="33%">
-<img src="https://img.icons8.com/fluency/96/linux.png" width="64"><br>
+<img src="https://img.icons8.com/external-tal-revivo-color-tal-revivo/64/external-linux-a-family-of-open-source-unix-like-operating-systems-based-on-the-linux-kernel-logo-color-tal-revivo.png" width="64"><br>
 <b>Linux</b><br>
 <a href="https://github.com/user/marix/releases/latest/download/Marix.AppImage">.AppImage</a> •
 <a href="https://github.com/user/marix/releases/latest/download/marix.deb">.deb</a> •
@@ -205,6 +205,7 @@ Marix использует **автокалибровку** параметров
 | **SFTP** | Двухпанельный файловый менеджер с перетаскиванием |
 | **FTP/FTPS** | Поддержка стандартного и безопасного FTP |
 | **RDP** | Удалённый рабочий стол (xfreerdp3 на Linux, mstsc на Windows) |
+| **База данных** | mysql2, pg, mongodb, redis, better-sqlite3 | Подключение к MySQL, PostgreSQL, MongoDB, Redis, SQLite |
 
 ### 💻 Терминал
 
@@ -277,6 +278,9 @@ Marix использует **автокалибровку** параметров
 | Приватные SSH-ключи | ✅ | ✅ |
 | API-токены Cloudflare | ✅ | ✅ |
 | Настройки и параметры приложения | ✅ | ✅ |
+| Сниппеты команд | ✅ | ✅ |
+| Записи 2FA TOTP | ✅ | ✅ |
+| Конфигурации переадресации портов | ✅ | ✅ |
 | Known hosts | ✅ | ✅ |
 
 ### Гарантии безопасности

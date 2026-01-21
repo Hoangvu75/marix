@@ -184,7 +184,7 @@ Marix sử dụng **auto-calibration** cho các tham số Argon2id—một best 
 <a href="https://github.com/user/marix/releases/latest/download/Marix-arm64.zip">Apple Silicon</a>
 </td>
 <td align="center" width="33%">
-<img src="https://img.icons8.com/fluency/96/linux.png" width="64"><br>
+<img src="https://img.icons8.com/external-tal-revivo-color-tal-revivo/64/external-linux-a-family-of-open-source-unix-like-operating-systems-based-on-the-linux-kernel-logo-color-tal-revivo.png" width="64"><br>
 <b>Linux</b><br>
 <a href="https://github.com/user/marix/releases/latest/download/Marix.AppImage">.AppImage</a> •
 <a href="https://github.com/user/marix/releases/latest/download/marix.deb">.deb</a> •
@@ -205,6 +205,7 @@ Marix sử dụng **auto-calibration** cho các tham số Argon2id—một best 
 | **SFTP** | Quản lý file dual-pane với drag-and-drop |
 | **FTP/FTPS** | Hỗ trợ FTP tiêu chuẩn và bảo mật |
 | **RDP** | Remote Desktop (xfreerdp3 trên Linux, mstsc trên Windows) |
+| **Database** | mysql2, pg, mongodb, redis, better-sqlite3 | Kết nối MySQL, PostgreSQL, MongoDB, Redis, SQLite |
 
 ### 💻 Terminal
 
@@ -277,6 +278,9 @@ Password → Argon2id(64-512MB memory) → 256-bit key → AES-256-GCM → Encry
 | SSH private keys | ✅ | ✅ |
 | Cloudflare API token | ✅ | ✅ |
 | Cài đặt & preferences ứng dụng | ✅ | ✅ |
+| Snippets lệnh | ✅ | ✅ |
+| Mục 2FA TOTP | ✅ | ✅ |
+| Cấu hình Port Forwarding | ✅ | ✅ |
 | Known hosts | ✅ | ✅ |
 
 ### Đảm bảo bảo mật

@@ -184,7 +184,7 @@ Marix ใช้ **auto-calibration** สำหรับพารามิเต�
 <a href="https://github.com/user/marix/releases/latest/download/Marix-arm64.zip">Apple Silicon</a>
 </td>
 <td align="center" width="33%">
-<img src="https://img.icons8.com/fluency/96/linux.png" width="64"><br>
+<img src="https://img.icons8.com/external-tal-revivo-color-tal-revivo/64/external-linux-a-family-of-open-source-unix-like-operating-systems-based-on-the-linux-kernel-logo-color-tal-revivo.png" width="64"><br>
 <b>Linux</b><br>
 <a href="https://github.com/user/marix/releases/latest/download/Marix.AppImage">.AppImage</a> •
 <a href="https://github.com/user/marix/releases/latest/download/marix.deb">.deb</a> •
@@ -205,6 +205,7 @@ Marix ใช้ **auto-calibration** สำหรับพารามิเต�
 | **SFTP** | จัดการไฟล์แบบสองแผงพร้อมลากและวาง |
 | **FTP/FTPS** | รองรับ FTP มาตรฐานและปลอดภัย |
 | **RDP** | เดสก์ท็อประยะไกล (xfreerdp3 บน Linux, mstsc บน Windows) |
+| **ฐานข้อมูล** | mysql2, pg, mongodb, redis, better-sqlite3 | เชื่อมต่อ MySQL, PostgreSQL, MongoDB, Redis, SQLite |
 
 ### 💻 เทอร์มินัล
 
@@ -277,6 +278,9 @@ Marix ใช้ **auto-calibration** สำหรับพารามิเต�
 | คีย์ส่วนตัว SSH | ✅ | ✅ |
 | โทเค็น API Cloudflare | ✅ | ✅ |
 | การตั้งค่าและความชอบของแอป | ✅ | ✅ |
+| สนิปเปตคำสั่ง | ✅ | ✅ |
+| รายการ 2FA TOTP | ✅ | ✅ |
+| การตั้งค่า Port Forwarding | ✅ | ✅ |
 | Known hosts | ✅ | ✅ |
 
 ### การรับประกันความปลอดภัย

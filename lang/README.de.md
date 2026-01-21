@@ -184,7 +184,7 @@ Marix verwendet **Auto-Kalibrierung** für Argon2id-Parameter—eine in der ange
 <a href="https://github.com/user/marix/releases/latest/download/Marix-arm64.zip">Apple Silicon</a>
 </td>
 <td align="center" width="33%">
-<img src="https://img.icons8.com/fluency/96/linux.png" width="64"><br>
+<img src="https://img.icons8.com/external-tal-revivo-color-tal-revivo/64/external-linux-a-family-of-open-source-unix-like-operating-systems-based-on-the-linux-kernel-logo-color-tal-revivo.png" width="64"><br>
 <b>Linux</b><br>
 <a href="https://github.com/user/marix/releases/latest/download/Marix.AppImage">.AppImage</a> •
 <a href="https://github.com/user/marix/releases/latest/download/marix.deb">.deb</a> •
@@ -205,6 +205,7 @@ Marix verwendet **Auto-Kalibrierung** für Argon2id-Parameter—eine in der ange
 | **SFTP** | Zweifenster-Dateimanager mit Drag-and-Drop |
 | **FTP/FTPS** | Standard- und sicherer FTP-Support |
 | **RDP** | Remote-Desktop (xfreerdp3 unter Linux, mstsc unter Windows) |
+| **Datenbank** | mysql2, pg, mongodb, redis, better-sqlite3 | Verbindung zu MySQL, PostgreSQL, MongoDB, Redis, SQLite |
 
 ### 💻 Terminal
 
@@ -277,6 +278,9 @@ Passwort → Argon2id(64-512MB Speicher) → 256-bit Schlüssel → AES-256-GCM 
 | SSH-Privatschlüssel | ✅ | ✅ |
 | Cloudflare API-Tokens | ✅ | ✅ |
 | App-Einstellungen & Präferenzen | ✅ | ✅ |
+| Befehlsschnipsel | ✅ | ✅ |
+| 2FA TOTP-Einträge | ✅ | ✅ |
+| Port-Forwarding-Konfigurationen | ✅ | ✅ |
 | Known Hosts | ✅ | ✅ |
 
 ### Sicherheitsgarantien

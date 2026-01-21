@@ -38,6 +38,17 @@ const path = __importStar(require("path"));
 const fs = __importStar(require("fs"));
 const dns = __importStar(require("dns"));
 const util_1 = require("util");
+// ============================================================================
+// MEMORY OPTIMIZATION FLAGS (applied before app ready)
+// ============================================================================
+// Limit V8 memory for renderer process  
+electron_1.app.commandLine.appendSwitch('js-flags', '--max-old-space-size=256 --optimize-for-size');
+// Disable GPU process if not needed (saves ~50MB)
+electron_1.app.commandLine.appendSwitch('disable-gpu-compositing');
+// Reduce memory usage by limiting background processes
+electron_1.app.commandLine.appendSwitch('disable-background-timer-throttling');
+// Disable hardware acceleration for lower memory (can enable if needed)
+// app.commandLine.appendSwitch('disable-hardware-acceleration');
 const NativeSSHManager_1 = require("./services/NativeSSHManager");
 const SSHConnectionManager_1 = require("./services/SSHConnectionManager");
 const SFTPManager_1 = require("./services/SFTPManager");
@@ -202,6 +213,16 @@ function createWindow() {
     // Show window when ready to prevent white flash
     mainWindow.once('ready-to-show', () => {
         mainWindow?.show();
+        // Setup periodic memory cleanup (every 5 minutes)
+        setInterval(() => {
+            if (mainWindow && !mainWindow.isDestroyed()) {
+                // Trigger renderer garbage collection via low memory signal
+                mainWindow.webContents.session.clearCache();
+                // Log memory usage periodically (debug)
+                const memUsage = process.memoryUsage();
+                console.log(`[Memory] Heap: ${Math.round(memUsage.heapUsed / 1024 / 1024)}MB / ${Math.round(memUsage.heapTotal / 1024 / 1024)}MB, RSS: ${Math.round(memUsage.rss / 1024 / 1024)}MB`);
+            }
+        }, 5 * 60 * 1000); // Every 5 minutes
     });
     // Optimize rendering
     mainWindow.webContents.on('did-finish-load', () => {
@@ -246,16 +267,9 @@ electron_1.app.whenReady().then(() => {
     createAppMenu();
     // Initialize database handlers
     (0, databaseService_1.initDatabaseHandlers)();
-    // Start LAN sharing service on app startup for always-on discovery
-    lanSharingService.start().then(() => {
-        console.log('[App] LAN sharing service started on app ready');
-    }).catch((err) => {
-        console.error('[App] Failed to start LAN sharing on startup:', err);
-    });
-    // Start file transfer service
-    LANFileTransferService_1.lanFileTransferService.start().catch((err) => {
-        console.error('[FileTransfer] Failed to start:', err);
-    });
+    // LAN sharing and file transfer services are started on-demand
+    // when user enables LAN Discovery toggle in the UI
+    // (via 'lan-share:start' IPC handler)
     electron_1.app.on('activate', () => {
         if (electron_1.BrowserWindow.getAllWindows().length === 0) {
             createWindow();
@@ -458,6 +472,15 @@ electron_1.ipcMain.handle('local:getOsInfo', async () => {
             ip: 'localhost',
             provider: null,
         };
+    }
+});
+electron_1.ipcMain.handle('ssh:closeShell', async (event, connectionId) => {
+    try {
+        nativeSSH.disconnect(connectionId);
+        return { success: true };
+    }
+    catch (error) {
+        return { success: false, error: error.message };
     }
 });
 electron_1.ipcMain.handle('ssh:disconnect', async (event, connectionId) => {
@@ -919,20 +942,23 @@ electron_1.ipcMain.handle('rdp:checkDeps', async () => {
     }
 });
 // Install RDP dependencies with streaming output
-electron_1.ipcMain.handle('rdp:installDeps', async (event) => {
+electron_1.ipcMain.handle('rdp:installDeps', async (event, password) => {
     try {
         const deps = rdpManager.checkDependencies();
         if (deps.xfreerdp3 && deps.xdotool) {
             return { success: true, message: 'All dependencies already installed' };
         }
+        if (!password) {
+            return { success: false, error: 'Password is required' };
+        }
         return new Promise((resolve) => {
-            rdpManager.installDependencies(deps, (data) => {
+            rdpManager.installDependencies(deps, password, (data) => {
                 // Stream data to renderer
                 if (event.sender && !event.sender.isDestroyed()) {
                     event.sender.send('rdp:installOutput', data);
                 }
-            }, (success) => {
-                resolve({ success });
+            }, (success, error) => {
+                resolve({ success, error });
             });
         });
     }
@@ -1264,8 +1290,11 @@ electron_1.ipcMain.handle('gdrive:createBackup', async (event, password) => {
         // Get Port Forwards
         const pfJson = await mainWindow?.webContents.executeJavaScript('localStorage.getItem("port_forwards")');
         const portForwards = pfJson ? JSON.parse(pfJson) : [];
+        // Get Snippets
+        const snippetsJson = await mainWindow?.webContents.executeJavaScript('localStorage.getItem("command_snippets")');
+        const snippets = snippetsJson ? JSON.parse(snippetsJson) : [];
         // Create encrypted backup
-        const result = await backupService.createBackupContent(password, servers, tagColors, cloudflareToken, sshKeys, totpEntries, portForwards);
+        const result = await backupService.createBackupContent(password, servers, tagColors, cloudflareToken, sshKeys, totpEntries, portForwards, snippets);
         if (!result.success || !result.content) {
             return { success: false, error: result.error || 'Failed to create backup content' };
         }
@@ -1302,10 +1331,20 @@ electron_1.ipcMain.handle('gdrive:restoreBackup', async (event, password) => {
             if (result.data.cloudflareToken) {
                 CloudflareService_1.cloudflareService.setToken(result.data.cloudflareToken);
             }
+            // Restore SSH keys
+            let sshKeyCount = 0;
+            if (result.data.sshKeys && result.data.sshKeys.length > 0) {
+                const importResult = await SSHKeyService_1.sshKeyService.importKeysFromBackup(result.data.sshKeys);
+                sshKeyCount = importResult.imported;
+            }
             return {
                 success: true,
                 serverCount: result.data.servers.length,
+                sshKeyCount,
                 metadata: downloadResult.metadata,
+                totpEntries: result.data.totpEntries,
+                portForwards: result.data.portForwards,
+                snippets: result.data.snippets
             };
         }
         return result;
@@ -1322,7 +1361,7 @@ electron_1.ipcMain.handle('github:saveRepoName', async (event, repoName) => {
     await githubAuthService.saveRepoName(repoName);
     return { success: true };
 });
-electron_1.ipcMain.handle('github:uploadBackup', async (event, password, totpEntries, portForwards) => {
+electron_1.ipcMain.handle('github:uploadBackup', async (event, password, totpEntries, portForwards, snippets) => {
     // Validate password first (same as local backup)
     const validation = backupService.validatePassword(password);
     if (!validation.valid) {
@@ -1332,8 +1371,8 @@ electron_1.ipcMain.handle('github:uploadBackup', async (event, password, totpEnt
     const tagColors = serverStore.getTagColors();
     const cloudflareToken = CloudflareService_1.cloudflareService.getToken() || undefined;
     const sshKeys = SSHKeyService_1.sshKeyService.exportAllKeysForBackup();
-    // Create encrypted backup content (including 2FA and port forwards)
-    const backupResult = await backupService.createBackupContent(password, servers, tagColors, cloudflareToken, sshKeys, totpEntries, portForwards);
+    // Create encrypted backup content (including 2FA, port forwards and snippets)
+    const backupResult = await backupService.createBackupContent(password, servers, tagColors, cloudflareToken, sshKeys, totpEntries, portForwards, snippets);
     if (!backupResult.success || !backupResult.content) {
         return { success: false, error: backupResult.error };
     }
@@ -1375,7 +1414,8 @@ electron_1.ipcMain.handle('github:downloadBackup', async (event, password) => {
         serverCount: restoreResult.data.servers.length,
         sshKeyCount,
         totpEntries: restoreResult.data.totpEntries,
-        portForwards: restoreResult.data.portForwards
+        portForwards: restoreResult.data.portForwards,
+        snippets: restoreResult.data.snippets
     };
 });
 electron_1.ipcMain.handle('github:openAuthUrl', async (event, url) => {
@@ -1427,7 +1467,7 @@ electron_1.ipcMain.handle('gitlab:logout', async () => {
     GitLabOAuthService_1.GitLabOAuthService.clearTokens();
     return { success: true };
 });
-electron_1.ipcMain.handle('gitlab:uploadBackup', async (event, password, totpEntries, portForwards) => {
+electron_1.ipcMain.handle('gitlab:uploadBackup', async (event, password, totpEntries, portForwards, snippets) => {
     try {
         // Validate password first
         const validation = backupService.validatePassword(password);
@@ -1445,7 +1485,7 @@ electron_1.ipcMain.handle('gitlab:uploadBackup', async (event, password, totpEnt
         const cloudflareToken = CloudflareService_1.cloudflareService.getToken() || undefined;
         const sshKeys = SSHKeyService_1.sshKeyService.exportAllKeysForBackup();
         // Create encrypted backup content
-        const backupResult = await backupService.createBackupContent(password, servers, tagColors, cloudflareToken, sshKeys, totpEntries, portForwards);
+        const backupResult = await backupService.createBackupContent(password, servers, tagColors, cloudflareToken, sshKeys, totpEntries, portForwards, snippets);
         if (!backupResult.success || !backupResult.content) {
             return { success: false, error: backupResult.error };
         }
@@ -1489,7 +1529,8 @@ electron_1.ipcMain.handle('gitlab:downloadBackup', async (event, password) => {
             serverCount: restoreResult.data.servers.length,
             sshKeyCount,
             totpEntries: restoreResult.data.totpEntries,
-            portForwards: restoreResult.data.portForwards
+            portForwards: restoreResult.data.portForwards,
+            snippets: restoreResult.data.snippets
         };
     }
     catch (error) {
@@ -1551,7 +1592,7 @@ electron_1.ipcMain.handle('box:logout', async () => {
         return { success: false, error: error.message };
     }
 });
-electron_1.ipcMain.handle('box:uploadBackup', async (event, password, totpEntries, portForwards) => {
+electron_1.ipcMain.handle('box:uploadBackup', async (event, password, totpEntries, portForwards, snippets) => {
     try {
         // Validate password
         const validation = backupService.validatePassword(password);
@@ -1568,7 +1609,7 @@ electron_1.ipcMain.handle('box:uploadBackup', async (event, password, totpEntrie
         const cloudflareToken = CloudflareService_1.cloudflareService.getToken() || undefined;
         const sshKeys = SSHKeyService_1.sshKeyService.exportAllKeysForBackup();
         // Create encrypted backup content
-        const backupResult = await backupService.createBackupContent(password, servers, tagColors, cloudflareToken, sshKeys, totpEntries, portForwards);
+        const backupResult = await backupService.createBackupContent(password, servers, tagColors, cloudflareToken, sshKeys, totpEntries, portForwards, snippets);
         if (!backupResult.success || !backupResult.content) {
             return { success: false, error: backupResult.error };
         }
@@ -1612,7 +1653,8 @@ electron_1.ipcMain.handle('box:downloadBackup', async (event, password) => {
             serverCount: restoreResult.data.servers.length,
             sshKeyCount,
             totpEntries: restoreResult.data.totpEntries,
-            portForwards: restoreResult.data.portForwards
+            portForwards: restoreResult.data.portForwards,
+            snippets: restoreResult.data.snippets
         };
     }
     catch (error) {
@@ -2019,6 +2061,9 @@ electron_1.ipcMain.handle('app:openUrl', async (event, url) => {
 electron_1.ipcMain.handle('lan-share:start', async () => {
     try {
         await lanSharingService.start();
+        // Also start file transfer service
+        await LANFileTransferService_1.lanFileTransferService.start();
+        console.log('[LANShare] Services started (sharing + file transfer)');
         return { success: true };
     }
     catch (error) {
@@ -2030,6 +2075,8 @@ electron_1.ipcMain.handle('lan-share:start', async () => {
 electron_1.ipcMain.handle('lan-share:stop', () => {
     try {
         lanSharingService.stop();
+        LANFileTransferService_1.lanFileTransferService.stop();
+        console.log('[LANShare] Services stopped');
         return { success: true };
     }
     catch (error) {

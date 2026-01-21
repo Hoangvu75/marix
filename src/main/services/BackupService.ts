@@ -57,6 +57,9 @@ let cachedOptions: Argon2Options | null = null;
 let lastCalibrationTime: number = 0;
 const CALIBRATION_CACHE_TTL = 3600000; // Re-calibrate after 1 hour
 
+// Lock to prevent concurrent calibrations - stores the in-progress promise
+let calibrationInProgress: Promise<Argon2Options> | null = null;
+
 /**
  * Auto-tune Argon2id parameters to achieve ~1 second KDF time
  * 
@@ -73,9 +76,32 @@ const CALIBRATION_CACHE_TTL = 3600000; // Re-calibrate after 1 hour
 async function calibrateArgon2Options(): Promise<Argon2Options> {
   // Return cached options if still valid
   if (cachedOptions && (Date.now() - lastCalibrationTime) < CALIBRATION_CACHE_TTL) {
+    console.log('[BackupService] Using cached Argon2id parameters');
     return cachedOptions;
   }
 
+  // If calibration is already in progress, wait for it instead of starting another
+  if (calibrationInProgress) {
+    console.log('[BackupService] Calibration already in progress, waiting...');
+    return calibrationInProgress;
+  }
+
+  // Start calibration and store the promise
+  calibrationInProgress = performCalibration();
+  
+  try {
+    const result = await calibrationInProgress;
+    return result;
+  } finally {
+    // Clear the lock after completion (success or failure)
+    calibrationInProgress = null;
+  }
+}
+
+/**
+ * Performs the actual calibration work
+ */
+async function performCalibration(): Promise<Argon2Options> {
   console.log('[BackupService] Auto-tuning Argon2id parameters for ~1s KDF time...');
   
   const testPassword = 'calibration-test-password';
@@ -207,6 +233,7 @@ export interface BackupData {
   sshKeys?: SSHKeyBackup[]; // SSH keys from keychain
   totpEntries?: any[]; // 2FA TOTP entries
   portForwards?: any[]; // Port forwarding configurations
+  snippets?: any[]; // Command snippets
 }
 
 export interface EncryptedBackup {
@@ -529,11 +556,12 @@ export class BackupService {
     cloudflareToken?: string,
     sshKeys?: SSHKeyBackup[],
     totpEntries?: any[],
-    portForwards?: any[]
+    portForwards?: any[],
+    snippets?: any[]
   ): Promise<{ success: boolean; content?: string; error?: string }> {
     try {
       const backupData: BackupData = {
-        version: '2.1.0',
+        version: '2.2.0',
         timestamp: Date.now(),
         servers,
         tagColors,
@@ -541,6 +569,7 @@ export class BackupService {
         sshKeys,
         totpEntries,
         portForwards,
+        snippets,
       };
 
       const encryptedContent = await this.encrypt(backupData, password);

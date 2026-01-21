@@ -109,7 +109,18 @@ export class WSSManager extends EventEmitter {
     const conn = this.connections.get(connectionId);
     if (conn) {
       try {
-        conn.socket.close(1000, 'User disconnected');
+        // Remove all listeners first to prevent events after disconnect
+        conn.socket.removeAllListeners();
+        
+        // Check socket state: 0=CONNECTING, 1=OPEN, 2=CLOSING, 3=CLOSED
+        if (conn.socket.readyState === WebSocket.CONNECTING) {
+          // If still connecting, terminate immediately
+          conn.socket.terminate();
+        } else if (conn.socket.readyState === WebSocket.OPEN) {
+          // If connected, close gracefully
+          conn.socket.close(1000, 'User disconnected');
+        }
+        // If CLOSING or CLOSED, nothing to do
       } catch (err) {
         console.error(`[WSSManager] Error closing ${connectionId}:`, err);
       }

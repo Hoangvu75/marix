@@ -184,7 +184,7 @@ Marix uses **auto-calibration** for Argon2id parameters—a widely-adopted best 
 <a href="https://github.com/user/marix/releases/latest/download/Marix-arm64.zip">Apple Silicon</a>
 </td>
 <td align="center" width="33%">
-<img src="https://img.icons8.com/fluency/96/linux.png" width="64"><br>
+<img src="https://img.icons8.com/external-tal-revivo-color-tal-revivo/64/external-linux-a-family-of-open-source-unix-like-operating-systems-based-on-the-linux-kernel-logo-color-tal-revivo.png" width="64"><br>
 <b>Linux</b><br>
 <a href="https://github.com/user/marix/releases/latest/download/Marix.AppImage">.AppImage</a> •
 <a href="https://github.com/user/marix/releases/latest/download/marix.deb">.deb</a> •
@@ -205,6 +205,7 @@ Marix uses **auto-calibration** for Argon2id parameters—a widely-adopted best 
 | **SFTP** | ssh2 | Dual-pane file manager with drag-and-drop |
 | **FTP/FTPS** | basic-ftp | Standard and secure FTP support |
 | **RDP** | xfreerdp3 / mstsc | Remote Desktop (xfreerdp3 on Linux, mstsc on Windows) |
+| **Database** | mysql2, pg, mongodb, redis, better-sqlite3 | Connect to MySQL, PostgreSQL, MongoDB, Redis, SQLite |
 
 ### 💻 Terminal
 
@@ -322,28 +323,25 @@ Marix uses **auto-calibration** for Argon2id parameters—a widely-adopted best 
 </details>
 
 <details>
-<summary><b>Custom Hotkeys</b></summary>
+<summary><b>Command Snippets</b></summary>
 
-*Create keyboard shortcuts to quickly execute commands in SSH terminal.*
+*Save and organize frequently-used commands with optional keyboard shortcuts.*
 
-- **Quick command execution** - Press `Ctrl+Shift+[key]` (or `Cmd+Shift+[key]` on Mac) to instantly run commands
-- **Custom shortcuts** - Assign any single character (A-Z, 0-9) to your frequently used commands
-- **Examples**:
-  - `Ctrl+Shift+L` → `ls -la` (list files)
-  - `Ctrl+Shift+D` → `docker ps` (list containers)
-  - `Ctrl+Shift+S` → `sudo systemctl status nginx` (check nginx status)
-- **Auto-execute** - Commands are typed and executed automatically (with Enter)
-- **Local storage** - Hotkeys stored locally, never uploaded
-- **Manage easily** - Add, edit, or delete hotkeys from the Hotkeys menu
+- **Quick command library** - Store commands you use often with descriptions
+- **Keyboard shortcuts** - Assign `Ctrl+Shift+[key]` (or `Cmd+Shift+[key]` on Mac) for instant execution
+- **Categories** - Organize by System, Docker, Git, Network, Database, or Custom
+- **Scope-based** - Global snippets or specific to a host/group
+- **Snippet Panel** - Side panel in terminal for quick access
+- **Search & filter** - Find snippets by name, command, or tags
+- **Included in backup** - Snippets are encrypted and backed up with your data
 
 **How to use:**
-1. Open **Hotkeys** menu from the sidebar
-2. Click **Add Hotkey**
-3. Enter a key (single character, e.g., `L`)
-4. Enter the command (e.g., `ls -la`)
-5. Optionally add a description
-6. Click **Add**
-7. In SSH terminal, press `Ctrl+Shift+L` to execute the command
+1. Open **Snippets** menu from the sidebar
+2. Click **Add** to create a new snippet
+3. Enter name, command, category, and optional hotkey
+4. In SSH terminal:
+   - Click snippet in the panel to insert command
+   - Or press `Ctrl+Shift+[key]` to execute with hotkey
 
 </details>
 
@@ -374,6 +372,9 @@ All backups use **Argon2id** (winner of the Password Hashing Competition) and **
 | Server list (hosts, ports, credentials) | ✅ | ✅ AES-256-GCM |
 | SSH private keys | ✅ | ✅ AES-256-GCM |
 | Cloudflare API token | ✅ | ✅ AES-256-GCM |
+| Command snippets | ✅ | ✅ AES-256-GCM |
+| 2FA TOTP entries | ✅ | ✅ AES-256-GCM |
+| Port forwarding configs | ✅ | ✅ AES-256-GCM |
 | App settings & preferences | ✅ | ✅ AES-256-GCM |
 | Known hosts | ❌ | — |
 

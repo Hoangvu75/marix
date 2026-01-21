@@ -55,43 +55,25 @@ interface QueryResult {
 type TabType = 'data' | 'query' | 'structure' | 'erd' | 'import-export';
 
 // =============================================================================
-// SVG ICONS - Official Database Logos
+// SVG ICONS - Unified Database Icon
 // =============================================================================
 
+// Unified database cylinder icon used for all database types
+const UnifiedDatabaseIcon = (
+  <svg viewBox="0 0 24 24" className="w-8 h-8" fill="none" stroke="#64748b" strokeWidth="1.5">
+    <ellipse cx="12" cy="5" rx="9" ry="3"/>
+    <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
+    <path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"/>
+  </svg>
+);
+
 const Icons = {
-  // MySQL - Official dual-color logo
-  mysql: (
-    <svg viewBox="0 0 48 48" className="w-8 h-8">
-      <path fill="#00796b" d="M0.002,35.041h1.92v-7.085l2.667,6.057c0.329,0.755,0.779,1.022,1.662,1.022 s1.315-0.267,1.644-1.022l2.667-5.902v6.93h1.92v-7.906c0-0.61-0.277-0.917-0.807-1.054c-1.286-0.373-2.138,0.089-2.525,0.986 l-2.7,6.069l-2.613-6.069c-0.37-0.897-1.239-1.359-2.524-0.986c-0.531,0.137-0.808,0.444-0.808,1.054v7.906H0.002z"/>
-      <path fill="#00796b" d="M13.441,29.281h1.92v4.055c-0.015,0.2,0.064,0.731,0.99,0.745c0.472,0.008,2.821,0,2.85,0v-4.8h1.92 c0,0,0,5.417,0,5.529c0,0.617-0.559,1.239-1.2,1.44c-0.263,0.085-3.479,0-3.479,0c-1.845,0-3.001-0.962-3.001-1.8V29.281z"/>
-      <path fill="#f57f17" d="M21.722,34.063v2.718c0,0.267,0.053,0.457,0.16,0.57c0.054,0.057,0.16,0.125,0.294,0.181 c0.227,0.089,0.48,0.131,0.751,0.131h0.16v0.377h-4.451v-0.377h0.16c0.535,0,0.925-0.144,1.145-0.42 c0.107-0.125,0.16-0.342,0.16-0.627v-6.262c0-0.285-0.053-0.502-0.16-0.627c-0.22-0.269-0.609-0.413-1.145-0.413h-0.16v-0.377 h4.078v0.377h-0.16c-0.535,0-0.925,0.144-1.145,0.42c-0.107,0.125-0.16,0.342-0.16,0.62v3.411h4.238v-3.411 c0-0.285-0.053-0.502-0.16-0.627c-0.22-0.269-0.609-0.413-1.145-0.413h-0.16v-0.377h4.078v0.377h-0.16 c-0.535,0-0.925,0.144-1.145,0.42c-0.107,0.125-0.16,0.342-0.16,0.62v6.269c0,0.267,0.053,0.457,0.16,0.57 c0.054,0.057,0.16,0.125,0.294,0.181c0.227,0.089,0.48,0.131,0.751,0.131h0.16v0.377h-4.451v-0.377h0.16 c0.535,0,0.925-0.144,1.145-0.42c0.107-0.125,0.16-0.342,0.16-0.627v-2.553L21.722,34.063z"/>
-      <path fill="#00796b" d="M24.124,10.651c-0.306-0.048-0.527-0.078-0.769-0.078 c-2.755,0-4.138,1.398-4.138,4.183v1.107h-1.721v1.453h1.721v7.291h1.873v-7.291h2.426v-1.453h-2.426v-1.003 c0-1.729,0.549-2.528,1.909-2.528c0.384,0,0.742,0.036,1.125,0.108V10.651L24.124,10.651z"/>
-    </svg>
-  ),
-  // PostgreSQL - Official elephant (blue)
-  postgresql: (
-    <svg viewBox="0 0 24 24" className="w-8 h-8">
-      <path fill="#336791" d="M17.128 0a10.134 10.134 0 0 0-2.755.403l-.063.02a10.922 10.922 0 0 0-1.612-.143c-1.209 0-2.291.256-3.193.737l-.077.044c-.268-.032-.56-.05-.877-.05-1.203 0-2.23.254-3.028.707-.986.558-1.678 1.433-1.734 2.602-.034.73.071 1.415.278 2.045.06.185.133.36.218.525-.082.367-.125.76-.125 1.175 0 .597.068 1.158.2 1.676.16.624.42 1.181.78 1.663.14.187.302.361.48.52-.003.018-.004.036-.006.055l-.003.024c-.003.02-.004.041-.005.062v.514l.025.096.018.057.021.054.024.053.028.05.031.049.034.047.037.044.04.042.043.04.046.036.048.034.051.031.053.028.056.024.057.021.06.018.061.014.063.011.065.007.066.003h.066l.065-.003.064-.007.063-.011.062-.015.06-.018.058-.021.056-.025.054-.028.051-.031.049-.034.046-.037.044-.04.04-.042.038-.044.034-.047.031-.049.028-.051.024-.054.021-.055.017-.058.014-.06.011-.062.007-.064.004-.066v-.066l-.003-.066-.007-.065-.01-.063-.014-.062-.018-.06-.021-.058-.025-.056-.028-.053-.031-.051-.034-.048-.037-.046-.04-.043-.043-.04-.046-.037-.049-.034-.051-.031-.054-.028-.056-.024-.058-.021-.06-.018-.062-.014-.063-.011-.065-.007-.066-.004h-.066l-.065.003-.064.007-.063.01-.062.015-.06.017-.058.021-.056.025-.054.027-.051.032-.049.034-.046.036-.044.04-.04.043-.038.045-.034.047-.031.049-.028.051-.024.054-.021.055-.018.058-.014.06-.011.062-.007.064-.004.066v.066c0 .022.001.044.003.066.003.022.007.043.01.065.005.021.01.042.015.062.006.02.012.04.018.06.007.02.014.039.021.057.008.019.016.037.025.055.009.018.018.035.028.052.01.017.02.034.031.05.011.016.023.031.034.046.013.015.025.03.038.044.013.014.026.028.04.041.014.013.028.025.043.037.014.012.029.024.044.035.015.011.03.022.046.032.016.01.032.02.048.029.017.009.033.018.05.026.017.008.034.015.052.022.017.007.035.013.053.02.018.006.036.011.054.016.019.005.037.009.056.013.019.004.037.007.056.01.019.003.038.005.057.007.019.002.038.003.058.004.019.001.039.001.058.001h.058l.058-.001c.02-.001.039-.002.058-.004.019-.002.038-.004.057-.007.019-.003.038-.006.056-.01.019-.004.037-.008.056-.013.018-.005.036-.01.054-.016.018-.006.036-.012.053-.019.018-.007.035-.014.052-.022.017-.008.033-.017.05-.026.016-.009.032-.019.048-.03.016-.01.031-.02.046-.032.015-.011.03-.023.044-.035.015-.012.029-.024.043-.037.014-.013.027-.027.04-.041.013-.014.025-.029.038-.044.012-.015.024-.03.035-.046.011-.016.021-.033.031-.05.01-.017.019-.034.028-.052.009-.018.017-.036.025-.055.007-.018.014-.037.021-.057.006-.02.012-.04.018-.06.005-.02.01-.041.014-.062.004-.022.008-.043.011-.065.002-.022.003-.044.003-.066z"/>
-    </svg>
-  ),
-  // MongoDB - Official leaf (green)
-  mongodb: (
-    <svg viewBox="0 0 24 24" className="w-8 h-8">
-      <path fill="#47a248" d="M17.193 9.555c-1.264-5.58-4.252-7.414-4.573-8.115-.28-.394-.53-.954-.735-1.44-.036.495-.055.685-.523 1.184-.723.566-4.438 3.682-4.74 10.02-.282 5.912 4.27 9.435 4.888 9.884l.07.05A73.49 73.49 0 0111.91 24h.481c.114-1.032.284-2.056.51-3.07.417-.296.604-.463.85-.693a11.342 11.342 0 003.639-8.464c.01-.814-.103-1.662-.197-2.218zm-5.336 8.195s0-8.291.275-8.29c.213 0 .49 10.695.49 10.695-.381-.045-.765-1.76-.765-2.405z"/>
-    </svg>
-  ),
-  // Redis - Official stacked blocks (red)
-  redis: (
-    <svg viewBox="0 0 24 24" className="w-8 h-8">
-      <path fill="#dc382d" d="M10.5 2.661l-8.571 4.062c-.309.146-.309.422 0 .568l8.571 4.062c.346.163.727.163 1.073 0l8.571-4.062c.309-.146.309-.422 0-.568l-8.571-4.062c-.346-.163-.727-.163-1.073 0zM1.929 9.405l8.571 4.062c.346.163.727.163 1.073 0l8.571-4.062c.309-.146.309-.422 0-.568-.309-.146-.818-.146-1.127 0l-7.944 3.77c-.346.163-.727.163-1.073 0l-7.944-3.77c-.309-.146-.818-.146-1.127 0-.309.146-.309.422 0 .568zM1.929 13.405l8.571 4.062c.346.163.727.163 1.073 0l8.571-4.062c.309-.146.309-.422 0-.568-.309-.146-.818-.146-1.127 0l-7.944 3.77c-.346.163-.727.163-1.073 0l-7.944-3.77c-.309-.146-.818-.146-1.127 0-.309.146-.309.422 0 .568z"/>
-    </svg>
-  ),
-  // SQLite - Official feather (blue)
-  sqlite: (
-    <svg viewBox="0 0 24 24" className="w-8 h-8">
-      <path fill="#003b57" d="M21.678.521c-1.032-.92-2.28-.55-3.678.618A38.019 38.019 0 0 0 16.463 2.5c-1.586 1.683-3.726 4.32-5.141 6.486-.053.026-.095.044-.148.076-.714.42-1.46.868-2.19 1.345-.099-.152-.462-.209-.923-.146A7.91 7.91 0 0 1 6.9 10.4a1.553 1.553 0 0 1-.09.01 2.76 2.76 0 0 1-.142.007h-.074c-.16.003-.288.019-.358.047-.082.032-.13.076-.137.128-.01.072.04.17.139.282.015.018.037.039.055.058.033.035.071.073.11.113.041.042.085.088.13.135.022.024.045.05.068.075.14.157.294.34.454.549-.024.039-.047.078-.071.119a87.23 87.23 0 0 0-2.06 3.769C3.694 17.925 2.14 20.747.67 23.095c-.12.19-.029.356.114.455.037.026.08.046.127.061.053.017.11.028.168.034.082.007.168.002.248-.014.093-.02.181-.053.255-.1.108-.067.194-.16.244-.275a46.79 46.79 0 0 1 1.595-2.936c.115-.196.35-.472.65-.745.147-.133.31-.262.48-.379.142-.098.29-.186.437-.262.135-.069.284-.153.447-.25l.018-.011.018-.01c.155-.091.323-.194.504-.31.086-.054.175-.112.266-.172.02.114.075.299.166.557.055.154.12.33.195.53.185.496.408 1.108.578 1.795.174.699.294 1.467.267 2.257a.195.195 0 0 0 .029.11.166.166 0 0 0 .067.06c.021.01.044.017.068.019.031.003.065-.001.097-.011a.206.206 0 0 0 .07-.036.2.2 0 0 0 .052-.058.174.174 0 0 0 .023-.059c.206-.933.328-1.747.386-2.445a9.284 9.284 0 0 0-.095-2.143c.25-.156.498-.315.746-.477.088-.057.175-.115.262-.172.153.188.306.383.46.583.296.39.592.808.87 1.246.178.28.348.571.503.867.101.192.196.387.282.58.053.12.103.24.149.358.043.109.083.217.119.322.054.157.1.306.136.443.029.107.053.207.071.297.04.195.058.348.053.448a.194.194 0 0 0 .016.091c.012.03.032.054.058.072a.18.18 0 0 0 .164.014.228.228 0 0 0 .062-.037.24.24 0 0 0 .045-.046.195.195 0 0 0 .032-.055l.01-.024c.01-.029.024-.068.041-.117a4.37 4.37 0 0 0 .055-.16 6.817 6.817 0 0 0 .139-.518 8.38 8.38 0 0 0 .108-.561 9.61 9.61 0 0 0 .101-.87c.039-.52.042-1.14-.048-1.847a9.786 9.786 0 0 0-.22-1.12c.184-.142.369-.286.554-.43.064-.05.128-.1.192-.15.009.011.019.02.028.031.024.03.047.055.068.077z"/>
-    </svg>
-  ),
+  // All database types use the same unified icon
+  mysql: UnifiedDatabaseIcon,
+  postgresql: UnifiedDatabaseIcon,
+  mongodb: UnifiedDatabaseIcon,
+  redis: UnifiedDatabaseIcon,
+  sqlite: UnifiedDatabaseIcon,
   table: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>,
   view: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>,
   collection: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>,
@@ -1147,12 +1129,12 @@ const DatabaseClient: React.FC<DatabaseClientProps> = ({
     return (
       <div className={`flex items-center justify-center h-full ${isDark ? 'bg-navy-900' : 'bg-gray-50'}`}>
         <div className="text-center">
-          <div className={`w-20 h-20 mx-auto mb-6 rounded-2xl bg-gradient-to-br ${config.color} flex items-center justify-center text-white shadow-xl`}>
-            <span className="w-10 h-10">{Icons[config.icon]}</span>
+          <div className={`w-20 h-20 mx-auto mb-6 rounded-2xl ${isDark ? 'bg-navy-800' : 'bg-gray-200'} flex items-center justify-center`}>
+            <span className={`w-10 h-10 ${isDark ? 'text-indigo-400' : 'text-indigo-600'}`}>{Icons[config.icon]}</span>
           </div>
           <div className="animate-spin w-8 h-8 mx-auto mb-4 border-3 border-indigo-500 border-t-transparent rounded-full"></div>
           <p className={`text-lg font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>
-            Connecting to {config.name}...
+            {t('dbConnecting')}
           </p>
           <p className={`text-sm mt-2 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
             {server.host}:{server.port}
@@ -1170,7 +1152,7 @@ const DatabaseClient: React.FC<DatabaseClientProps> = ({
             <span className="w-10 h-10">{Icons.x}</span>
           </div>
           <p className={`text-xl font-bold mb-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>
-            Connection Failed
+            {t('dbConnectionFailed')}
           </p>
           <p className={`text-sm mb-6 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
             {error}
@@ -1179,7 +1161,7 @@ const DatabaseClient: React.FC<DatabaseClientProps> = ({
             onClick={() => window.location.reload()}
             className="px-6 py-2.5 bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-xl font-medium hover:shadow-lg transition-all"
           >
-            Try Again
+            {t('dbRetry')}
           </button>
         </div>
       </div>
@@ -1258,7 +1240,7 @@ const DatabaseClient: React.FC<DatabaseClientProps> = ({
                   : 'bg-gray-50 border-gray-200 text-gray-900 focus:border-indigo-500'
               } border focus:outline-none focus:ring-2 focus:ring-indigo-500/20`}
             >
-              <option value="">Select Database</option>
+              <option value="">{t('dbSelectDatabase')}</option>
               {databases.map(db => (
                 <option key={db} value={db}>{db}</option>
               ))}
@@ -1273,7 +1255,7 @@ const DatabaseClient: React.FC<DatabaseClientProps> = ({
               type="text"
               value={searchTables}
               onChange={(e) => setSearchTables(e.target.value)}
-              placeholder="Search tables..."
+              placeholder={t('dbSearchTables')}
               className={`w-full px-3 py-2 rounded-lg text-sm ${
                 isDark 
                   ? 'bg-navy-900 border-navy-600 text-white placeholder-gray-500' 
@@ -1315,43 +1297,6 @@ const DatabaseClient: React.FC<DatabaseClientProps> = ({
                       }`}>{table.name}</span>
                     )}
                   </button>
-                  {/* Drop/Truncate buttons */}
-                  {!sidebarCollapsed && config.supportsStructure && (
-                    <div className={`flex items-center gap-0.5 pr-2 ${
-                      selectedTable === table.name ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
-                    } transition-opacity`}>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); dropSingleTable(table.name, 'truncate'); }}
-                        className={`p-1.5 rounded transition-colors ${
-                          selectedTable === table.name
-                            ? 'hover:bg-white/20 text-white/80 hover:text-white'
-                            : isDark 
-                              ? 'hover:bg-amber-500/20 text-gray-500 hover:text-amber-400' 
-                              : 'hover:bg-amber-100 text-gray-400 hover:text-amber-600'
-                        }`}
-                        title="Truncate table (delete all data)"
-                      >
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                      </button>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); dropSingleTable(table.name, 'drop'); }}
-                        className={`p-1.5 rounded transition-colors ${
-                          selectedTable === table.name
-                            ? 'hover:bg-white/20 text-white/80 hover:text-white'
-                            : isDark 
-                              ? 'hover:bg-red-500/20 text-gray-500 hover:text-red-400' 
-                              : 'hover:bg-red-100 text-gray-400 hover:text-red-600'
-                        }`}
-                        title="Drop table (delete table)"
-                      >
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                      </button>
-                    </div>
-                  )}
                 </div>
               ))}
             </div>
@@ -1381,11 +1326,11 @@ const DatabaseClient: React.FC<DatabaseClientProps> = ({
         {/* Tabs */}
         <div className={`flex items-center gap-1 px-4 py-3 border-b ${isDark ? 'bg-navy-800 border-navy-700' : 'bg-white border-gray-200'}`}>
           {[
-            { id: 'data' as TabType, icon: Icons.data, label: 'Data' },
-            { id: 'query' as TabType, icon: Icons.query, label: 'Query' },
-            { id: 'structure' as TabType, icon: Icons.structure, label: 'Structure', show: config.supportsStructure },
-            { id: 'erd' as TabType, icon: Icons.erd, label: 'ERD', show: config.supportsERD },
-            { id: 'import-export' as TabType, icon: Icons.importExport, label: 'Import/Export' },
+            { id: 'data' as TabType, icon: Icons.data, label: t('dbData') },
+            { id: 'query' as TabType, icon: Icons.query, label: t('dbQuery') },
+            { id: 'structure' as TabType, icon: Icons.structure, label: t('dbStructure'), show: config.supportsStructure },
+            { id: 'erd' as TabType, icon: Icons.erd, label: t('dbERD'), show: config.supportsERD },
+            { id: 'import-export' as TabType, icon: Icons.importExport, label: t('dbImportExport') },
           ].filter(tab => tab.show !== false).map(tab => (
             <button
               key={tab.id}
@@ -1419,40 +1364,16 @@ const DatabaseClient: React.FC<DatabaseClientProps> = ({
                       <div>
                         <h3 className={`font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>{selectedTable}</h3>
                         <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                          {tableData?.rows.length || 0} rows
+                          {tableData?.rows.length || 0} {t('dbRows')}
                         </p>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      {config.supportsStructure && (
-                        <>
-                          <button
-                            onClick={() => dropSingleTable(selectedTable, 'truncate')}
-                            className={`px-3 py-1.5 rounded-lg text-sm flex items-center gap-2 ${isDark ? 'bg-amber-500/20 hover:bg-amber-500/30 text-amber-400' : 'bg-amber-100 hover:bg-amber-200 text-amber-600'}`}
-                            title="Truncate table (delete all data)"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                            Truncate
-                          </button>
-                          <button
-                            onClick={() => dropSingleTable(selectedTable, 'drop')}
-                            className={`px-3 py-1.5 rounded-lg text-sm flex items-center gap-2 ${isDark ? 'bg-red-500/20 hover:bg-red-500/30 text-red-400' : 'bg-red-100 hover:bg-red-200 text-red-600'}`}
-                            title="Drop table (delete table)"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                            </svg>
-                            Drop
-                          </button>
-                        </>
-                      )}
                       <button
                         onClick={() => loadTableData(selectedTable)}
                         className={`px-3 py-1.5 rounded-lg text-sm flex items-center gap-2 ${isDark ? 'bg-navy-700 hover:bg-navy-600 text-gray-300' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'}`}
                       >
-                        {Icons.refresh} Refresh
+                        {Icons.refresh} {t('dbRefresh')}
                       </button>
                     </div>
                   </div>
@@ -1506,7 +1427,7 @@ const DatabaseClient: React.FC<DatabaseClientProps> = ({
                       </table>
                     ) : (
                       <div className="flex items-center justify-center h-full">
-                        <p className={isDark ? 'text-gray-500' : 'text-gray-400'}>No data</p>
+                        <p className={isDark ? 'text-gray-500' : 'text-gray-400'}>{t('dbNoData')}</p>
                       </div>
                     )}
                   </div>
@@ -1517,7 +1438,7 @@ const DatabaseClient: React.FC<DatabaseClientProps> = ({
                     <span className={`block mb-4 ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-16 h-16 mx-auto"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
                     </span>
-                    <p className={isDark ? 'text-gray-400' : 'text-gray-500'}>Select a table to view data</p>
+                    <p className={isDark ? 'text-gray-400' : 'text-gray-500'}>{t('dbSelectTableToView')}</p>
                   </div>
                 </div>
               )}
@@ -1539,7 +1460,7 @@ const DatabaseClient: React.FC<DatabaseClientProps> = ({
                 />
                 <div className="flex items-center justify-between mt-3">
                   <p className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
-                    Press Ctrl+Enter to execute
+                    {t('dbPressCtrlEnter')}
                   </p>
                   <button
                     onClick={executeQuery}
@@ -1551,9 +1472,9 @@ const DatabaseClient: React.FC<DatabaseClientProps> = ({
                     }`}
                   >
                     {executing ? (
-                      <><div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></div> Running...</>
+                      <><div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></div> {t('dbExecuting')}</>
                     ) : (
-                      <>▶ Execute</>
+                      <>▶ {t('dbExecute')}</>
                     )}
                   </button>
                 </div>
@@ -1562,13 +1483,13 @@ const DatabaseClient: React.FC<DatabaseClientProps> = ({
               <div className="flex-1 overflow-auto p-4">
                 {queryResult?.error ? (
                   <div className={`p-4 rounded-xl ${isDark ? 'bg-red-500/10 border-red-500/30' : 'bg-red-50 border-red-200'} border`}>
-                    <p className="text-red-500 font-medium">Error</p>
+                    <p className="text-red-500 font-medium">{t('dbError')}</p>
                     <p className={`text-sm mt-1 ${isDark ? 'text-red-400' : 'text-red-600'}`}>{queryResult.error}</p>
                   </div>
                 ) : queryResult?.rows.length ? (
                   <div>
                     <p className={`text-sm mb-3 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                      {queryResult.rows.length} rows • {queryResult.executionTime}ms
+                      {queryResult.rows.length} {t('dbRows')} • {queryResult.executionTime}ms
                     </p>
                     <div className={`rounded-xl border overflow-hidden ${isDark ? 'border-navy-700' : 'border-gray-200'}`}>
                       <table className="w-full text-sm">
@@ -1597,14 +1518,14 @@ const DatabaseClient: React.FC<DatabaseClientProps> = ({
                   </div>
                 ) : queryResult ? (
                   <div className={`p-4 rounded-xl ${isDark ? 'bg-green-500/10 border-green-500/30' : 'bg-green-50 border-green-200'} border`}>
-                    <p className="text-green-500 font-medium">Success</p>
+                    <p className="text-green-500 font-medium">{t('dbQuerySuccess')}</p>
                     <p className={`text-sm mt-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                      {queryResult.affectedRows !== undefined ? `${queryResult.affectedRows} rows affected` : 'Query executed'} • {queryResult.executionTime}ms
+                      {queryResult.affectedRows !== undefined ? `${queryResult.affectedRows} ${t('dbRowsAffected')}` : t('dbQuerySuccess')} • {queryResult.executionTime}ms
                     </p>
                   </div>
                 ) : (
                   <div className="flex items-center justify-center h-full">
-                    <p className={isDark ? 'text-gray-500' : 'text-gray-400'}>Write a query and execute</p>
+                    <p className={isDark ? 'text-gray-500' : 'text-gray-400'}>{t('dbWriteQuery')}</p>
                   </div>
                 )}
               </div>
@@ -1620,7 +1541,7 @@ const DatabaseClient: React.FC<DatabaseClientProps> = ({
                     <span className="text-2xl">🏗️</span>
                     <div>
                       <h3 className={`text-xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>{selectedTable}</h3>
-                      <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>{tableStructure.length} columns</p>
+                      <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>{tableStructure.length} {t('dbColumns')}</p>
                     </div>
                   </div>
                   
@@ -1629,11 +1550,11 @@ const DatabaseClient: React.FC<DatabaseClientProps> = ({
                       <thead className={isDark ? 'bg-navy-800' : 'bg-gray-100'}>
                         <tr>
                           <th className={`px-4 py-3 text-left font-semibold ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>#</th>
-                          <th className={`px-4 py-3 text-left font-semibold ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>Column</th>
-                          <th className={`px-4 py-3 text-left font-semibold ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>Type</th>
-                          <th className={`px-4 py-3 text-left font-semibold ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>Nullable</th>
-                          <th className={`px-4 py-3 text-left font-semibold ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>Key</th>
-                          <th className={`px-4 py-3 text-left font-semibold ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>Default</th>
+                          <th className={`px-4 py-3 text-left font-semibold ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>{t('dbColumnName')}</th>
+                          <th className={`px-4 py-3 text-left font-semibold ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>{t('dbColumnType')}</th>
+                          <th className={`px-4 py-3 text-left font-semibold ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>{t('dbColumnNullable')}</th>
+                          <th className={`px-4 py-3 text-left font-semibold ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>{t('dbColumnKey')}</th>
+                          <th className={`px-4 py-3 text-left font-semibold ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>{t('dbColumnDefault')}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1656,7 +1577,7 @@ const DatabaseClient: React.FC<DatabaseClientProps> = ({
                             </td>
                             <td className={`px-4 py-3 border-t ${isDark ? 'border-navy-700' : 'border-gray-200'}`}>
                               {col.key === 'PRI' ? (
-                                <span className={`px-2 py-1 rounded text-xs ${isDark ? 'bg-yellow-500/20 text-yellow-400' : 'bg-yellow-100 text-yellow-700'}`}>PRIMARY</span>
+                                <span className={`px-2 py-1 rounded text-xs ${isDark ? 'bg-yellow-500/20 text-yellow-400' : 'bg-yellow-100 text-yellow-700'}`}>{t('erdPrimaryKey')}</span>
                               ) : col.key === 'UNI' ? (
                                 <span className={`px-2 py-1 rounded text-xs ${isDark ? 'bg-purple-500/20 text-purple-400' : 'bg-purple-100 text-purple-700'}`}>UNIQUE</span>
                               ) : col.key === 'MUL' ? (
@@ -1678,7 +1599,7 @@ const DatabaseClient: React.FC<DatabaseClientProps> = ({
                     <span className={`block mb-4 ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-16 h-16 mx-auto"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
                     </span>
-                    <p className={isDark ? 'text-gray-400' : 'text-gray-500'}>Select a table to view structure</p>
+                    <p className={isDark ? 'text-gray-400' : 'text-gray-500'}>{t('dbSelectTableForStructure')}</p>
                   </div>
                 </div>
               )}
@@ -1692,7 +1613,7 @@ const DatabaseClient: React.FC<DatabaseClientProps> = ({
                 <div className="flex items-center justify-center h-full">
                   <div className="text-center">
                     <div className="animate-spin w-10 h-10 mx-auto mb-4 border-3 border-indigo-500 border-t-transparent rounded-full"></div>
-                    <p className={isDark ? 'text-gray-400' : 'text-gray-500'}>Loading ERD...</p>
+                    <p className={isDark ? 'text-gray-400' : 'text-gray-500'}>{t('erdLoading')}</p>
                   </div>
                 </div>
               ) : erdTables.length > 0 ? (
@@ -1711,12 +1632,12 @@ const DatabaseClient: React.FC<DatabaseClientProps> = ({
                     <span className={`block mb-4 ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-16 h-16 mx-auto"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
                     </span>
-                    <p className={isDark ? 'text-gray-400' : 'text-gray-500'}>No tables to display</p>
+                    <p className={isDark ? 'text-gray-400' : 'text-gray-500'}>{t('erdNoTables')}</p>
                     <button
                       onClick={loadERDData}
                       className={`mt-4 px-4 py-2 rounded-lg text-sm font-medium bg-gradient-to-r ${config.color} text-white`}
                     >
-                      Reload ERD
+                      {t('dbRefresh')}
                     </button>
                   </div>
                 </div>
@@ -1735,10 +1656,10 @@ const DatabaseClient: React.FC<DatabaseClientProps> = ({
                   </div>
                   <div>
                     <h2 className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                      Import / Export
+                      {t('dbImportExport')}
                     </h2>
                     <p className={`${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                      Backup and restore your {config.name} database
+                      {t('dbImportExportDesc')}
                     </p>
                   </div>
                 </div>
@@ -1748,7 +1669,7 @@ const DatabaseClient: React.FC<DatabaseClientProps> = ({
                     <span className={`block mb-4 ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-16 h-16 mx-auto"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
                     </span>
-                    <p className={isDark ? 'text-gray-400' : 'text-gray-500'}>Select a database first</p>
+                    <p className={isDark ? 'text-gray-400' : 'text-gray-500'}>{t('dbSelectDatabaseFirst')}</p>
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -1761,9 +1682,9 @@ const DatabaseClient: React.FC<DatabaseClientProps> = ({
                             {Icons.download}
                           </div>
                           <div>
-                            <h3 className={`text-lg font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>Import</h3>
+                            <h3 className={`text-lg font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>{t('dbImport')}</h3>
                             <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                              Import {config.exportExt} file
+                              {t('dbImportSQLFile')}
                             </p>
                           </div>
                         </div>
@@ -1800,7 +1721,7 @@ const DatabaseClient: React.FC<DatabaseClientProps> = ({
                             <>
                               <span className={`block mb-3 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>{Icons.folder}</span>
                               <p className={isDark ? 'text-gray-400' : 'text-gray-500'}>
-                                Click to select {config.exportExt} file
+                                {t('dbClickToUpload')}
                               </p>
                             </>
                           )}
@@ -1818,10 +1739,10 @@ const DatabaseClient: React.FC<DatabaseClientProps> = ({
                           />
                           <div>
                             <p className={`font-medium ${isDark ? 'text-amber-400' : 'text-amber-700'}`}>
-                              🔄 Smart Drop (Recommended)
+                              🔄 {t('dbSmartDrop')}
                             </p>
                             <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-                              Only drops tables found in import file, not all tables
+                              {t('dbSmartDropDesc')}
                             </p>
                           </div>
                         </label>
@@ -1837,9 +1758,9 @@ const DatabaseClient: React.FC<DatabaseClientProps> = ({
                           }`}
                         >
                           {importing ? (
-                            <><div className="animate-spin w-5 h-5 border-2 border-white border-t-transparent rounded-full"></div> Importing...</>
+                            <><div className="animate-spin w-5 h-5 border-2 border-white border-t-transparent rounded-full"></div> {t('dbImporting')}</>
                           ) : (
-                            <>{Icons.download} Start Import</>
+                            <>{Icons.download} {t('dbStartImport')}</>
                           )}
                         </button>
                         
@@ -1871,9 +1792,9 @@ const DatabaseClient: React.FC<DatabaseClientProps> = ({
                             {Icons.upload}
                           </div>
                           <div>
-                            <h3 className={`text-lg font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>Export</h3>
+                            <h3 className={`text-lg font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>{t('dbExport')}</h3>
                             <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                              Download {config.exportExt} backup
+                              {t('dbExportToSQL')}
                             </p>
                           </div>
                         </div>
@@ -1884,9 +1805,9 @@ const DatabaseClient: React.FC<DatabaseClientProps> = ({
                         {config.supportsStructure && (
                           <div className="space-y-2">
                             {[
-                              { key: 'dropTable', label: 'Include DROP TABLE', desc: 'Add DROP before CREATE' },
-                              { key: 'structure', label: 'Include structure', desc: 'Export CREATE statements' },
-                              { key: 'data', label: 'Include data', desc: 'Export INSERT statements' },
+                              { key: 'dropTable', label: t('dbIncludeDropTable'), desc: t('dbIncludeDropTableDesc') },
+                              { key: 'structure', label: t('dbIncludeStructure'), desc: t('dbIncludeStructureDesc') },
+                              { key: 'data', label: t('dbIncludeData'), desc: t('dbIncludeDataDesc') },
                             ].map(opt => (
                               <label key={opt.key} className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-colors ${
                                 isDark ? 'bg-navy-900/50 hover:bg-navy-900' : 'bg-gray-50 hover:bg-gray-100'
@@ -1909,7 +1830,7 @@ const DatabaseClient: React.FC<DatabaseClientProps> = ({
                         {/* Tables Selection */}
                         <div>
                           <p className={`text-sm font-medium mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                            Tables ({exportOptions.allTables ? 'All' : exportOptions.selectedTables.length})
+                            {t('dbSelectTables')} ({exportOptions.allTables ? t('dbAllTables') : exportOptions.selectedTables.length})
                           </p>
                           <div className={`max-h-32 overflow-auto rounded-xl border p-2 ${isDark ? 'bg-navy-900 border-navy-600' : 'bg-gray-50 border-gray-200'}`}>
                             <label className={`flex items-center gap-2 p-2 rounded-lg cursor-pointer ${isDark ? 'hover:bg-navy-700' : 'hover:bg-gray-100'}`}>
@@ -1920,24 +1841,24 @@ const DatabaseClient: React.FC<DatabaseClientProps> = ({
                                 className="w-4 h-4 rounded border-2 text-emerald-500"
                               />
                               <span className={`font-medium ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}>
-                                All tables ({tables.length})
+                                {t('dbAllTables')} ({tables.length})
                               </span>
                             </label>
-                            {!exportOptions.allTables && tables.map(t => (
-                              <label key={t.name} className={`flex items-center gap-2 p-2 rounded-lg cursor-pointer ${isDark ? 'hover:bg-navy-700' : 'hover:bg-gray-100'}`}>
+                            {!exportOptions.allTables && tables.map(tbl => (
+                              <label key={tbl.name} className={`flex items-center gap-2 p-2 rounded-lg cursor-pointer ${isDark ? 'hover:bg-navy-700' : 'hover:bg-gray-100'}`}>
                                 <input
                                   type="checkbox"
-                                  checked={exportOptions.selectedTables.includes(t.name)}
+                                  checked={exportOptions.selectedTables.includes(tbl.name)}
                                   onChange={(e) => {
                                     if (e.target.checked) {
-                                      setExportOptions({ ...exportOptions, selectedTables: [...exportOptions.selectedTables, t.name] });
+                                      setExportOptions({ ...exportOptions, selectedTables: [...exportOptions.selectedTables, tbl.name] });
                                     } else {
-                                      setExportOptions({ ...exportOptions, selectedTables: exportOptions.selectedTables.filter(n => n !== t.name) });
+                                      setExportOptions({ ...exportOptions, selectedTables: exportOptions.selectedTables.filter(n => n !== tbl.name) });
                                     }
                                   }}
                                   className="w-4 h-4 rounded border-2 text-emerald-500"
                                 />
-                                <span className={`text-sm ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>{t.name}</span>
+                                <span className={`text-sm ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>{tbl.name}</span>
                               </label>
                             ))}
                           </div>
@@ -1954,9 +1875,9 @@ const DatabaseClient: React.FC<DatabaseClientProps> = ({
                           }`}
                         >
                           {exporting ? (
-                            <><div className="animate-spin w-5 h-5 border-2 border-white border-t-transparent rounded-full"></div> Exporting...</>
+                            <><div className="animate-spin w-5 h-5 border-2 border-white border-t-transparent rounded-full"></div> {t('dbExporting')}</>
                           ) : (
-                            <>{Icons.upload} Download {config.exportExt}</>
+                            <>{Icons.upload} {t('dbDownloadSQL')}</>
                           )}
                         </button>
                       </div>
@@ -1969,13 +1890,13 @@ const DatabaseClient: React.FC<DatabaseClientProps> = ({
                   <div className={`mt-6 rounded-2xl border overflow-hidden ${isDark ? 'bg-navy-800 border-navy-700' : 'bg-white border-gray-200'}`}>
                     <div className={`px-5 py-3 border-b flex items-center justify-between ${isDark ? 'border-navy-700 bg-navy-900/50' : 'border-gray-200 bg-gray-50'}`}>
                       <span className={`font-medium flex items-center gap-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                        {Icons.data} Operation Log
+                        {Icons.data} {t('dbOperationLog')}
                       </span>
                       <button
                         onClick={() => setOperationLog([])}
                         className={`text-xs px-2 py-1 rounded ${isDark ? 'hover:bg-navy-700 text-gray-400' : 'hover:bg-gray-200 text-gray-500'}`}
                       >
-                        Clear
+                        {t('dbClear')}
                       </button>
                     </div>
                     <div className="p-4 max-h-48 overflow-auto font-mono text-sm">
@@ -2012,7 +1933,7 @@ const DatabaseClient: React.FC<DatabaseClientProps> = ({
             <div className={`px-6 py-4 border-b ${isDark ? 'border-navy-700 bg-navy-900' : 'border-gray-200 bg-gray-50'} flex items-center justify-between rounded-t-xl`}>
               <div>
                 <h3 className={`text-lg font-semibold flex items-center gap-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                  <span className="text-indigo-400">{Icons.structure}</span> Edit Row
+                  <span className="text-indigo-400">{Icons.structure}</span> {t('dbEditRow')}
                 </h3>
                 <p className={`text-sm mt-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
                   {selectedTable} • Row #{editingRowIdx + 1}
@@ -2108,7 +2029,7 @@ const DatabaseClient: React.FC<DatabaseClientProps> = ({
                   : 'bg-gray-200 hover:bg-gray-300 text-gray-800'
                 }`}
               >
-                Cancel
+                {t('cancel')}
               </button>
               <button
                 onClick={saveRowFromModal}
@@ -2118,11 +2039,11 @@ const DatabaseClient: React.FC<DatabaseClientProps> = ({
                 {savingRow ? (
                   <>
                     <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></div>
-                    Saving...
+                    {t('dbSaving')}
                   </>
                 ) : (
                   <>
-                    {Icons.check} Save
+                    {Icons.check} {t('save')}
                   </>
                 )}
               </button>
@@ -2153,27 +2074,27 @@ const DatabaseClient: React.FC<DatabaseClientProps> = ({
               onClick={copyRowAsJSON}
               className={`w-full px-4 py-2 text-left text-sm flex items-center gap-2 ${isDark ? 'hover:bg-navy-700 text-gray-300' : 'hover:bg-gray-100 text-gray-700'}`}
             >
-              <span className="w-4">{Icons.file}</span> Copy as JSON
+              <span className="w-4">{Icons.file}</span> {t('dbCopyAsJSON')}
             </button>
             <button
               onClick={copyRowAsCSV}
               className={`w-full px-4 py-2 text-left text-sm flex items-center gap-2 ${isDark ? 'hover:bg-navy-700 text-gray-300' : 'hover:bg-gray-100 text-gray-700'}`}
             >
-              <span className="w-4">{Icons.data}</span> Copy as CSV
+              <span className="w-4">{Icons.data}</span> {t('dbCopyAsCSV')}
             </button>
             <div className={`my-1 border-t ${isDark ? 'border-navy-700' : 'border-gray-200'}`}></div>
             <button
               onClick={() => { if (selectedTable) loadTableData(selectedTable); setContextMenu(null); }}
               className={`w-full px-4 py-2 text-left text-sm flex items-center gap-2 ${isDark ? 'hover:bg-navy-700 text-gray-300' : 'hover:bg-gray-100 text-gray-700'}`}
             >
-              <span className="w-4">{Icons.refresh}</span> Refresh
+              <span className="w-4">{Icons.refresh}</span> {t('dbRefresh')}
             </button>
             {primaryKeyColumn && (
               <button
                 onClick={() => { openEditModal(contextMenu.rowIdx); setContextMenu(null); }}
                 className={`w-full px-4 py-2 text-left text-sm flex items-center gap-2 ${isDark ? 'hover:bg-navy-700 text-gray-300' : 'hover:bg-gray-100 text-gray-700'}`}
               >
-                <span className="w-4">{Icons.structure}</span> Edit Row
+                <span className="w-4">{Icons.structure}</span> {t('dbEditRow')}
               </button>
             )}
             {primaryKeyColumn && (
@@ -2181,11 +2102,11 @@ const DatabaseClient: React.FC<DatabaseClientProps> = ({
                 onClick={deleteRow}
                 className={`w-full px-4 py-2 text-left text-sm flex items-center gap-2 text-red-500 ${isDark ? 'hover:bg-navy-700' : 'hover:bg-gray-100'}`}
               >
-                <span className="w-4">{Icons.trash}</span> Delete Row
+                <span className="w-4">{Icons.trash}</span> {t('dbDeleteRow')}
               </button>
             )}
             <div className={`my-1 border-t ${isDark ? 'border-navy-700' : 'border-gray-200'}`}></div>
-            <div className={`px-4 py-1 text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Copy Column Value</div>
+            <div className={`px-4 py-1 text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>{t('dbCopyColumn')}</div>
             {tableData?.columns.slice(0, 8).map(col => (
               <button
                 key={col}
@@ -2197,7 +2118,7 @@ const DatabaseClient: React.FC<DatabaseClientProps> = ({
             ))}
             {tableData && tableData.columns.length > 8 && (
               <div className={`px-4 py-1 text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
-                +{tableData.columns.length - 8} more columns...
+                +{tableData.columns.length - 8} {t('dbMoreColumns')}
               </div>
             )}
           </div>

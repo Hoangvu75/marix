@@ -87,12 +87,11 @@ export class RDPManager {
 
   /**
    * Get installation commands for missing dependencies
+   * Returns the command string (without sudo prefix)
    */
-  getInstallCommands(deps: DependencyStatus): string[] {
-    const commands: string[] = [];
-    
+  getInstallCommand(deps: DependencyStatus): string | null {
     if (deps.xfreerdp3 && deps.xdotool) {
-      return commands;
+      return null;
     }
 
     const packages: string[] = [];
@@ -117,72 +116,107 @@ export class RDPManager {
       packages.push('xdotool');
     }
 
-    if (packages.length === 0) return commands;
+    if (packages.length === 0) return null;
 
-    // Use pkexec instead of sudo - it shows a GUI password dialog
     switch (deps.distro) {
       case 'debian':
-        commands.push(`pkexec apt update`);
-        commands.push(`pkexec apt install -y ${packages.join(' ')}`);
-        break;
+        return `apt update && apt install -y ${packages.join(' ')}`;
       case 'fedora':
-        commands.push(`pkexec dnf install -y ${packages.join(' ')}`);
-        break;
+        return `dnf install -y ${packages.join(' ')}`;
       case 'arch':
-        commands.push(`pkexec pacman -S --noconfirm ${packages.join(' ')}`);
-        break;
+        return `pacman -S --noconfirm ${packages.join(' ')}`;
       default:
-        // Try apt as default
-        commands.push(`pkexec apt update`);
-        commands.push(`pkexec apt install -y ${packages.join(' ')}`);
+        return `apt update && apt install -y ${packages.join(' ')}`;
     }
-
-    return commands;
   }
 
   /**
    * Install missing dependencies with streaming output
+   * Uses sudo -S to read password from stdin
+   * Uses script command for PTY to get unbuffered output
    */
   installDependencies(
     deps: DependencyStatus,
+    password: string,
     onData: (data: string) => void,
-    onComplete: (success: boolean) => void
+    onComplete: (success: boolean, error?: string) => void
   ): void {
-    const commands = this.getInstallCommands(deps);
+    const cmd = this.getInstallCommand(deps);
     
-    if (commands.length === 0) {
+    if (!cmd) {
       onData('✓ All dependencies are already installed\n');
       onComplete(true);
       return;
     }
 
-    const runCommands = async () => {
-      for (const cmd of commands) {
-        onData(`\x1b[36m$ ${cmd}\x1b[0m\n`);
-        
-        try {
-          const success = await this.runCommandWithStream(cmd, onData);
-          if (!success) {
-            onData(`\x1b[31m✗ Command failed: ${cmd}\x1b[0m\n`);
-            onComplete(false);
-            return;
-          }
-        } catch (err: any) {
-          onData(`\x1b[31m✗ Error: ${err.message}\x1b[0m\n`);
-          onComplete(false);
-          return;
-        }
-      }
-      
-      onData(`\x1b[32m✓ Dependencies installed successfully!\x1b[0m\n`);
-      onComplete(true);
-    };
+    onData(`\x1b[36m$ sudo ${cmd}\x1b[0m\n`);
+    onData(`\x1b[33mAuthenticating...\x1b[0m\n`);
 
-    runCommands();
+    // Use script to create a PTY for unbuffered output
+    // This ensures apt/dnf output is streamed in real-time
+    const wrappedCmd = `script -qec "${cmd.replace(/"/g, '\\"')}" /dev/null`;
+    
+    const sudoProcess = spawn('sudo', ['-S', 'bash', '-c', wrappedCmd], {
+      stdio: ['pipe', 'pipe', 'pipe'],
+      env: { ...process.env, DEBIAN_FRONTEND: 'noninteractive' },
+    });
+
+    let authFailed = false;
+    let hasOutput = false;
+
+    // Send password to stdin
+    sudoProcess.stdin?.write(password + '\n');
+    sudoProcess.stdin?.end();
+
+    sudoProcess.stdout?.on('data', (data: Buffer) => {
+      const output = data.toString();
+      hasOutput = true;
+      // Clean up script command artifacts
+      const cleanOutput = output
+        .replace(/Script started.*\n?/g, '')
+        .replace(/Script done.*\n?/g, '');
+      if (cleanOutput.trim()) {
+        onData(cleanOutput);
+      }
+    });
+
+    sudoProcess.stderr?.on('data', (data: Buffer) => {
+      const output = data.toString();
+      // Check for sudo password prompt or auth failure
+      if (output.includes('sorry') || output.includes('Sorry') || output.includes('incorrect password')) {
+        authFailed = true;
+        onData(`\x1b[31m✗ Incorrect password\x1b[0m\n`);
+      } else if (!output.includes('[sudo]') && !output.includes('password for')) {
+        // Filter out password prompts, show other stderr
+        hasOutput = true;
+        onData(output);
+      }
+    });
+
+    sudoProcess.on('close', (code) => {
+      if (authFailed) {
+        onComplete(false, 'Incorrect password');
+        return;
+      }
+
+      if (code === 0) {
+        onData(`\n\x1b[32m✓ Dependencies installed successfully!\x1b[0m\n`);
+        onData(`\x1b[32mPlease close this dialog and try connecting again.\x1b[0m\n`);
+        onComplete(true);
+      } else {
+        onData(`\n\x1b[31m✗ Installation failed (exit code: ${code})\x1b[0m\n`);
+        onComplete(false, `Exit code: ${code}`);
+      }
+    });
+
+    sudoProcess.on('error', (err) => {
+      onData(`\x1b[31m✗ Error: ${err.message}\x1b[0m\n`);
+      onComplete(false, err.message);
+    });
   }
 
   /**
-   * Run a command with streaming output
+   * Run a command with streaming output (for non-pkexec commands)
    */
   private runCommandWithStream(cmd: string, onData: (data: string) => void): Promise<boolean> {
     return new Promise((resolve) => {
@@ -476,7 +510,6 @@ export class RDPManager {
       `/t:RDP - ${config.host}`,
       '/cert:ignore',
       '/sec:nla',
-      '/tls:seclevel:0',
       '+clipboard',
       '/dynamic-resolution',
       '/network:auto',
@@ -549,13 +582,37 @@ export class RDPManager {
       config,
     });
 
-    setTimeout(() => {
+    // Emit connect after window appears (check via xdotool)
+    // We check for window every 500ms for up to 15 seconds
+    let checkCount = 0;
+    const maxChecks = 30; // 15 seconds
+    const checkWindow = () => {
+      checkCount++;
       const conn = this.connections.get(connectionId);
-      if (conn && !conn.connected) {
-        conn.connected = true;
-        emitter.emit('connect');
-      }
-    }, 2000);
+      if (!conn) return; // Already disconnected
+      
+      // Check if xfreerdp window exists
+      exec(`xdotool search --name "RDP - ${config.host}" 2>/dev/null | head -1`, (err, stdout) => {
+        if (stdout && stdout.trim()) {
+          // Window found - connected!
+          if (!conn.connected) {
+            conn.connected = true;
+            console.log(`[RDPManager] RDP window detected, connection confirmed`);
+            emitter.emit('connect');
+          }
+        } else if (checkCount < maxChecks && this.connections.has(connectionId)) {
+          // Keep checking
+          setTimeout(checkWindow, 500);
+        } else if (checkCount >= maxChecks && !conn.connected) {
+          // Timeout - no window appeared
+          console.log(`[RDPManager] RDP window not detected after ${maxChecks * 0.5}s`);
+          // Don't emit error - let the process stderr handler deal with it
+        }
+      });
+    };
+    
+    // Start checking after 1 second (give xfreerdp time to start)
+    setTimeout(checkWindow, 1000);
 
     return { emitter, success: true };
   }
