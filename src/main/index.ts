@@ -39,7 +39,7 @@ import { PortKnockService } from './services/PortKnockService';
 import { LANSharingService } from './services/LANSharingService';
 import { lanFileTransferService } from './services/LANFileTransferService';
 import { getGoogleDriveService } from './services/GoogleDriveService';
-import { initDatabaseHandlers } from './databaseService';
+import { initDatabaseHandlers } from './services/databaseService';
 import buildInfo from './buildInfo';
 
 let mainWindow: BrowserWindow | null = null;
