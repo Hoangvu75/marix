@@ -23,20 +23,25 @@ This document describes the security architecture, cryptographic implementations
 
 ---
 
-## Overview
+## Overview & Threat Model
 
-Marix implements multiple layers of security to protect sensitive data:
+Marix is designed to provide high usability while minimizing the attack surface.
 
-| Layer | Protection | Implementation |
-|-------|------------|----------------|
-| **At Rest** | Credential encryption | Electron safeStorage (OS Keychain) |
-| **Backup** | Military-grade encryption | Argon2id + AES-256-GCM |
-| **In Transit** | Secure protocols | SSH2, TLS 1.2+, HTTPS |
-| **Authentication** | Multi-factor | SSH Keys |
-| **Host Verification** | Fingerprint checking | SHA256 fingerprints |
+**Marix PROTECTS against:**
+- Accidental credential disclosure (via shoulder surfing or plain text files).
+- Local credential theft from casual malware (via OS Keychain binding).
+- Backup leakage (encrypted at rest before upload).
+- Offline brute-force attacks against stolen backups.
+- MITM attacks via SSH host key verification.
 
+**Marix does NOT claim protection against:**
+- A malicious or fully compromised SSH server.
+- Kernel-level malware (Rootkits/Keyloggers) on the local machine.
+- Physical access to an unlocked device while the app is running.
+- Supply-chain attacks at the OS level.
+
+> **Disclaimer:** This is not a formal security audit. If your threat model includes nation-state adversaries, you should use OpenSSH CLI directly in a hardened environment.
 ---
-
 ## Credential Storage
 
 ### SecureStorage Service
