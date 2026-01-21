@@ -180,6 +180,19 @@ const App: React.FC = () => {
   const APP_AUTHOR = 'Đạt Vũ (Marix)';
   const GITHUB_REPO = 'https://github.com/marixdev/marix';
   
+  // Build info state
+  const [buildInfo, setBuildInfo] = useState<{
+    commitSha?: string;
+    commitShort?: string;
+    branch?: string;
+    buildTime?: string;
+    runId?: string;
+    repository?: string;
+    electronVersion?: string;
+    chromeVersion?: string;
+    nodeVersion?: string;
+  } | null>(null);
+  
   // SSH Fingerprint Modal state
   const [fingerprintModal, setFingerprintModal] = useState<{
     server: Server;
@@ -1443,6 +1456,18 @@ const App: React.FC = () => {
     loadServers();
     loadTagColors();
     loadGitHubAuth();
+    
+    // Load build info
+    const loadBuildInfo = async () => {
+      try {
+        const info = await ipcRenderer.invoke('app:getBuildInfo');
+        setBuildInfo(info);
+        console.log('[App] Build info loaded:', info.commitShort || 'dev');
+      } catch (err) {
+        console.error('[App] Failed to load build info:', err);
+      }
+    };
+    loadBuildInfo();
     
     // Auto-check for updates once per day
     const checkForUpdatesAuto = async () => {
@@ -4498,6 +4523,96 @@ const App: React.FC = () => {
                     </div>
                   )}
                 </div>
+
+                {/* Build Info */}
+                {buildInfo && (
+                  <div className={`rounded-xl p-6 mb-6 ${appTheme === 'light' ? 'bg-white border border-gray-200' : 'bg-navy-800 border border-navy-700'}`}>
+                    <h2 className={`text-lg font-semibold mb-4 flex items-center gap-2 ${appTheme === 'light' ? 'text-gray-900' : 'text-white'}`}>
+                      <svg className="w-5 h-5 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+                      </svg>
+                      {t('buildInfo') || 'Build Info'}
+                    </h2>
+                    <div className="space-y-3">
+                      {/* Commit SHA */}
+                      <div className="flex items-center justify-between">
+                        <span className={`text-sm ${appTheme === 'light' ? 'text-gray-600' : 'text-gray-400'}`}>{t('commitSha') || 'Commit SHA'}</span>
+                        <div className="flex items-center gap-2">
+                          <code className={`px-2 py-1 rounded text-xs font-mono ${appTheme === 'light' ? 'bg-gray-100 text-gray-700' : 'bg-navy-900 text-gray-300'}`}>
+                            {buildInfo.commitShort || 'dev'}
+                          </code>
+                          {buildInfo.commitSha && buildInfo.commitSha !== 'unknown' && buildInfo.commitSha !== 'development' && (
+                            <button
+                              onClick={() => ipcRenderer.invoke('app:openUrl', `https://github.com/${buildInfo.repository || 'marixdev/marix'}/commit/${buildInfo.commitSha}`)}
+                              className={`p-1 rounded hover:bg-gray-200 dark:hover:bg-navy-700 transition ${appTheme === 'light' ? 'text-gray-500' : 'text-gray-400'}`}
+                              title={t('viewCommitOnGithub') || 'View commit on GitHub'}
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                              </svg>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      
+                      {/* Branch */}
+                      <div className="flex items-center justify-between">
+                        <span className={`text-sm ${appTheme === 'light' ? 'text-gray-600' : 'text-gray-400'}`}>{t('branch') || 'Branch'}</span>
+                        <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+                          buildInfo.branch === 'main' 
+                            ? (appTheme === 'light' ? 'bg-green-100 text-green-700' : 'bg-green-500/20 text-green-400')
+                            : (appTheme === 'light' ? 'bg-blue-100 text-blue-700' : 'bg-blue-500/20 text-blue-400')
+                        }`}>
+                          {buildInfo.branch || 'local'}
+                        </span>
+                      </div>
+                      
+                      {/* Build Time */}
+                      {buildInfo.buildTime && (
+                        <div className="flex items-center justify-between">
+                          <span className={`text-sm ${appTheme === 'light' ? 'text-gray-600' : 'text-gray-400'}`}>{t('buildTime') || 'Build Time'}</span>
+                          <span className={`text-xs ${appTheme === 'light' ? 'text-gray-500' : 'text-gray-400'}`}>
+                            {new Date(buildInfo.buildTime).toLocaleString()}
+                          </span>
+                        </div>
+                      )}
+                      
+                      {/* GitHub Actions Run */}
+                      {buildInfo.runId && buildInfo.runId !== 'local' && (
+                        <div className="flex items-center justify-between">
+                          <span className={`text-sm ${appTheme === 'light' ? 'text-gray-600' : 'text-gray-400'}`}>{t('buildRun') || 'Build Run'}</span>
+                          <button
+                            onClick={() => ipcRenderer.invoke('app:openUrl', `https://github.com/${buildInfo.repository || 'marixdev/marix'}/actions/runs/${buildInfo.runId}`)}
+                            className={`text-xs flex items-center gap-1 ${appTheme === 'light' ? 'text-teal-600 hover:text-teal-700' : 'text-teal-400 hover:text-teal-300'}`}
+                          >
+                            #{buildInfo.runId}
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                            </svg>
+                          </button>
+                        </div>
+                      )}
+                      
+                      {/* Runtime Info */}
+                      <div className={`pt-3 mt-3 border-t ${appTheme === 'light' ? 'border-gray-200' : 'border-navy-700'}`}>
+                        <div className="grid grid-cols-3 gap-2 text-center">
+                          <div>
+                            <div className={`text-xs ${appTheme === 'light' ? 'text-gray-400' : 'text-gray-500'}`}>{t('electronVersion') || 'Electron'}</div>
+                            <div className={`text-xs font-mono ${appTheme === 'light' ? 'text-gray-600' : 'text-gray-400'}`}>{buildInfo.electronVersion || 'N/A'}</div>
+                          </div>
+                          <div>
+                            <div className={`text-xs ${appTheme === 'light' ? 'text-gray-400' : 'text-gray-500'}`}>{t('chromeVersion') || 'Chrome'}</div>
+                            <div className={`text-xs font-mono ${appTheme === 'light' ? 'text-gray-600' : 'text-gray-400'}`}>{buildInfo.chromeVersion?.split('.')[0] || 'N/A'}</div>
+                          </div>
+                          <div>
+                            <div className={`text-xs ${appTheme === 'light' ? 'text-gray-400' : 'text-gray-500'}`}>{t('nodeVersion') || 'Node.js'}</div>
+                            <div className={`text-xs font-mono ${appTheme === 'light' ? 'text-gray-600' : 'text-gray-400'}`}>{buildInfo.nodeVersion?.replace('v', '') || 'N/A'}</div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Features Grid */}
                 <div className={`rounded-xl p-6 mb-6 ${appTheme === 'light' ? 'bg-white border border-gray-200' : 'bg-navy-800 border border-navy-700'}`}>

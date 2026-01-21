@@ -71,6 +71,7 @@ export interface SSHConfig {
   privateKey?: string;
   passphrase?: string;
   authType?: 'password' | 'key';
+  useLegacyAlgorithms?: boolean;  // Enable legacy SSH algorithms for old servers (CentOS 6, RHEL 6)
 }
 
 interface PTYSession {
@@ -105,14 +106,30 @@ export class NativeSSHManager {
     const emitter = new EventEmitter();
     let keyFilePath: string | undefined;
 
-    // Build SSH command
+    // Build SSH command - only add legacy algorithms if explicitly requested
     const sshArgs: string[] = [
       '-o', 'StrictHostKeyChecking=no',
       '-o', 'UserKnownHostsFile=/dev/null',
       '-o', 'LogLevel=ERROR',
+    ];
+
+    // Add legacy algorithm support only when explicitly enabled (for old servers like CentOS 6, RHEL 6)
+    if (config.useLegacyAlgorithms) {
+      console.log('[NativeSSH] Using legacy algorithms for old server compatibility');
+      sshArgs.push(
+        '-o', 'KexAlgorithms=+diffie-hellman-group1-sha1,diffie-hellman-group14-sha1,diffie-hellman-group-exchange-sha1',
+        '-o', 'HostKeyAlgorithms=+ssh-rsa,ssh-dss',
+        '-o', 'Ciphers=+aes128-cbc,aes192-cbc,aes256-cbc,3des-cbc',
+        '-o', 'MACs=+hmac-sha1,hmac-md5',
+        '-o', 'PubkeyAcceptedAlgorithms=+ssh-rsa,ssh-dss'
+      );
+    }
+
+    // Add port and host
+    sshArgs.push(
       '-p', config.port.toString(),
       `${config.username}@${config.host}`
-    ];
+    );
 
     // If using private key
     if (config.authType === 'key' && config.privateKey) {

@@ -209,6 +209,19 @@ export interface Translations {
   version: string;
   platform: string;
   
+  // Build Info
+  buildInfo: string;
+  commitSha: string;
+  branch: string;
+  buildTime: string;
+  buildRun: string;
+  viewCommitOnGithub: string;
+  runtimeInfo: string;
+  electronVersion: string;
+  chromeVersion: string;
+  nodeVersion: string;
+  v8Version: string;
+  
   // Tags
   addTag: string;
   editTag: string;

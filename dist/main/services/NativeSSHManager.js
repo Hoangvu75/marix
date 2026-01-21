@@ -109,14 +109,19 @@ class NativeSSHManager {
         }
         const emitter = new events_1.EventEmitter();
         let keyFilePath;
-        // Build SSH command
+        // Build SSH command - only add legacy algorithms if explicitly requested
         const sshArgs = [
             '-o', 'StrictHostKeyChecking=no',
             '-o', 'UserKnownHostsFile=/dev/null',
             '-o', 'LogLevel=ERROR',
-            '-p', config.port.toString(),
-            `${config.username}@${config.host}`
         ];
+        // Add legacy algorithm support only when explicitly enabled (for old servers like CentOS 6, RHEL 6)
+        if (config.useLegacyAlgorithms) {
+            console.log('[NativeSSH] Using legacy algorithms for old server compatibility');
+            sshArgs.push('-o', 'KexAlgorithms=+diffie-hellman-group1-sha1,diffie-hellman-group14-sha1,diffie-hellman-group-exchange-sha1', '-o', 'HostKeyAlgorithms=+ssh-rsa,ssh-dss', '-o', 'Ciphers=+aes128-cbc,aes192-cbc,aes256-cbc,3des-cbc', '-o', 'MACs=+hmac-sha1,hmac-md5', '-o', 'PubkeyAcceptedAlgorithms=+ssh-rsa,ssh-dss');
+        }
+        // Add port and host
+        sshArgs.push('-p', config.port.toString(), `${config.username}@${config.host}`);
         // If using private key
         if (config.authType === 'key' && config.privateKey) {
             // Write key to temp file (SSH requires file path)

@@ -161,6 +161,18 @@
   "version": "Phiên bản",
   "platform": "Nền tảng",
   
+  "buildInfo": "Thông tin bản dựng",
+  "commitSha": "Mã commit",
+  "branch": "Nhánh",
+  "buildTime": "Thời gian dựng",
+  "buildRun": "Build Run",
+  "viewCommitOnGithub": "Xem commit trên GitHub",
+  "runtimeInfo": "Thông tin runtime",
+  "electronVersion": "Electron",
+  "chromeVersion": "Chrome",
+  "nodeVersion": "Node.js",
+  "v8Version": "V8 Engine",
+  
   "database": "Cơ sở dữ liệu",
   "databaseServer": "Máy chủ cơ sở dữ liệu",
   "dbConnecting": "Đang kết nối đến cơ sở dữ liệu...",

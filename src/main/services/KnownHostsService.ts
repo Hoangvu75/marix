@@ -62,14 +62,31 @@ export class KnownHostsService {
   }
 
   /**
+   * Quick check if host is already known (no network call)
+   * Returns 'known' if in known_hosts, 'unknown' if not
+   */
+  isHostKnown(host: string, port: number): boolean {
+    const hostKey = this.getHostKey(host, port);
+    return this.knownHosts.has(hostKey);
+  }
+
+  /**
+   * Get stored fingerprint for a known host (no network call)
+   */
+  getStoredFingerprint(host: string, port: number): KnownHost | null {
+    const hostKey = this.getHostKey(host, port);
+    return this.knownHosts.get(hostKey) || null;
+  }
+
+  /**
    * Fetch SSH host fingerprint using ssh-keyscan
    */
   async getHostFingerprint(host: string, port: number): Promise<FingerprintResult> {
     return new Promise((resolve) => {
       const hostKey = this.getHostKey(host, port);
       
-      // Use ssh-keyscan to get host key
-      const args = ['-p', port.toString(), '-T', '5', host];
+      // Use ssh-keyscan to get host key (2 second timeout for faster response)
+      const args = ['-p', port.toString(), '-T', '2', host];
       const keyscan = spawn('ssh-keyscan', args);
       
       let stdout = '';
@@ -162,14 +179,14 @@ export class KnownHostsService {
         });
       });
 
-      // Timeout after 10 seconds
+      // Timeout after 3 seconds (faster than before)
       setTimeout(() => {
         keyscan.kill();
         resolve({
           status: 'error',
           error: 'Timeout fetching host key'
         });
-      }, 10000);
+      }, 3000);
     });
   }
 
@@ -213,14 +230,6 @@ export class KnownHostsService {
    */
   getAllKnownHosts(): KnownHost[] {
     return Array.from(this.knownHosts.values());
-  }
-
-  /**
-   * Check if host is known
-   */
-  isHostKnown(host: string, port: number): boolean {
-    const hostKey = this.getHostKey(host, port);
-    return this.knownHosts.has(hostKey);
   }
 
   /**

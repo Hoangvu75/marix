@@ -3,6 +3,58 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.SSHConnectionManager = void 0;
 const ssh2_1 = require("ssh2");
 const events_1 = require("events");
+// Legacy algorithms for old servers (CentOS 6, RHEL 6, etc.)
+// OpenSSH 5.3 on CentOS 6 only supports these older algorithms
+const LEGACY_ALGORITHMS = {
+    kex: [
+        // Modern (try first)
+        'curve25519-sha256',
+        'curve25519-sha256@libssh.org',
+        'ecdh-sha2-nistp256',
+        'ecdh-sha2-nistp384',
+        'ecdh-sha2-nistp521',
+        // Legacy (for old servers)
+        'diffie-hellman-group-exchange-sha256',
+        'diffie-hellman-group-exchange-sha1',
+        'diffie-hellman-group14-sha1',
+        'diffie-hellman-group1-sha1', // CentOS 6
+    ],
+    cipher: [
+        // Modern
+        'aes128-gcm@openssh.com',
+        'aes256-gcm@openssh.com',
+        'aes128-ctr',
+        'aes192-ctr',
+        'aes256-ctr',
+        // Legacy
+        'aes128-cbc',
+        'aes192-cbc',
+        'aes256-cbc',
+        '3des-cbc', // CentOS 6
+    ],
+    serverHostKey: [
+        // Modern
+        'ssh-ed25519',
+        'ecdsa-sha2-nistp256',
+        'ecdsa-sha2-nistp384',
+        'ecdsa-sha2-nistp521',
+        'rsa-sha2-512',
+        'rsa-sha2-256',
+        // Legacy
+        'ssh-rsa', // CentOS 6
+        'ssh-dss', // Very old servers
+    ],
+    hmac: [
+        // Modern
+        'hmac-sha2-256-etm@openssh.com',
+        'hmac-sha2-512-etm@openssh.com',
+        'hmac-sha2-256',
+        'hmac-sha2-512',
+        // Legacy
+        'hmac-sha1', // CentOS 6
+        'hmac-md5', // Very old servers
+    ],
+};
 class SSHConnectionManager {
     constructor() {
         this.connections = new Map();
@@ -33,6 +85,8 @@ class SSHConnectionManager {
                 readyTimeout: 30000,
                 keepaliveInterval: 10000,
                 keepaliveCountMax: 3,
+                // Enable legacy algorithms for old servers (CentOS 6, RHEL 6, etc.)
+                algorithms: LEGACY_ALGORITHMS,
             };
             // Capture greeting (server identification)
             client.on('greeting', (message) => {

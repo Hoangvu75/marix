@@ -32,6 +32,9 @@ var __importStar = (this && this.__importStar) || (function () {
         return result;
     };
 })();
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 const electron_1 = require("electron");
 const path = __importStar(require("path"));
@@ -73,6 +76,7 @@ const LANSharingService_1 = require("./services/LANSharingService");
 const LANFileTransferService_1 = require("./services/LANFileTransferService");
 const GoogleDriveService_1 = require("./services/GoogleDriveService");
 const databaseService_1 = require("./databaseService");
+const buildInfo_1 = __importDefault(require("./buildInfo"));
 let mainWindow = null;
 let tray = null;
 const nativeSSH = new NativeSSHManager_1.NativeSSHManager(); // For terminal (with MOTD)
@@ -364,29 +368,59 @@ electron_1.ipcMain.handle('ssh:connect', async (event, config) => {
             console.log('[Main] Port knocking enabled, knocking before SSH connect...');
             await PortKnockService_1.PortKnockService.knock(config.host, config.knockSequence);
         }
-        // Connect using native SSH (spawns ssh command with PTY)
-        const { connectionId, emitter } = await nativeSSH.connectAndCreateShell(config);
-        // Setup data forwarding to renderer
-        const dataHandler = (data) => {
-            if (event.sender && !event.sender.isDestroyed()) {
-                event.sender.send('ssh:shellData', connectionId, data);
-            }
+        // Helper to setup event forwarding
+        const setupEventForwarding = (connectionId, emitter) => {
+            const dataHandler = (data) => {
+                if (event.sender && !event.sender.isDestroyed()) {
+                    event.sender.send('ssh:shellData', connectionId, data);
+                }
+            };
+            const closeHandler = () => {
+                if (event.sender && !event.sender.isDestroyed()) {
+                    event.sender.send('ssh:shellClose', connectionId);
+                }
+            };
+            emitter.on('data', dataHandler);
+            emitter.on('close', closeHandler);
         };
-        const closeHandler = () => {
-            if (event.sender && !event.sender.isDestroyed()) {
-                event.sender.send('ssh:shellClose', connectionId);
+        // Try connecting without legacy algorithms first
+        try {
+            const { connectionId, emitter } = await nativeSSH.connectAndCreateShell({ ...config, useLegacyAlgorithms: false });
+            setupEventForwarding(connectionId, emitter);
+            // Also connect SSH2 in background for execute commands (OS info, etc)
+            sshManager.connect(config).then(() => {
+                console.log('[Main] SSH2 connected in background for:', connectionId);
+            }).catch(err => {
+                console.log('[Main] SSH2 background connect failed:', err.message);
+            });
+            return { success: true, connectionId };
+        }
+        catch (firstError) {
+            // Check if error is related to algorithms/key types - retry with legacy mode
+            const errMsg = firstError.message?.toLowerCase() || '';
+            const isAlgorithmError = errMsg.includes('bad key types') ||
+                errMsg.includes('no matching') ||
+                errMsg.includes('algorithm') ||
+                errMsg.includes('kex') ||
+                errMsg.includes('cipher') ||
+                errMsg.includes('unable to negotiate');
+            if (isAlgorithmError) {
+                console.log('[Main] Algorithm error detected, retrying with legacy algorithms...');
+                console.log('[Main] Original error:', firstError.message);
+                // Retry with legacy algorithms enabled
+                const { connectionId, emitter } = await nativeSSH.connectAndCreateShell({ ...config, useLegacyAlgorithms: true });
+                setupEventForwarding(connectionId, emitter);
+                // Also connect SSH2 in background
+                sshManager.connect(config).then(() => {
+                    console.log('[Main] SSH2 connected in background for:', connectionId);
+                }).catch(err => {
+                    console.log('[Main] SSH2 background connect failed:', err.message);
+                });
+                return { success: true, connectionId };
             }
-        };
-        emitter.on('data', dataHandler);
-        emitter.on('close', closeHandler);
-        // Also connect SSH2 in background for execute commands (OS info, etc)
-        // Don't await - let it connect in parallel
-        sshManager.connect(config).then(() => {
-            console.log('[Main] SSH2 connected in background for:', connectionId);
-        }).catch(err => {
-            console.log('[Main] SSH2 background connect failed:', err.message);
-        });
-        return { success: true, connectionId };
+            // Not an algorithm error, rethrow
+            throw firstError;
+        }
     }
     catch (error) {
         return { success: false, error: error.message };
@@ -1778,8 +1812,36 @@ electron_1.ipcMain.handle('networktools:whois', async (event, domain) => {
 electron_1.ipcMain.handle('networktools:webcheck', async (event, url) => {
     return await NetworkToolsService_1.networkToolsService.webCheck(url);
 });
+// ============================================================================
+// BUILD INFO - Get build metadata for transparency
+// ============================================================================
+electron_1.ipcMain.handle('app:getBuildInfo', async () => {
+    return {
+        ...buildInfo_1.default,
+        version: electron_1.app.getVersion(),
+        electronVersion: process.versions.electron,
+        chromeVersion: process.versions.chrome,
+        v8Version: process.versions.v8,
+    };
+});
 // Known Hosts handlers
+// Fast check - if host is already known and trusted, return 'match' immediately without network call
 electron_1.ipcMain.handle('knownhosts:check', async (event, host, port) => {
+    // First check if host is already in known_hosts (instant, no network)
+    const storedHost = KnownHostsService_1.knownHostsService.getStoredFingerprint(host, port);
+    if (storedHost) {
+        // Host is known - return match status immediately for fast connection
+        // The actual fingerprint verification happens during SSH handshake
+        console.log(`[KnownHosts] Host ${host}:${port} already known, skipping ssh-keyscan`);
+        return {
+            status: 'match',
+            keyType: storedHost.keyType,
+            fingerprint: storedHost.fingerprint,
+            fullKey: storedHost.fullKey,
+        };
+    }
+    // Host not known - need to fetch fingerprint (slower, requires network)
+    console.log(`[KnownHosts] Host ${host}:${port} not known, fetching fingerprint...`);
     return await KnownHostsService_1.knownHostsService.getHostFingerprint(host, port);
 });
 electron_1.ipcMain.handle('knownhosts:accept', async (event, host, port, keyType, fingerprint, fullKey) => {

@@ -89,6 +89,11 @@ const DualPaneSFTP: React.FC<Props> = ({ connectionId, server, initialLocalPath,
   // Delete progress state
   const [deleteProgress, setDeleteProgress] = useState<{ deleting: boolean; currentItem: string; count: number } | null>(null);
 
+  // Resizable pane state
+  const [localPaneWidth, setLocalPaneWidth] = useState(50); // percentage
+  const [isResizing, setIsResizing] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
   // Custom prompt function
   const showPrompt = (title: string, message: string, defaultValue = ''): Promise<string | null> => {
     return new Promise((resolve) => {
@@ -220,6 +225,36 @@ const DualPaneSFTP: React.FC<Props> = ({ connectionId, server, initialLocalPath,
       onPathChange(localPath, remotePath);
     }
   }, [localPath, remotePath]);
+
+  // Handle resize mouse events
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizing || !containerRef.current) return;
+      
+      const rect = containerRef.current.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const newWidth = Math.min(Math.max((x / rect.width) * 100, 15), 85); // Min 15%, max 85%
+      setLocalPaneWidth(newWidth);
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+
+    if (isResizing) {
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+    }
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizing]);
 
   // Close context menu on click
   useEffect(() => {
@@ -948,9 +983,9 @@ const DualPaneSFTP: React.FC<Props> = ({ connectionId, server, initialLocalPath,
   return (
     <div className="h-full flex flex-col bg-navy-900 relative">
       {/* Dual pane */}
-      <div className="flex-1 flex overflow-hidden">
+      <div ref={containerRef} className="flex-1 flex overflow-hidden">
         {/* Local pane */}
-        <div className="flex-1 flex flex-col border-r border-navy-700">
+        <div style={{ width: `${localPaneWidth}%` }} className="flex flex-col border-r border-navy-700">
           {/* Local toolbar */}
           <div className="bg-navy-800 border-b border-navy-700 p-2">
             <div className="flex items-center gap-1 mb-2">
@@ -1047,8 +1082,19 @@ const DualPaneSFTP: React.FC<Props> = ({ connectionId, server, initialLocalPath,
           </div>
         </div>
 
+        {/* Resize handle */}
+        <div
+          className="w-1 bg-navy-700 hover:bg-teal-500 cursor-col-resize flex-shrink-0 transition-colors group relative"
+          onMouseDown={(e) => {
+            e.preventDefault();
+            setIsResizing(true);
+          }}
+        >
+          <div className="absolute inset-y-0 -left-1 -right-1 group-hover:bg-teal-500/20" />
+        </div>
+
         {/* Remote pane */}
-        <div className="flex-1 flex flex-col">
+        <div style={{ width: `${100 - localPaneWidth}%` }} className="flex flex-col">
           {/* Remote toolbar */}
           <div className="bg-navy-800 border-b border-navy-700 p-2">
             <div className="flex items-center gap-1 mb-2">

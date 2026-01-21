@@ -2,6 +2,37 @@
 
 All notable changes to Marix SSH Client will be documented in this file.
 
+## [1.0.11] - 2026-01-21
+
+### Added
+- **Build Info Transparency**: Commit SHA and build information displayed in About page
+  - Shows commit SHA with link to GitHub commit
+  - Displays branch name, build time, and GitHub Actions run ID
+  - Runtime info: Electron, Chrome, Node.js versions
+  - Full i18n support for 14 languages
+
+- **SFTP Resizable Panels**: Local and Remote file panels are now resizable
+  - Drag the divider between panels to adjust width
+  - Applies to SSH/SFTP, FTP, and FTPS connections
+  - Min 15%, max 85% width for each panel
+
+### Fixed
+- **SSH Legacy Algorithm Auto-Detection**: Smart retry for old server compatibility
+  - First attempts connection without legacy algorithms (works with modern servers)
+  - Auto-retries with legacy algorithms if connection fails due to algorithm mismatch
+  - Supports CentOS 6, RHEL 6, and other servers with OpenSSH 5.x
+  - Eliminates "Bad key types '+ssh-rsa,ssh-dss'" error on modern systems
+
+- **EPIPE Error on App Close**: Fixed crash when closing app with active RDP connections
+  - Wrapped console.log calls in try-catch within RDPManager.closeAll()
+  - Prevents "Error: write EPIPE" when stdout pipe closes before logging completes
+
+### Changed
+- **Build System**: Added commit SHA injection for release transparency
+  - `scripts/inject-build-info.js` generates build metadata at compile time
+  - GitHub Actions workflow injects commit info into binaries
+  - Release notes now include build verification section
+
 ## [1.0.10] - 2026-01-21
 
 ### Added

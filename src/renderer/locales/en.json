@@ -893,6 +893,18 @@
   "openSource": "Open source on GitHub",
   "available": "available",
   
+  "buildInfo": "Build Info",
+  "commitSha": "Commit SHA",
+  "branch": "Branch",
+  "buildTime": "Build Time",
+  "buildRun": "Build Run",
+  "viewCommitOnGithub": "View commit on GitHub",
+  "runtimeInfo": "Runtime Info",
+  "electronVersion": "Electron",
+  "chromeVersion": "Chrome",
+  "nodeVersion": "Node.js",
+  "v8Version": "V8 Engine",
+  
   "gitlabBackup": "GitLab Backup",
   "gitlabConnect": "Connect to GitLab",
   "gitlabConnected": "Connected to GitLab",

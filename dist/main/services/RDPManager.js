@@ -563,7 +563,20 @@ class RDPManager {
      * Close all connections - called when app is closing
      */
     closeAll() {
-        console.log(`[RDPManager] Closing all ${this.connections.size} RDP connections...`);
+        // Use try-catch for all console operations to prevent EPIPE errors when app is closing
+        const safeLog = (msg) => {
+            try {
+                console.log(msg);
+            }
+            catch { /* ignore EPIPE */ }
+        };
+        const safeError = (msg, err) => {
+            try {
+                console.error(msg, err);
+            }
+            catch { /* ignore EPIPE */ }
+        };
+        safeLog(`[RDPManager] Closing all ${this.connections.size} RDP connections...`);
         for (const [id, conn] of this.connections) {
             try {
                 if (!conn.process.killed) {
@@ -578,11 +591,11 @@ class RDPManager {
                 }
             }
             catch (err) {
-                console.error(`[RDPManager] Error closing ${id}:`, err);
+                safeError(`[RDPManager] Error closing ${id}:`, err);
             }
         }
         this.connections.clear();
-        console.log('[RDPManager] All connections closed');
+        safeLog('[RDPManager] All connections closed');
     }
     /**
      * Focus the RDP window using xdotool (Linux only)
