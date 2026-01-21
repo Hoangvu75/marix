@@ -1,530 +1,198 @@
-# Security Architecture
+# Security Overview
 
-> **Marix SSH Client** - Security Documentation  
-> Version: 1.0.10 | Last Updated: January 2026
+> **Marix SSH Client – Security Model & Threat Analysis**  
+> Last updated: 2026-01
 
-This document describes the security architecture, cryptographic implementations, and data protection mechanisms used in Marix SSH Client.
+Marix is an open-source, cross-platform SSH client designed to help users manage multiple servers efficiently.  
+This document explains **what Marix protects**, **how it protects it**, and **what it explicitly does not attempt to protect against**.
 
----
-
-## Table of Contents
-
-1. [Overview](#overview)
-2. [Credential Storage](#credential-storage)
-3. [Backup Encryption](#backup-encryption)
-4. [SSH/SFTP Security](#sshsftp-security)
-5. [Known Hosts Verification](#known-hosts-verification)
-6. [SSH Key Management](#ssh-key-management)
-7. [OAuth & Cloud Integrations](#oauth--cloud-integrations)
-8. [LAN Sharing Security](#lan-sharing-security)
-9. [Electron Security Model](#electron-security-model)
-10. [Cryptographic Summary](#cryptographic-summary)
-11. [Security Recommendations](#security-recommendations)
+This is **not a formal security audit** and Marix should **not** be considered a hardened or formally verified security product.
 
 ---
 
-## Overview
+## 1. Threat Model (Important)
 
-Marix implements multiple layers of security to protect sensitive data:
+Marix is designed to protect against:
 
-| Layer | Protection | Implementation |
-|-------|------------|----------------|
-| **At Rest** | Credential encryption | Electron safeStorage (OS Keychain) |
-| **Backup** | Military-grade encryption | Argon2id + AES-256-GCM |
-| **In Transit** | Secure protocols | SSH2, TLS 1.2+, HTTPS |
-| **Authentication** | Multi-factor | SSH Keys |
-| **Host Verification** | Fingerprint checking | SHA256 fingerprints |
+- Accidental credential disclosure
+- Local credential theft from casual malware
+- Backup leakage (cloud storage, lost files)
+- Offline brute-force attacks against encrypted backups
+- MITM attacks via SSH host key verification
+
+Marix **does NOT claim protection against**:
+
+- A malicious or fully compromised SSH server
+- Hostile or untrusted networks
+- Kernel-level malware on the local machine
+- Supply-chain attacks at the OS or runtime level
+- Zero-day vulnerabilities in OpenSSH, Electron, Chromium, Node.js, or dependencies
+
+If your threat model includes **nation-state adversaries, hostile servers, or untrusted execution environments**, you should use **OpenSSH CLI directly** and avoid GUI wrappers entirely.
 
 ---
 
-## Credential Storage
+## 2. Credential Storage (At Rest)
 
-### SecureStorage Service
-
-All sensitive data (passwords, private keys, passphrases) are encrypted using **Electron's safeStorage API**, which leverages the operating system's native keychain:
+Sensitive data is stored using **Electron safeStorage**, which delegates encryption to the operating system:
 
 | Platform | Backend |
-|----------|---------|
-| **macOS** | Keychain |
-| **Windows** | DPAPI (Data Protection API) |
-| **Linux** | libsecret (GNOME Keyring / KWallet) |
+|--------|--------|
+| macOS | Apple Keychain |
+| Windows | DPAPI |
+| Linux | libsecret (GNOME Keyring / KWallet) |
 
-```
-┌────────────────────────────────────────────────────────────┐
-│                    SecureStorage Flow                       │
-├────────────────────────────────────────────────────────────┤
-│                                                            │
-│   Plain Password ─────────────────────────────────────►    │
-│         │                                                  │
-│         ▼                                                  │
-│   ┌─────────────────┐                                      │
-│   │ safeStorage API │                                      │
-│   │   (OS Keychain) │                                      │
-│   └────────┬────────┘                                      │
-│            │                                               │
-│            ▼                                               │
-│   enc:XXXXXXXXXXXXXX (Base64 encrypted string)             │
-│         │                                                  │
-│         ▼                                                  │
-│   Stored in electron-store (config.json)                   │
-│                                                            │
-└────────────────────────────────────────────────────────────┘
-```
+Security properties:
 
-**Key Security Properties:**
+- Secrets are encrypted and bound to the OS user
+- Data cannot be decrypted on another machine
+- No custom password vault implementation
 
-- ✅ Data encrypted on one machine **cannot** be decrypted on another
-- ✅ Credentials are tied to the device and user account
-- ✅ Automatic migration from plaintext on first run
-- ✅ Protected fields: `password`, `privateKey`, `passphrase`
-
-### ServerStore Implementation
-
-```typescript
-// Fields automatically encrypted/decrypted
-const SENSITIVE_FIELDS = ['password', 'privateKey', 'passphrase'];
-
-// Storage format example
-{
-  "id": "server-001",
-  "host": "example.com",
-  "username": "admin",
-  "password": "enc:AQAAANCMnd8BFdERjHoAwE...",  // ← Encrypted
-  "privateKey": "enc:AQAAANCMnd8BFdERjHoAwE..." // ← Encrypted
-}
-```
+Marix **does not implement its own credential store**.
 
 ---
 
-## Backup Encryption
+## 3. Backup Encryption
 
-### Cryptographic Specifications
+Backups are encrypted using standard, well-studied primitives:
 
-| Component | Algorithm | Parameters |
-|-----------|-----------|------------|
-| **KDF** | Argon2id | Auto-tuned (~1s target) |
-| **Encryption** | AES-256-GCM | Authenticated encryption |
-| **Salt** | CSPRNG | 32 bytes per backup |
-| **IV/Nonce** | CSPRNG | 16 bytes per operation |
-| **Auth Tag** | GCM | 16 bytes |
+- **KDF:** Argon2id  
+- **Encryption:** AES-256-GCM (AEAD)  
+- **Randomness:** Secure system RNG  
 
-### Argon2id Auto-Tuning
+### Argon2id Calibration
 
-Marix dynamically calibrates Argon2id parameters based on the user's hardware to achieve approximately **1 second** of key derivation time. This provides consistent security regardless of machine performance.
+- Local calibration targets ~1 second runtime
+- Parameters are stored inside the backup file
+- Ensures cross-machine decrypt compatibility
+- Enforces a minimum security floor (memory + iterations)
 
-```
-┌────────────────────────────────────────────────────────────┐
-│              Argon2id Auto-Tuning Algorithm                │
-├────────────────────────────────────────────────────────────┤
-│                                                            │
-│   1. Detect System RAM                                     │
-│      ├── ≥16 GB → Start at 512 MB memory                   │
-│      ├── ≥8 GB  → Start at 256 MB memory                   │
-│      ├── ≥4 GB  → Start at 128 MB memory                   │
-│      └── <4 GB  → Start at 64 MB memory (minimum)          │
-│                                                            │
-│   2. Benchmark with timeCost=1                             │
-│                                                            │
-│   3. Adjust memory if baseline is off                      │
-│      ├── Too slow (>600ms) → Reduce memory                 │
-│      └── Too fast (<100ms) → Increase memory               │
-│                                                            │
-│   4. Scale timeCost to hit ~1000ms target                  │
-│                                                            │
-│   5. Fine-tune ±200ms tolerance                            │
-│                                                            │
-│   6. Store parameters with backup for decryption           │
-│                                                            │
-└────────────────────────────────────────────────────────────┘
-```
-
-**Security Floors (Minimum Values):**
-
-- Memory Cost: 64 MB minimum
-- Time Cost: 2 iterations minimum  
-- Parallelism: min(4, CPU cores)
-
-### Password Requirements
-
-Backup passwords must meet strict requirements:
-
-| Requirement | Minimum |
-|-------------|---------|
-| Length | 10 characters |
-| Uppercase | At least 1 |
-| Lowercase | At least 1 |
-| Number | At least 1 |
-| Special Character | At least 1 (`!@#$%^&*()_+-=[]{}...`) |
-
-```typescript
-// Password validation regex
-/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?~`]).{10,}$/
-```
-
-### Encrypted Backup Format
-
-```json
-{
-  "version": "2.2",
-  "encrypted": "Base64(AES-256-GCM ciphertext)",
-  "salt": "Base64(32 random bytes)",
-  "iv": "Base64(16 random bytes)",
-  "authTag": "Base64(16 bytes GCM tag)",
-  "kdf": "argon2id",
-  "memoryCost": 262144,
-  "parallelism": 4,
-  "timeCost": 3
-}
-```
-
-**Cross-Machine Compatibility:**
-- KDF parameters are stored with the backup
-- Decryption uses stored parameters, not current machine's calibration
-- Legacy backups (v2.0) use fixed parameters for compatibility
-
-### Backup Data Contents
-
-| Data Type | Encrypted in Backup |
-|-----------|---------------------|
-| Server credentials | ✅ Yes |
-| SSH Keys (public + private) | ✅ Yes |
-| 2FA TOTP secrets | ✅ Yes |
-| Cloudflare API tokens | ✅ Yes |
-| Port forward configs | ✅ Yes |
-| Command snippets | ✅ Yes |
-| Tag colors | ✅ Yes |
-| Theme settings | ✅ Yes |
+This design prioritizes **offline brute-force resistance** over speed.
 
 ---
 
-## SSH/SFTP Security
+## 4. SSH & Terminal Handling
 
-### SSH2 Library Configuration
+### SSH Protocol
 
-```typescript
-const connectConfig: ConnectConfig = {
-  host: config.host,
-  port: config.port,
-  username: config.username,
-  password: config.password,
-  privateKey: config.privateKey,
-  passphrase: config.passphrase,
-  readyTimeout: 30000,
-  keepaliveInterval: 10000,
-  keepaliveCountMax: 3,
-};
-```
+- SSH protocol handled by:
+  - System OpenSSH (interactive terminals via PTY)
+  - `ssh2` library (non-interactive and SFTP use cases)
 
-### Supported Authentication Methods
+Marix **does not re-implement SSH cryptography**.
 
-| Method | Security Level | Recommendation |
-|--------|---------------|----------------|
-| SSH Key (Ed25519) | 🟢 Highest | **Recommended** |
-| SSH Key (ECDSA) | 🟢 High | Good |
-| SSH Key (RSA 4096-bit) | 🟢 High | Good |
-| Password | 🟡 Medium | Use with strong passwords |
+### Terminal Parsing
 
-### Native SSH (PTY) Security
+Marix renders server-controlled output in a terminal emulator.
 
-For terminal sessions, Marix uses the system's native SSH client via `node-pty`:
+⚠️ **Important**  
+Any terminal emulator that parses remote output may be vulnerable to control-sequence or logic attacks.
 
-```typescript
-const sshArgs = [
-  '-o', 'StrictHostKeyChecking=no',
-  '-o', 'UserKnownHostsFile=/dev/null',
-  '-o', 'LogLevel=ERROR',
-  '-p', port.toString(),
-  '-i', privateKeyPath,  // If using key auth
-  `${username}@${host}`
-];
-```
-
-**Temporary Key Handling:**
-- Private keys are written to temp files with `mode: 0o600`
-- Keys are normalized (LF line endings, trailing newline)
-- Temp files are cleaned up after session ends
+This risk exists in **xterm, tmux, screen, iTerm, and GUI SSH clients alike**.  
+Marix does not claim immunity to malicious terminal output.
 
 ---
 
-## Known Hosts Verification
+## 5. Host Key Verification
 
-### Host Key Fingerprinting
-
-Marix implements SSH host key verification to prevent MITM attacks:
-
-```
-┌────────────────────────────────────────────────────────────┐
-│              Host Key Verification Flow                     │
-├────────────────────────────────────────────────────────────┤
-│                                                            │
-│   1. Connect to server                                     │
-│                                                            │
-│   2. Fetch host key via ssh-keyscan                        │
-│      └── Preference: ed25519 > ecdsa > rsa                 │
-│                                                            │
-│   3. Calculate SHA256 fingerprint                          │
-│                                                            │
-│   4. Compare with stored fingerprint                       │
-│      ├── NEW: Prompt user to trust                         │
-│      ├── MATCH: Allow connection                           │
-│      └── CHANGED: ⚠️ Security warning!                     │
-│                                                            │
-│   5. Store in ~/.marix/known_hosts.json                    │
-│                                                            │
-└────────────────────────────────────────────────────────────┘
-```
-
-### Fingerprint Storage Format
-
-```json
-{
-  "example.com:22": {
-    "host": "example.com",
-    "port": 22,
-    "keyType": "ssh-ed25519",
-    "fingerprint": "SHA256:AAAA...",
-    "fullKey": "ssh-ed25519 AAAA...",
-    "addedAt": "2026-01-21T10:00:00Z"
-  }
-}
-```
+- SSH host keys are verified using:
+  - `ssh-keyscan`
+  - SHA-256 fingerprints
+- First connection requires explicit user confirmation
+- Host key changes trigger warnings and require user action
 
 ---
 
-## SSH Key Management
+## 6. SSH Key Handling
 
-### Key Generation
-
-Marix supports generating SSH keys via `ssh-keygen`:
-
-| Type | Bits | Use Case |
-|------|------|----------|
-| **Ed25519** | 256 | Modern, recommended |
-| **ECDSA** | 521 | Strong, wide support |
-| **RSA** | 4096 | Legacy compatibility |
-
-### Key Storage
-
-- Location: `~/.marix/ssh_keys/`
-- Private keys: `mode: 0o600` (owner read/write only)
-- Public keys: stored alongside private
-- Metadata: `ssh_keys_meta.json`
-
-### Backup Strategy
-
-Both public and private keys are backed up:
-
-```typescript
-exportAllKeysForBackup(): {
-  id: string;
-  name: string;
-  type: string;
-  publicKey: string;    // Full public key
-  privateKey: string;   // Full private key (encrypted in backup)
-  fingerprint: string;
-  createdAt: string;
-}[]
-```
-
-**Import Deduplication:**
-- Keys are matched by fingerprint
-- Duplicate keys are skipped during restore
-- Preserves original key IDs and metadata
+- Private keys are stored encrypted at rest
+- When required by OpenSSH:
+  - Keys are written to temporary files
+  - File permissions set to `0600`
+  - Files are removed immediately after use
+- No persistent plaintext key storage
 
 ---
 
-## OAuth & Cloud Integrations
+## 7. Cloud & OAuth Integrations
 
-### Supported Providers
-
-| Provider | Auth Method | Scopes |
-|----------|-------------|--------|
-| **Google Drive** | OAuth 2.0 (PKCE) | `drive.file` |
-| **GitHub** | Device Flow | `repo` |
-| **GitLab** | OAuth 2.0 | `api` |
-| **Box** | OAuth 2.0 | `root_readwrite` |
-
-### Token Storage
-
-OAuth tokens are stored securely:
-
-```typescript
-// GitHub tokens
-class SecureStore {
-  async setPassword(service, account, password) {
-    const encrypted = safeStorage.encryptString(password);
-    fs.writeFileSync(filePath, encrypted);
-  }
-}
-
-// Google Drive tokens
-// Stored in user data directory, encrypted
-TOKEN_PATH = path.join(app.getPath('userData'), 'google-drive-token.json');
-```
-
-### OAuth Callback Security
-
-Local callback server for OAuth:
-- Runs on `localhost:3000` only
-- Stops immediately after receiving callback
-- Uses PKCE flow where supported
+- Uses official OAuth flows (PKCE / Device Flow)
+- Tokens stored encrypted via OS keychain
+- Local callback servers bind to `localhost` only
+- No credentials are transmitted to third-party servers
 
 ---
 
-## LAN Sharing Security
+## 8. Electron Security Considerations
 
-### Server Discovery
+Marix is an **Electron application**, which implies:
 
-- Protocol: UDP Multicast
-- Address: `224.0.0.88:45678`
-- Peer timeout: 30 seconds
+- Chromium runtime
+- Node.js execution environment
+- Larger attack surface compared to CLI-only tools
 
-### Device Identification
+Marix **does not claim Electron is secure by default**.
 
-```typescript
-// Stable device ID from hostname + MAC address
-const deviceId = crypto.createHash('sha256')
-  .update(`${hostname}-${macAddress}`)
-  .digest('hex')
-  .substring(0, 32);
-```
+Hardening measures include:
 
-### Pairing Code
-
-- 6-digit random code for each transfer
-- Must match to initiate file transfer
-- Prevents unauthorized connections
-
-### File Transfer
-
-- Protocol: TCP (port 45679)
-- Chunk size: 64 KB
-- No encryption (relies on LAN trust)
-
-⚠️ **Warning:** LAN transfers are not encrypted. Only use on trusted networks.
+- Reduced IPC surface
+- No remote code execution in renderer
+- No remote script loading
 
 ---
 
-## Electron Security Model
+## 9. Supply-Chain & Build Transparency
 
-### Current Configuration
+### Current State
 
-```typescript
-webPreferences: {
-  nodeIntegration: true,
-  contextIsolation: false,
-  backgroundThrottling: false,
-  spellcheck: false,
-}
-```
+- Source code is fully open-source
+- Releases are built via CI
+- Dependencies are locked using lockfiles
 
-### Content Security Policy
+### Roadmap
 
-```html
-<meta http-equiv="Content-Security-Policy" 
-      content="script-src 'self' 'unsafe-inline';">
-```
+- CI-only release builds
+- Public GitHub Actions workflows
+- Commit-linked release artifacts
+- Published checksums
 
-### IPC Communication
-
-Preload script exposes minimal IPC surface:
-
-```typescript
-contextBridge.exposeInMainWorld('electron', {
-  ipcRenderer: {
-    invoke: (channel, ...args) => ipcRenderer.invoke(channel, ...args),
-    on: (channel, func) => ipcRenderer.on(channel, ...args),
-  },
-});
-```
-
-### Memory Management
-
-- V8 memory limit: 256 MB
-- Periodic cache clearing (5 minutes)
-- Manual GC triggers
+These measures are intended to mitigate **supply-chain risks**.
 
 ---
 
-## Cryptographic Summary
+## 10. What Marix Is — And Is Not
 
-| Operation | Algorithm | Key Size | Notes |
-|-----------|-----------|----------|-------|
-| Credential encryption | OS Keychain | Platform-dependent | safeStorage API |
-| Backup KDF | Argon2id | 256-bit output | Auto-tuned |
-| Backup encryption | AES-256-GCM | 256-bit | Authenticated |
-| SSH key generation | Ed25519/ECDSA/RSA | 256/521/4096-bit | Via ssh-keygen |
-| Host fingerprint | SHA256 | 256-bit | Via ssh-keyscan |
-| Device ID | SHA256 | 256-bit | From hostname+MAC |
-| Random generation | CSPRNG | N/A | crypto.randomBytes |
+**Marix is:**
 
----
+- A productivity-focused SSH frontend
+- Designed for managing multiple hosts
+- Transparent about its design choices
 
-## Security Recommendations
+**Marix is NOT:**
 
-### For Users
-
-1. **Use SSH Keys** instead of passwords whenever possible
-2. **Use strong backup passwords** (10+ chars, mixed case, numbers, symbols)
-3. **Verify host fingerprints** on first connection
-4. **Use Port Knocking** for additional stealth
-5. **Backup regularly** to multiple cloud providers
-
-### For Network Administrators
-
-1. **Disable password authentication** on SSH servers
-2. **Use Ed25519 keys** for best security/performance
-3. **Configure fail2ban** for brute-force protection
-4. **Keep OpenSSH updated** on all servers
-5. **Use VPN** for sensitive LAN transfers
-
-### Port Knocking Benefits
-
-```
-┌────────────────────────────────────────────────────────────┐
-│                   Port Knocking Flow                        │
-├────────────────────────────────────────────────────────────┤
-│                                                            │
-│   1. SSH port (22) is CLOSED by default                    │
-│                                                            │
-│   2. Client sends TCP SYN to sequence: 7000 → 8000 → 9000  │
-│                                                            │
-│   3. Server daemon (knockd) detects sequence               │
-│                                                            │
-│   4. Firewall opens port 22 for client IP                  │
-│                                                            │
-│   5. Client connects via SSH                               │
-│                                                            │
-│   Benefits:                                                │
-│   ├── Port scanners see port 22 as closed                  │
-│   ├── Prevents brute-force attacks                         │
-│   └── Adds stealth layer before authentication             │
-│                                                            │
-└────────────────────────────────────────────────────────────┘
-```
+- A hardened security appliance
+- A replacement for OpenSSH CLI in hostile environments
+- A formally audited cryptographic product
 
 ---
 
-## Reporting Security Issues
+## 11. Responsible Disclosure
 
-If you discover a security vulnerability in Marix, please report it responsibly:
+If you discover a security issue:
 
-1. **Do not** open a public GitHub issue
-2. Contact the maintainer directly
-3. Provide detailed reproduction steps
-4. Allow reasonable time for a fix before disclosure
-
----
-
-## Changelog
-
-| Version | Date | Changes |
-|---------|------|---------|
-| 1.0.0 | 2026 | Initial security implementation |
-| 1.0.5 | 2026 | Added Argon2id auto-tuning |
-| 1.0.10 | 2026 | Added Snippets to backup |
+1. Do **not** publish exploit details publicly
+2. Report the issue privately with reproduction steps
+3. Include environment and version information
 
 ---
 
-*This document is maintained as part of the Marix SSH Client project.*
+## Final Note
 
+Security is a **process**, not a checkbox.
+
+Marix prioritizes:
+- Clear threat boundaries
+- Practical security trade-offs
+- Transparency over marketing claims
+
+If your security requirements exceed this scope, **Marix is not the right tool — and that is acceptable**.
