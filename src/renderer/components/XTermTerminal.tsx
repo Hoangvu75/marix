@@ -1,10 +1,11 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
-import { ipcRenderer } from 'electron';
 import { useTerminalContext } from '../contexts/TerminalContext';
 import { terminalThemes } from '../themes';
 import '@xterm/xterm/css/xterm.css';
 import { getCustomHotkeys } from '../services/snippetStore';
 import SnippetPanel from './SnippetPanel';
+
+const { ipcRenderer } = window.electron;
 
 interface Props {
   connectionId: string;

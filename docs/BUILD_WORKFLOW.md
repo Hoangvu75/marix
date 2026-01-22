@@ -99,7 +99,6 @@ Every Marix release includes build metadata embedded in the binary, allowing use
 | **macOS** | macos-latest | 39.x | 22.x |
 
 
-
 ## 📋 Build Steps Detail
 
 ### 1. Inject Build Info

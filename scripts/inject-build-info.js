@@ -66,10 +66,18 @@ function getLocalBranch() {
 
 // Main
 const buildInfo = getBuildInfo();
-const outputPath = path.join(__dirname, '..', 'src', 'build-info.json');
+const srcOutputPath = path.join(__dirname, '..', 'src', 'build-info.json');
+const distOutputPath = path.join(__dirname, '..', 'dist', 'main', 'build-info.json');
 
-// Write JSON file
-fs.writeFileSync(outputPath, JSON.stringify(buildInfo, null, 2));
+// Write JSON file to src (for development)
+fs.writeFileSync(srcOutputPath, JSON.stringify(buildInfo, null, 2));
+
+// Also write to dist/main if it exists (for packaging)
+const distDir = path.dirname(distOutputPath);
+if (fs.existsSync(distDir)) {
+  fs.writeFileSync(distOutputPath, JSON.stringify(buildInfo, null, 2));
+  console.log(`[BuildInfo] Also written to: ${distOutputPath}`);
+}
 
 console.log('='.repeat(60));
 console.log('BUILD INFO INJECTED');
@@ -83,4 +91,4 @@ console.log(`Repository: ${buildInfo.repository}`);
 console.log(`Node:       ${buildInfo.nodeVersion}`);
 console.log(`Platform:   ${buildInfo.platform}/${buildInfo.arch}`);
 console.log('='.repeat(60));
-console.log(`Output:     ${outputPath}`);
+console.log(`Output:     ${srcOutputPath}`);

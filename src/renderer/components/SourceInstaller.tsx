@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { ipcRenderer } from 'electron';
 import { useLanguage } from '../contexts/LanguageContext';
 import XTermLogViewer, { XTermLogViewerRef } from './XTermLogViewer';
 import { getFrameworkIcon } from './FrameworkIcons';
 import legacyVersions from '../data/legacy-versions.json';
+
+const { ipcRenderer } = window.electron;
 
 // Source code types/frameworks
 export type SourceType = 

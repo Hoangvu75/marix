@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { ipcRenderer } from 'electron';
 import { useLanguage } from '../contexts/LanguageContext';
+
+const { ipcRenderer } = window.electron;
 
 interface Server {
   id: string;

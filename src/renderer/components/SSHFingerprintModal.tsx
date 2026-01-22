@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { ipcRenderer } from 'electron';
 import { useLanguage } from '../contexts/LanguageContext';
+
+const { ipcRenderer } = window.electron;
 
 interface FingerprintResult {
   status: 'new' | 'match' | 'changed' | 'error';

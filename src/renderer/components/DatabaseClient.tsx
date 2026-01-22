@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { ipcRenderer } from 'electron';
 import { useLanguage } from '../contexts/LanguageContext';
 import SQLEditor from './SQLEditor';
 import ERDDiagram from './ERDDiagram';
+
+const { ipcRenderer } = window.electron;
 
 // =============================================================================
 // TYPES & INTERFACES
@@ -25,6 +26,7 @@ interface DatabaseClientProps {
   connectionId: string;
   theme?: 'dark' | 'light';
   onClose?: () => void;
+  onDbInfo?: (info: { version: string; ip: string; provider: string }) => void;
 }
 
 interface TableInfo {
@@ -156,7 +158,8 @@ const DatabaseClient: React.FC<DatabaseClientProps> = ({
   server, 
   connectionId, 
   theme = 'dark', 
-  onClose 
+  onClose,
+  onDbInfo 
 }) => {
   const { t } = useLanguage();
   const isDark = theme === 'dark';
@@ -182,6 +185,14 @@ const DatabaseClient: React.FC<DatabaseClientProps> = ({
   const [tableData, setTableData] = useState<QueryResult | null>(null);
   const [loadingData, setLoadingData] = useState(false);
   const [tableStructure, setTableStructure] = useState<ColumnInfo[]>([]);
+  
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalRows, setTotalRows] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(100);
+  const [loadingAll, setLoadingAll] = useState(false);
+  const ROWS_PER_PAGE_OPTIONS = [50, 100, 200, 500, 1000];
+  const totalPages = Math.ceil(totalRows / rowsPerPage);
   
   // Query
   const [query, setQuery] = useState('');
@@ -228,45 +239,75 @@ const DatabaseClient: React.FC<DatabaseClientProps> = ({
   // EFFECTS
   // ---------------------------------------------------------------------------
 
+  // Connect function - can be called for initial connect or retry
+  const connect = async () => {
+    setConnecting(true);
+    setError(null);
+    
+    try {
+      const result = await ipcRenderer.invoke('db:connect', {
+        connectionId,
+        protocol: server.protocol,
+        host: server.host,
+        port: server.port,
+        username: server.username,
+        password: server.password,
+        database: server.database,
+        sslEnabled: server.sslEnabled,
+        mongoUri: server.mongoUri,
+        sqliteFile: server.sqliteFile,
+      });
+      
+      if (result.success) {
+        setConnected(true);
+        if (result.databases) {
+          setDatabases(result.databases);
+        }
+        if (server.database) {
+          setSelectedDatabase(server.database);
+          loadTables(server.database);
+        }
+        
+        // Fetch database version and IP info
+        if (onDbInfo) {
+          try {
+            const versionResult = await ipcRenderer.invoke('db:getVersion', { connectionId });
+            if (versionResult.success) {
+              // Fetch IP info from ipinfo.io
+              let ip = server.host;
+              let provider = '';
+              try {
+                // Resolve hostname to IP if needed
+                const ipInfoResult = await ipcRenderer.invoke('lookup-ip-info', server.host);
+                if (ipInfoResult.success) {
+                  ip = ipInfoResult.ip || server.host;
+                  provider = ipInfoResult.org || '';
+                }
+              } catch (e) {
+                console.log('[DatabaseClient] Could not fetch IP info:', e);
+              }
+              onDbInfo({
+                version: versionResult.version || `${server.protocol} (unknown version)`,
+                ip,
+                provider,
+              });
+            }
+          } catch (e) {
+            console.log('[DatabaseClient] Could not fetch version:', e);
+          }
+        }
+      } else {
+        setError(result.error || 'Connection failed');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Connection failed');
+    } finally {
+      setConnecting(false);
+    }
+  };
+
   // Connect on mount
   useEffect(() => {
-    const connect = async () => {
-      setConnecting(true);
-      setError(null);
-      
-      try {
-        const result = await ipcRenderer.invoke('db:connect', {
-          connectionId,
-          protocol: server.protocol,
-          host: server.host,
-          port: server.port,
-          username: server.username,
-          password: server.password,
-          database: server.database,
-          sslEnabled: server.sslEnabled,
-          mongoUri: server.mongoUri,
-          sqliteFile: server.sqliteFile,
-        });
-        
-        if (result.success) {
-          setConnected(true);
-          if (result.databases) {
-            setDatabases(result.databases);
-          }
-          if (server.database) {
-            setSelectedDatabase(server.database);
-            loadTables(server.database);
-          }
-        } else {
-          setError(result.error || 'Connection failed');
-        }
-      } catch (err: any) {
-        setError(err.message || 'Connection failed');
-      } finally {
-        setConnecting(false);
-      }
-    };
-    
     connect();
     
     return () => {
@@ -352,22 +393,58 @@ const DatabaseClient: React.FC<DatabaseClientProps> = ({
     }
   }, [activeTab, tables]);
 
-  const loadTableData = async (tableName: string) => {
+  const loadTableData = async (tableName: string, page: number = 1, limit: number = rowsPerPage, loadAll: boolean = false) => {
     setLoadingData(true);
+    if (loadAll) setLoadingAll(true);
     setSelectedTable(tableName);
     
     try {
-      const queryStr = server.protocol === 'mongodb'
-        ? JSON.stringify({ collection: tableName, limit: 100 })
-        : `SELECT * FROM ${quoteIdentifier(tableName)} LIMIT 100`;
+      const offset = (page - 1) * limit;
       
-      const [dataResult, structResult] = await Promise.all([
-        ipcRenderer.invoke('db:query', { connectionId, database: selectedDatabase, query: queryStr }),
+      // First, get total count
+      let countQuery: string;
+      if (server.protocol === 'mongodb') {
+        countQuery = JSON.stringify({ collection: tableName, count: true });
+      } else {
+        countQuery = `SELECT COUNT(*) as total FROM ${quoteIdentifier(tableName)}`;
+      }
+      
+      // Data query with pagination (or all if loadAll)
+      let dataQuery: string;
+      if (server.protocol === 'mongodb') {
+        dataQuery = loadAll 
+          ? JSON.stringify({ collection: tableName, limit: 0 })
+          : JSON.stringify({ collection: tableName, limit, skip: offset });
+      } else if (server.protocol === 'sqlite') {
+        dataQuery = loadAll
+          ? `SELECT * FROM ${quoteIdentifier(tableName)}`
+          : `SELECT * FROM ${quoteIdentifier(tableName)} LIMIT ${limit} OFFSET ${offset}`;
+      } else {
+        dataQuery = loadAll
+          ? `SELECT * FROM ${quoteIdentifier(tableName)}`
+          : `SELECT * FROM ${quoteIdentifier(tableName)} LIMIT ${limit} OFFSET ${offset}`;
+      }
+      
+      const [countResult, dataResult, structResult] = await Promise.all([
+        ipcRenderer.invoke('db:query', { connectionId, database: selectedDatabase, query: countQuery }),
+        ipcRenderer.invoke('db:query', { connectionId, database: selectedDatabase, query: dataQuery }),
         ipcRenderer.invoke('db:getTableStructure', { connectionId, database: selectedDatabase, table: tableName }),
       ]);
       
+      // Extract total count
+      if (countResult.success) {
+        const count = server.protocol === 'mongodb'
+          ? countResult.count || 0
+          : countResult.rows?.[0]?.total || countResult.rows?.[0]?.['COUNT(*)'] || 0;
+        setTotalRows(Number(count));
+      }
+      
       if (dataResult.success) {
         setTableData(dataResult);
+        setCurrentPage(loadAll ? 1 : page);
+        if (loadAll) {
+          setRowsPerPage(dataResult.rows?.length || limit);
+        }
       }
       if (structResult.success) {
         setTableStructure(structResult.columns || []);
@@ -381,6 +458,7 @@ const DatabaseClient: React.FC<DatabaseClientProps> = ({
       console.error('Failed to load table data:', err);
     } finally {
       setLoadingData(false);
+      setLoadingAll(false);
     }
   };
 
@@ -1148,8 +1226,10 @@ const DatabaseClient: React.FC<DatabaseClientProps> = ({
     return (
       <div className={`flex items-center justify-center h-full ${isDark ? 'bg-navy-900' : 'bg-gray-50'}`}>
         <div className="text-center max-w-md px-6">
-          <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-gradient-to-br from-red-500 to-rose-500 flex items-center justify-center text-white shadow-xl">
-            <span className="w-10 h-10">{Icons.x}</span>
+          <div className="w-20 h-20 mx-auto mb-6 flex items-center justify-center">
+            <svg className="w-20 h-20" viewBox="0 0 512 512" fill="#e03">
+              <path fillRule="evenodd" clipRule="evenodd" d="m437.894 243.804 20.92 13.177v99.47c0 36.829-16.245 68.514-46.152 90.008l-77.928 56.01-77.929-56.01c-29.905-21.494-46.15-53.179-46.15-90.008v-99.47l20.92-13.177c64.557-40.663 141.759-40.663 206.319 0zm-347.582 99.086c-15.174-5.73-27.82-12.821-37.126-20.928v41.874c0 13.441 14.569 26.289 38.122 36.194 35.012 14.723 79.375 18.903 117.264 17.181-9.345-17.321-14.446-36.862-14.886-57.8-33.768.22-71.647-4.541-103.374-16.521zm0-75.141c31.75 11.989 69.554 16.725 103.343 16.522v58.145c-32.037.067-67.24-4.021-97.367-15.397-23.714-8.955-39.618-20.765-43.102-33.505v-46.691c9.306 8.104 21.952 15.196 37.126 20.926zm0-75.141c-15.174-5.729-27.82-12.821-37.126-20.927v46.69c3.483 12.74 19.388 24.55 43.102 33.505 30.127 11.376 65.331 15.465 97.367 15.396v-19.676l28.859-18.178c34.246-21.572 71.873-32.604 109.577-33.097v-25.019c-8.981 7.946-21.157 14.927-35.776 20.621-58.612 22.83-147.161 22.906-206.003.685zm210.231-77.535c12.775-5.372 23.474-11.77 31.548-18.961v45.414c-2.368 13.063-17.993 25.29-41.886 34.595-54.604 21.267-139.098 21.318-193.918.617-23.714-8.955-39.618-20.764-43.102-33.505v-47.12c8.075 7.19 18.772 13.588 31.548 18.96 60.041 25.249 155.77 25.248 215.81 0zm-6.574-15.605c23.554-9.905 38.122-22.751 38.122-36.192s-14.568-26.289-38.122-36.193c-55.646-23.401-147.015-23.401-202.662 0-13.964 5.873-38.121 18.616-38.121 36.209.013 13.435 14.578 26.275 38.121 36.176 55.648 23.401 147.016 23.4 202.662 0zm12.008 289.939 28.757-28.757 28.758 28.757c6.875 6.876 18.022 6.876 24.897 0 6.875-6.874 6.875-18.022 0-24.896l-28.758-28.758 28.758-28.758c6.875-6.875 6.875-18.022 0-24.898-6.875-6.875-18.022-6.875-24.897 0l-28.758 28.758-28.757-28.758c-6.875-6.875-18.022-6.875-24.897 0s-6.875 18.022 0 24.897l28.757 28.758-28.757 28.758c-6.875 6.875-6.875 18.022 0 24.897 6.875 6.876 18.022 6.876 24.897 0z"/>
+            </svg>
           </div>
           <p className={`text-xl font-bold mb-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>
             {t('dbConnectionFailed')}
@@ -1158,7 +1238,7 @@ const DatabaseClient: React.FC<DatabaseClientProps> = ({
             {error}
           </p>
           <button
-            onClick={() => window.location.reload()}
+            onClick={() => connect()}
             className="px-6 py-2.5 bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-xl font-medium hover:shadow-lg transition-all"
           >
             {t('dbRetry')}
@@ -1364,13 +1444,53 @@ const DatabaseClient: React.FC<DatabaseClientProps> = ({
                       <div>
                         <h3 className={`font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>{selectedTable}</h3>
                         <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                          {tableData?.rows.length || 0} {t('dbRows')}
+                          {totalRows > 0 ? (
+                            <>
+                              {t('dbShowing')} {((currentPage - 1) * rowsPerPage) + 1}-{Math.min(currentPage * rowsPerPage, totalRows)} {t('dbOf')} {totalRows.toLocaleString()} {t('dbRows')}
+                            </>
+                          ) : (
+                            <>{tableData?.rows.length || 0} {t('dbRows')}</>
+                          )}
                         </p>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
+                      {/* Rows per page selector */}
+                      <select
+                        value={rowsPerPage}
+                        onChange={(e) => {
+                          const newLimit = Number(e.target.value);
+                          setRowsPerPage(newLimit);
+                          loadTableData(selectedTable, 1, newLimit);
+                        }}
+                        className={`px-2 py-1.5 rounded-lg text-sm ${isDark ? 'bg-navy-700 text-gray-300 border-navy-600' : 'bg-gray-100 text-gray-700 border-gray-200'} border`}
+                      >
+                        {ROWS_PER_PAGE_OPTIONS.map(opt => (
+                          <option key={opt} value={opt}>{opt} / page</option>
+                        ))}
+                      </select>
+                      
+                      {/* Load All button */}
+                      {totalRows > rowsPerPage && (
+                        <button
+                          onClick={() => loadTableData(selectedTable, 1, totalRows, true)}
+                          disabled={loadingAll}
+                          className={`px-3 py-1.5 rounded-lg text-sm flex items-center gap-2 ${isDark ? 'bg-amber-600 hover:bg-amber-700 text-white' : 'bg-amber-500 hover:bg-amber-600 text-white'} ${loadingAll ? 'opacity-50 cursor-wait' : ''}`}
+                          title={`Load all ${totalRows.toLocaleString()} rows`}
+                        >
+                          {loadingAll ? (
+                            <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></div>
+                          ) : (
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                            </svg>
+                          )}
+                          {t('dbLoadAll')}
+                        </button>
+                      )}
+                      
                       <button
-                        onClick={() => loadTableData(selectedTable)}
+                        onClick={() => loadTableData(selectedTable, currentPage)}
                         className={`px-3 py-1.5 rounded-lg text-sm flex items-center gap-2 ${isDark ? 'bg-navy-700 hover:bg-navy-600 text-gray-300' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'}`}
                       >
                         {Icons.refresh} {t('dbRefresh')}
@@ -1408,7 +1528,7 @@ const DatabaseClient: React.FC<DatabaseClientProps> = ({
                               onDoubleClick={() => openEditModal(idx)}
                             >
                               <td className={`px-4 py-2.5 border-b ${isDark ? 'border-navy-700 text-gray-500' : 'border-gray-200 text-gray-400'}`}>
-                                {idx + 1}
+                                {((currentPage - 1) * rowsPerPage) + idx + 1}
                               </td>
                               {tableData.columns.map(col => (
                                 <td key={col} className={`px-4 py-2.5 border-b max-w-xs truncate ${isDark ? 'border-navy-700 text-gray-300' : 'border-gray-200 text-gray-700'}`}>
@@ -1431,6 +1551,85 @@ const DatabaseClient: React.FC<DatabaseClientProps> = ({
                       </div>
                     )}
                   </div>
+                  
+                  {/* Pagination Footer */}
+                  {totalPages > 1 && (
+                    <div className={`px-4 py-3 border-t flex items-center justify-between ${isDark ? 'bg-navy-800/50 border-navy-700' : 'bg-white border-gray-200'}`}>
+                      <div className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                        {t('dbPage')} {currentPage} / {totalPages} • {totalRows.toLocaleString()} {t('dbRows')}
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => loadTableData(selectedTable!, 1)}
+                          disabled={currentPage === 1 || loadingData}
+                          className={`p-2 rounded ${isDark ? 'hover:bg-navy-700 disabled:opacity-30' : 'hover:bg-gray-100 disabled:opacity-30'} disabled:cursor-not-allowed`}
+                          title="First page"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
+                          </svg>
+                        </button>
+                        <button
+                          onClick={() => loadTableData(selectedTable!, currentPage - 1)}
+                          disabled={currentPage === 1 || loadingData}
+                          className={`p-2 rounded ${isDark ? 'hover:bg-navy-700 disabled:opacity-30' : 'hover:bg-gray-100 disabled:opacity-30'} disabled:cursor-not-allowed`}
+                          title="Previous page"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                          </svg>
+                        </button>
+                        <div className="flex items-center gap-1 mx-2">
+                          {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                            let pageNum: number;
+                            if (totalPages <= 5) {
+                              pageNum = i + 1;
+                            } else if (currentPage <= 3) {
+                              pageNum = i + 1;
+                            } else if (currentPage >= totalPages - 2) {
+                              pageNum = totalPages - 4 + i;
+                            } else {
+                              pageNum = currentPage - 2 + i;
+                            }
+                            return (
+                              <button
+                                key={pageNum}
+                                onClick={() => loadTableData(selectedTable!, pageNum)}
+                                disabled={loadingData}
+                                className={`w-8 h-8 rounded text-sm font-medium ${
+                                  currentPage === pageNum
+                                    ? `bg-gradient-to-r ${config.color} text-white`
+                                    : isDark ? 'hover:bg-navy-700 text-gray-300' : 'hover:bg-gray-100 text-gray-700'
+                                }`}
+                              >
+                                {pageNum}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <button
+                          onClick={() => loadTableData(selectedTable!, currentPage + 1)}
+                          disabled={currentPage === totalPages || loadingData}
+                          className={`p-2 rounded ${isDark ? 'hover:bg-navy-700 disabled:opacity-30' : 'hover:bg-gray-100 disabled:opacity-30'} disabled:cursor-not-allowed`}
+                          title="Next page"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                          </svg>
+                        </button>
+                        <button
+                          onClick={() => loadTableData(selectedTable!, totalPages)}
+                          disabled={currentPage === totalPages || loadingData}
+                          className={`p-2 rounded ${isDark ? 'hover:bg-navy-700 disabled:opacity-30' : 'hover:bg-gray-100 disabled:opacity-30'} disabled:cursor-not-allowed`}
+                          title="Last page"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </>
               ) : (
                 <div className="flex items-center justify-center h-full">

@@ -1,8 +1,9 @@
 import React, { createContext, useContext, useRef, ReactNode } from 'react';
 import { Terminal as XTerm, ITheme } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
-import { ipcRenderer } from 'electron';
 import { terminalThemes } from '../themes';
+
+const { ipcRenderer } = window.electron;
 
 interface TerminalInstance {
   xterm: XTerm;
@@ -154,13 +155,14 @@ export const TerminalProvider: React.FC<{ children: ReactNode }> = ({ children }
     });
 
     // Setup IPC listeners
-    const handleData = (_: any, connId: string, data: string) => {
+    // Note: preload strips the event parameter, so we receive (connId, data) directly
+    const handleData = (connId: string, data: string) => {
       if (connId === connectionId) {
         xterm.write(data);
       }
     };
 
-    const handleClose = (_: any, connId: string) => {
+    const handleClose = (connId: string) => {
       if (connId === connectionId) {
         const inst = terminalsRef.current.get(connectionId);
         if (inst) {

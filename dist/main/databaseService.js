@@ -34,6 +34,8 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.initDatabaseHandlers = initDatabaseHandlers;
+exports.getDatabaseConnectionCount = getDatabaseConnectionCount;
+exports.closeAllDatabaseConnections = closeAllDatabaseConnections;
 const electron_1 = require("electron");
 const mysql = __importStar(require("mysql2/promise"));
 const pg_1 = require("pg");
@@ -146,6 +148,52 @@ function initDatabaseHandlers() {
             return { success: true };
         }
         catch (error) {
+            return { success: false, error: error.message };
+        }
+    });
+    // Get database version
+    electron_1.ipcMain.handle('db:getVersion', async (_, { connectionId }) => {
+        try {
+            const conn = connections.get(connectionId);
+            if (!conn)
+                return { success: false, error: 'Not connected' };
+            let version = '';
+            switch (conn.protocol) {
+                case 'mysql':
+                    const [mysqlRows] = await conn.connection.query('SELECT VERSION() as version');
+                    version = `MySQL ${mysqlRows[0]?.version || 'unknown'}`;
+                    // Check if MariaDB
+                    if (version.toLowerCase().includes('mariadb')) {
+                        version = version.replace(/mysql/i, 'MariaDB');
+                    }
+                    break;
+                case 'postgresql':
+                    const pgResult = await conn.connection.query('SELECT version()');
+                    const pgVersion = pgResult.rows[0]?.version || '';
+                    // Extract PostgreSQL version like "PostgreSQL 15.4"
+                    const pgMatch = pgVersion.match(/PostgreSQL\s+[\d.]+/i);
+                    version = pgMatch ? pgMatch[0] : `PostgreSQL ${pgVersion.split(' ')[0]}`;
+                    break;
+                case 'mongodb':
+                    const adminDb = conn.connection.db('admin');
+                    const buildInfo = await adminDb.command({ buildInfo: 1 });
+                    version = `MongoDB ${buildInfo.version || 'unknown'}`;
+                    break;
+                case 'redis':
+                    const info = await conn.connection.info('server');
+                    const redisMatch = info.match(/redis_version:([\d.]+)/);
+                    version = `Redis ${redisMatch ? redisMatch[1] : 'unknown'}`;
+                    break;
+                case 'sqlite':
+                    version = 'SQLite 3.x (local)';
+                    break;
+                default:
+                    version = conn.protocol;
+            }
+            return { success: true, version };
+        }
+        catch (error) {
+            console.error('Get version error:', error);
             return { success: false, error: error.message };
         }
     });
@@ -478,5 +526,39 @@ function initDatabaseHandlers() {
         }
     });
     console.log('Database handlers initialized');
+}
+// Export helper to get active connection count
+function getDatabaseConnectionCount() {
+    return connections.size;
+}
+// Export helper to close all connections
+async function closeAllDatabaseConnections() {
+    console.log(`[Database] Closing all ${connections.size} connections...`);
+    for (const [connectionId, conn] of connections) {
+        try {
+            switch (conn.protocol) {
+                case 'mysql':
+                    await conn.connection.end();
+                    break;
+                case 'postgresql':
+                    await conn.connection.end();
+                    break;
+                case 'mongodb':
+                    await conn.connection.close();
+                    break;
+                case 'redis':
+                    await conn.connection.quit();
+                    break;
+                case 'sqlite':
+                    conn.connection.close();
+                    break;
+            }
+        }
+        catch (e) {
+            console.log(`[Database] Error closing ${connectionId}:`, e);
+        }
+    }
+    connections.clear();
+    console.log('[Database] All connections closed');
 }
 //# sourceMappingURL=databaseService.js.map

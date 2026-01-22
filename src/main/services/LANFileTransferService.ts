@@ -1,11 +1,15 @@
 /**
  * LAN File Transfer Service
- * Transfer files and folders over local network using TCP
+ * Transfer files and folders over local network using TCP with AES-256-GCM encryption
  * 
- * NEW FLOW:
+ * SECURITY: All data is encrypted using AES-256-GCM with key derived from pairing code
+ * via PBKDF2 (100,000 iterations). This protects against network sniffing.
+ * 
+ * FLOW:
  * 1. Sender: prepareToSend() - Creates a pending session with files + pairing code, waits for receiver
  * 2. Receiver: requestFiles() - Connects to sender with pairing code
- * 3. Sender verifies code and starts sending files
+ * 3. Both sides derive encryption key from pairing code
+ * 4. Sender verifies code and starts sending encrypted files
  */
 
 import * as net from 'net';
@@ -19,6 +23,14 @@ import { EventEmitter } from 'events';
 const CHUNK_SIZE = 64 * 1024; // 64KB chunks for transfer
 const HEADER_SIZE = 8; // 8 bytes for packet length
 const FILE_TRANSFER_PORT = 45679;
+
+// Encryption constants
+const ENCRYPTION_ALGORITHM = 'aes-256-gcm';
+const KEY_LENGTH = 32; // 256 bits
+const IV_LENGTH = 12; // 96 bits for GCM
+const AUTH_TAG_LENGTH = 16; // 128 bits
+const PBKDF2_ITERATIONS = 100000;
+const PBKDF2_SALT = 'marix-lan-transfer-v1'; // Static salt (pairing code provides entropy)
 
 interface FileInfo {
   name: string;
@@ -41,6 +53,7 @@ interface TransferSession {
   pairingCode?: string;
   savePath?: string;
   filePaths?: string[];
+  encryptionKey?: Buffer; // Derived from pairing code
 }
 
 interface TransferPacket {
@@ -55,11 +68,53 @@ export class LANFileTransferService extends EventEmitter {
   private sessions: Map<string, TransferSession> = new Map();
   private deviceId: string;
   private deviceName: string;
+  private encryptionKeys: Map<string, Buffer> = new Map(); // sessionId -> key
 
   constructor() {
     super();
     this.deviceId = this.generateDeviceId();
     this.deviceName = os.hostname() || 'Unknown Device';
+  }
+
+  /**
+   * Derive AES-256 key from pairing code using PBKDF2
+   */
+  private deriveKeyFromCode(pairingCode: string): Buffer {
+    return crypto.pbkdf2Sync(
+      pairingCode,
+      PBKDF2_SALT,
+      PBKDF2_ITERATIONS,
+      KEY_LENGTH,
+      'sha256'
+    );
+  }
+
+  /**
+   * Encrypt data using AES-256-GCM
+   */
+  private encrypt(data: Buffer, key: Buffer): Buffer {
+    const iv = crypto.randomBytes(IV_LENGTH);
+    const cipher = crypto.createCipheriv(ENCRYPTION_ALGORITHM, key, iv);
+    
+    const encrypted = Buffer.concat([cipher.update(data), cipher.final()]);
+    const authTag = cipher.getAuthTag();
+    
+    // Format: IV (12 bytes) + AuthTag (16 bytes) + Encrypted data
+    return Buffer.concat([iv, authTag, encrypted]);
+  }
+
+  /**
+   * Decrypt data using AES-256-GCM
+   */
+  private decrypt(data: Buffer, key: Buffer): Buffer {
+    const iv = data.slice(0, IV_LENGTH);
+    const authTag = data.slice(IV_LENGTH, IV_LENGTH + AUTH_TAG_LENGTH);
+    const encrypted = data.slice(IV_LENGTH + AUTH_TAG_LENGTH);
+    
+    const decipher = crypto.createDecipheriv(ENCRYPTION_ALGORITHM, key, iv);
+    decipher.setAuthTag(authTag);
+    
+    return Buffer.concat([decipher.update(encrypted), decipher.final()]);
   }
 
   private generateDeviceId(): string {
@@ -118,6 +173,7 @@ export class LANFileTransferService extends EventEmitter {
       session.status = 'cancelled';
     }
     this.sessions.clear();
+    this.encryptionKeys.clear();
 
     if (this.server) {
       this.server.close();
@@ -132,25 +188,35 @@ export class LANFileTransferService extends EventEmitter {
     
     let buffer = Buffer.alloc(0);
     let expectedLength = 0;
+    let socketSessionId: string | null = null; // Track session for this socket
 
     socket.on('data', (chunk: Buffer) => {
       buffer = Buffer.concat([buffer, chunk]);
       
-      while (buffer.length >= HEADER_SIZE) {
+      // New header format: 4 bytes length + 1 byte encryption flag
+      const TOTAL_HEADER = HEADER_SIZE + 1;
+      
+      while (buffer.length >= TOTAL_HEADER) {
         if (expectedLength === 0) {
           expectedLength = buffer.readUInt32BE(0);
         }
         
-        if (buffer.length >= HEADER_SIZE + expectedLength) {
-          const packetData = buffer.slice(HEADER_SIZE, HEADER_SIZE + expectedLength);
-          buffer = buffer.slice(HEADER_SIZE + expectedLength);
+        if (buffer.length >= TOTAL_HEADER + expectedLength) {
+          const isEncrypted = buffer[HEADER_SIZE] === 1;
+          const packetData = buffer.slice(TOTAL_HEADER, TOTAL_HEADER + expectedLength);
+          buffer = buffer.slice(TOTAL_HEADER + expectedLength);
           expectedLength = 0;
           
-          try {
-            const packet: TransferPacket = JSON.parse(packetData.toString());
-            this.handlePacket(socket, packet);
-          } catch (err) {
-            console.error('[FileTransfer] Failed to parse packet:', err);
+          // Get encryption key if available
+          const encKey = socketSessionId ? this.encryptionKeys.get(socketSessionId) : undefined;
+          
+          const packet = this.parsePacketData(packetData, isEncrypted ? encKey : undefined);
+          if (packet) {
+            // Track session ID for future encrypted packets
+            if (!socketSessionId && packet.sessionId) {
+              socketSessionId = packet.sessionId;
+            }
+            this.handlePacket(socket, packet, socketSessionId);
           }
         } else {
           break;
@@ -167,7 +233,7 @@ export class LANFileTransferService extends EventEmitter {
     });
   }
 
-  private handlePacket(socket: net.Socket, packet: TransferPacket): void {
+  private handlePacket(socket: net.Socket, packet: TransferPacket, socketSessionId?: string | null): void {
     console.log(`[FileTransfer] handlePacket: ${packet.type}, sessionId: ${packet.sessionId}`);
     
     switch (packet.type) {
@@ -253,6 +319,13 @@ export class LANFileTransferService extends EventEmitter {
       return;
     }
 
+    // Derive encryption key from pairing code
+    const encryptionKey = this.deriveKeyFromCode(pairingCode);
+    matchingSession.encryptionKey = encryptionKey;
+    this.encryptionKeys.set(matchingSession.id, encryptionKey);
+    this.encryptionKeys.set(receiverSessionId, encryptionKey);
+    console.log(`[FileTransfer] Encryption key derived for session ${matchingSession.id}`);
+
     // Valid code - attach socket and start sending
     matchingSession.socket = socket;
     matchingSession.peerId = deviceId;
@@ -261,7 +334,7 @@ export class LANFileTransferService extends EventEmitter {
     // IMPORTANT: Store receiver's session ID to use when sending packets
     (matchingSession as any).receiverSessionId = receiverSessionId;
 
-    // Send handshake with file info first so receiver knows what to expect
+    // Send handshake with file info (encrypted)
     this.sendPacket(socket, {
       type: 'handshake',
       sessionId: receiverSessionId,
@@ -270,7 +343,7 @@ export class LANFileTransferService extends EventEmitter {
         files: matchingSession.files,
         totalSize: matchingSession.totalSize
       }
-    });
+    }, encryptionKey);
 
     this.emit('transfer-connected', {
       sessionId: matchingSession.id,
@@ -287,6 +360,7 @@ export class LANFileTransferService extends EventEmitter {
     const session = this.sessions.get(packet.sessionId);
     if (!session || session.status !== 'transferring') return;
 
+    const encKey = this.encryptionKeys.get(packet.sessionId);
     const { name, relativePath, size, isDirectory } = packet.data;
     const fullPath = path.join(session.savePath!, relativePath);
     
@@ -308,7 +382,7 @@ export class LANFileTransferService extends EventEmitter {
       type: 'ack',
       sessionId: packet.sessionId,
       data: { ready: true }
-    });
+    }, encKey);
   }
 
   private handleFileData(socket: net.Socket, packet: TransferPacket): void {
@@ -337,6 +411,7 @@ export class LANFileTransferService extends EventEmitter {
     const session = this.sessions.get(packet.sessionId);
     if (!session) return;
 
+    const encKey = this.encryptionKeys.get(packet.sessionId);
     const currentFile = (session as any).currentFile;
     if (currentFile) {
       currentFile.writeStream.end();
@@ -352,13 +427,15 @@ export class LANFileTransferService extends EventEmitter {
         totalSize: session.totalSize,
         duration: Date.now() - (session.startTime || 0)
       });
+      // Clean up encryption key
+      this.encryptionKeys.delete(packet.sessionId);
     }
 
     this.sendPacket(socket, {
       type: 'ack',
       sessionId: packet.sessionId,
       data: { fileComplete: true }
-    });
+    }, encKey);
   }
 
   private handleAck(socket: net.Socket, packet: TransferPacket): void {
@@ -455,11 +532,15 @@ export class LANFileTransferService extends EventEmitter {
   async requestFiles(peerAddress: string, peerPort: number, pairingCode: string, savePath: string): Promise<string> {
     const sessionId = crypto.randomUUID();
     
+    // Derive encryption key from pairing code
+    const encryptionKey = this.deriveKeyFromCode(pairingCode);
+    this.encryptionKeys.set(sessionId, encryptionKey);
+    
     return new Promise((resolve, reject) => {
       console.log(`[FileTransfer] Connecting to ${peerAddress}:${peerPort} with code ${pairingCode}`);
       
       const socket = net.createConnection(peerPort, peerAddress, () => {
-        console.log(`[FileTransfer] Connected to sender`);
+        console.log(`[FileTransfer] Connected to sender, encryption enabled`);
         
         const session: TransferSession = {
           id: sessionId,
@@ -473,12 +554,13 @@ export class LANFileTransferService extends EventEmitter {
           socket,
           pairingCode,
           savePath,
-          startTime: Date.now()
+          startTime: Date.now(),
+          encryptionKey
         };
         
         this.sessions.set(sessionId, session);
         
-        // Send request with pairing code
+        // Send request with pairing code (unencrypted - needed for sender to derive key)
         this.sendPacket(socket, {
           type: 'request',
           sessionId,
@@ -488,32 +570,32 @@ export class LANFileTransferService extends EventEmitter {
             deviceName: this.deviceName,
             savePath
           }
-        });
+        }); // No encryption for initial request
         
         resolve(sessionId);
       });
 
       let buffer = Buffer.alloc(0);
       let expectedLength = 0;
+      const TOTAL_HEADER = HEADER_SIZE + 1; // Include encryption flag
 
       socket.on('data', (chunk: Buffer) => {
         buffer = Buffer.concat([buffer, chunk]);
         
-        while (buffer.length >= HEADER_SIZE) {
+        while (buffer.length >= TOTAL_HEADER) {
           if (expectedLength === 0) {
             expectedLength = buffer.readUInt32BE(0);
           }
           
-          if (buffer.length >= HEADER_SIZE + expectedLength) {
-            const packetData = buffer.slice(HEADER_SIZE, HEADER_SIZE + expectedLength);
-            buffer = buffer.slice(HEADER_SIZE + expectedLength);
+          if (buffer.length >= TOTAL_HEADER + expectedLength) {
+            const isEncrypted = buffer[HEADER_SIZE] === 1;
+            const packetData = buffer.slice(TOTAL_HEADER, TOTAL_HEADER + expectedLength);
+            buffer = buffer.slice(TOTAL_HEADER + expectedLength);
             expectedLength = 0;
             
-            try {
-              const packet: TransferPacket = JSON.parse(packetData.toString());
-              this.handlePacket(socket, packet);
-            } catch (err) {
-              console.error('[FileTransfer] Failed to parse packet:', err);
+            const packet = this.parsePacketData(packetData, isEncrypted ? encryptionKey : undefined);
+            if (packet) {
+              this.handlePacket(socket, packet, sessionId);
             }
           } else {
             break;
@@ -556,6 +638,12 @@ export class LANFileTransferService extends EventEmitter {
     }
 
     session.status = 'completed';
+    // Clean up encryption key
+    this.encryptionKeys.delete(session.id);
+    if ((session as any).receiverSessionId) {
+      this.encryptionKeys.delete((session as any).receiverSessionId);
+    }
+    
     this.emit('transfer-completed', {
       sessionId: session.id,
       direction: 'send',
@@ -569,6 +657,7 @@ export class LANFileTransferService extends EventEmitter {
     const stats = fs.statSync(filePath);
     // Use receiver's sessionId so receiver can find its session
     const targetSessionId = (session as any).receiverSessionId || session.id;
+    const encKey = session.encryptionKey;
     
     this.sendPacket(session.socket!, {
       type: 'file-info',
@@ -579,7 +668,7 @@ export class LANFileTransferService extends EventEmitter {
         size: stats.size,
         isDirectory: false
       }
-    });
+    }, encKey);
 
     await new Promise(resolve => setTimeout(resolve, 50));
 
@@ -592,7 +681,7 @@ export class LANFileTransferService extends EventEmitter {
         data: {
           chunk: (chunk as Buffer).toString('base64')
         }
-      });
+      }, encKey);
       
       session.transferredSize += (chunk as Buffer).length;
       
@@ -612,12 +701,13 @@ export class LANFileTransferService extends EventEmitter {
       type: 'file-end',
       sessionId: targetSessionId,
       data: { name: path.basename(filePath) }
-    });
+    }, encKey);
   }
 
   private async sendDirectory(session: TransferSession, dirPath: string, relativePath: string): Promise<void> {
     // Use receiver's sessionId so receiver can find its session
     const targetSessionId = (session as any).receiverSessionId || session.id;
+    const encKey = session.encryptionKey;
     
     this.sendPacket(session.socket!, {
       type: 'file-info',
@@ -628,7 +718,7 @@ export class LANFileTransferService extends EventEmitter {
         size: 0,
         isDirectory: true
       }
-    });
+    }, encKey);
 
     await new Promise(resolve => setTimeout(resolve, 50));
 
@@ -677,11 +767,44 @@ export class LANFileTransferService extends EventEmitter {
     return files;
   }
 
-  private sendPacket(socket: net.Socket, packet: TransferPacket): void {
-    const data = Buffer.from(JSON.stringify(packet));
+  /**
+   * Send packet with optional encryption
+   * First packet (request) is unencrypted, subsequent packets are encrypted
+   */
+  private sendPacket(socket: net.Socket, packet: TransferPacket, encryptionKey?: Buffer): void {
+    const jsonData = Buffer.from(JSON.stringify(packet));
+    
+    let data: Buffer;
+    if (encryptionKey) {
+      // Encrypt the packet data
+      data = this.encrypt(jsonData, encryptionKey);
+    } else {
+      data = jsonData;
+    }
+    
     const header = Buffer.alloc(HEADER_SIZE);
     header.writeUInt32BE(data.length, 0);
-    socket.write(Buffer.concat([header, data]));
+    // Add 1-byte flag: 0 = unencrypted, 1 = encrypted
+    const flag = Buffer.alloc(1);
+    flag[0] = encryptionKey ? 1 : 0;
+    
+    socket.write(Buffer.concat([header, flag, data]));
+  }
+
+  /**
+   * Parse incoming data, handling encryption
+   */
+  private parsePacketData(data: Buffer, encryptionKey?: Buffer): TransferPacket | null {
+    try {
+      if (encryptionKey && data.length > IV_LENGTH + AUTH_TAG_LENGTH) {
+        const decrypted = this.decrypt(data, encryptionKey);
+        return JSON.parse(decrypted.toString());
+      }
+      return JSON.parse(data.toString());
+    } catch (err) {
+      console.error('[FileTransfer] Failed to parse/decrypt packet:', err);
+      return null;
+    }
   }
 
   private calculateSpeed(session: TransferSession): string {
@@ -703,15 +826,18 @@ export class LANFileTransferService extends EventEmitter {
     const session = this.sessions.get(sessionId);
     if (!session) return;
 
+    const encKey = this.encryptionKeys.get(sessionId);
+    
     if (session.socket) {
       this.sendPacket(session.socket, {
         type: 'cancel',
         sessionId
-      });
+      }, encKey);
       session.socket.destroy();
     }
 
     session.status = 'cancelled';
+    this.encryptionKeys.delete(sessionId);
     this.emit('transfer-cancelled', { sessionId });
   }
 

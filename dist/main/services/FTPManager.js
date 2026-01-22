@@ -206,6 +206,22 @@ class FTPManager {
         }
         return mode;
     }
+    getActiveCount() {
+        return this.connections.size;
+    }
+    closeAll() {
+        console.log(`[FTPManager] Closing all ${this.connections.size} connections...`);
+        for (const [id, conn] of this.connections) {
+            try {
+                conn.client.close();
+            }
+            catch (e) {
+                console.log(`[FTPManager] Error closing ${id}:`, e);
+            }
+        }
+        this.connections.clear();
+        console.log('[FTPManager] All connections closed');
+    }
 }
 exports.FTPManager = FTPManager;
 //# sourceMappingURL=FTPManager.js.map

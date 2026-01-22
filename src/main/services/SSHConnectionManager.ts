@@ -146,7 +146,11 @@ export class SSHConnectionManager {
   async disconnect(connectionId: string): Promise<void> {
     const shell = this.shells.get(connectionId);
     if (shell) {
-      shell.end();
+      try {
+        shell.end();
+      } catch {
+        // Ignore errors during close
+      }
       this.shells.delete(connectionId);
     }
     
@@ -158,7 +162,12 @@ export class SSHConnectionManager {
     
     const connData = this.connections.get(connectionId);
     if (connData) {
-      connData.client.end();
+      try {
+        // Use destroy() for faster close, end() waits for graceful shutdown
+        connData.client.destroy();
+      } catch {
+        // Ignore errors during close
+      }
       this.connections.delete(connectionId);
       this.connectionConfigs.delete(connectionId);
     }
@@ -394,6 +403,13 @@ export class SSHConnectionManager {
 
   isConnected(connectionId: string): boolean {
     return this.connections.has(connectionId);
+  }
+
+  /**
+   * Get the number of active connections
+   */
+  getActiveCount(): number {
+    return this.connections.size;
   }
 
   /**

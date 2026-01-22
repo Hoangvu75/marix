@@ -560,6 +560,12 @@ class RDPManager {
         return conn?.connected ?? false;
     }
     /**
+     * Get the number of active connections
+     */
+    getActiveCount() {
+        return this.connections.size;
+    }
+    /**
      * Close all connections - called when app is closing
      */
     closeAll() {

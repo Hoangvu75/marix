@@ -123,7 +123,12 @@ class SSHConnectionManager {
     async disconnect(connectionId) {
         const shell = this.shells.get(connectionId);
         if (shell) {
-            shell.end();
+            try {
+                shell.end();
+            }
+            catch {
+                // Ignore errors during close
+            }
             this.shells.delete(connectionId);
         }
         const emitter = this.shellEmitters.get(connectionId);
@@ -133,7 +138,13 @@ class SSHConnectionManager {
         }
         const connData = this.connections.get(connectionId);
         if (connData) {
-            connData.client.end();
+            try {
+                // Use destroy() for faster close, end() waits for graceful shutdown
+                connData.client.destroy();
+            }
+            catch {
+                // Ignore errors during close
+            }
             this.connections.delete(connectionId);
             this.connectionConfigs.delete(connectionId);
         }
@@ -329,6 +340,12 @@ class SSHConnectionManager {
     }
     isConnected(connectionId) {
         return this.connections.has(connectionId);
+    }
+    /**
+     * Get the number of active connections
+     */
+    getActiveCount() {
+        return this.connections.size;
     }
     /**
      * Close all connections - called when app is closing

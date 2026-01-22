@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { ipcRenderer } from 'electron';
 import FileEditor from './FileEditor';
+
+const { ipcRenderer } = window.electron;
 
 interface FileInfo {
   name: string;

@@ -653,6 +653,13 @@ export class RDPManager {
   }
 
   /**
+   * Get the number of active connections
+   */
+  getActiveCount(): number {
+    return this.connections.size;
+  }
+
+  /**
    * Close all connections - called when app is closing
    */
   closeAll(): void {

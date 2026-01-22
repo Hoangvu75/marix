@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { ipcRenderer } from 'electron';
 import { version as APP_VERSION } from '../../package.json';
+
+const { ipcRenderer } = window.electron;
 import ServerList from './components/ServerList';
 import XTermTerminal from './components/XTermTerminal';
 import DualPaneSFTP from './components/DualPaneSFTP';
@@ -24,6 +25,19 @@ import PortForwardingPage from './components/PortForwardingPage';
 import { BackupModal } from './components/BackupModal';
 import { useTerminalContext } from './contexts/TerminalContext';
 import { useLanguage } from './contexts/LanguageContext';
+
+// Semver comparison helper: returns true if v1 > v2
+const isNewerVersion = (v1: string, v2: string): boolean => {
+  const parts1 = v1.replace(/^v/, '').split('.').map(n => parseInt(n, 10) || 0);
+  const parts2 = v2.replace(/^v/, '').split('.').map(n => parseInt(n, 10) || 0);
+  for (let i = 0; i < Math.max(parts1.length, parts2.length); i++) {
+    const p1 = parts1[i] || 0;
+    const p2 = parts2[i] || 0;
+    if (p1 > p2) return true;
+    if (p1 < p2) return false;
+  }
+  return false;
+};
 
 export interface Server {
   id: string;
@@ -51,6 +65,7 @@ export interface Server {
   sslKey?: string;  // SSL client key
   mongoUri?: string;  // MongoDB connection URI (alternative to host/port)
   sqliteFile?: string;  // Path to SQLite file (for remote SQLite via SSH)
+  notes?: string;  // User notes for this server (sticky note feature)
 }
 
 export interface Session {
@@ -68,6 +83,13 @@ export interface Session {
     ip: string;
     provider: string;
   };
+  dbInfo?: {
+    version: string;
+    ip: string;
+    provider: string;
+  };
+  wssStatus?: 'connecting' | 'connected' | 'disconnected' | 'error';
+  wssError?: string;
 }
 
 const App: React.FC = () => {
@@ -216,6 +238,10 @@ const App: React.FC = () => {
   // Connecting state (for UI feedback)
   const [connectingServerId, setConnectingServerId] = useState<string | null>(null);
   
+  // Tab drag state
+  const [draggedTabId, setDraggedTabId] = useState<string | null>(null);
+  const [dragOverTabId, setDragOverTabId] = useState<string | null>(null);
+  
   // RDP connecting overlay state
   const [rdpConnecting, setRdpConnecting] = useState<{ server: Server; status: 'connecting' | 'error'; error?: string } | null>(null);
   
@@ -223,6 +249,12 @@ const App: React.FC = () => {
   const [showRDPDepsInstaller, setShowRDPDepsInstaller] = useState(false);
   const [pendingRDPServer, setPendingRDPServer] = useState<Server | null>(null);
   const [rdpInstallSessionId, setRdpInstallSessionId] = useState<string | null>(null);
+  
+  // Sticky Note state
+  const [showNotePopup, setShowNotePopup] = useState(false);
+  const [noteContent, setNoteContent] = useState('');
+  const [noteSaving, setNoteSaving] = useState(false);
+  const noteDebounceRef = React.useRef<NodeJS.Timeout | null>(null);
   
   // GitHub OAuth state
   const [githubUser, setGithubUser] = useState<{ login: string; avatar_url: string; name: string } | null>(null);
@@ -312,6 +344,23 @@ const App: React.FC = () => {
       document.body.classList.remove('light-theme');
     }
   }, [appTheme]);
+
+  // Window close confirmation when there are active sessions
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      // Only show warning if there are active sessions
+      if (sessions.length > 0) {
+        // Standard way to show confirmation dialog
+        e.preventDefault();
+        // Chrome requires returnValue to be set
+        e.returnValue = '';
+        return '';
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [sessions.length]);
 
   // Global keyboard shortcuts
   useEffect(() => {
@@ -469,6 +518,34 @@ const App: React.FC = () => {
       ipcRenderer.removeListener('menu:send-files', handleSendFiles);
     };
   }, []);
+
+  // Listen for close dialog translation request from main process
+  // Use ref to store current t function to avoid stale closure issues
+  const tRef = React.useRef(t);
+  tRef.current = t;
+  
+  useEffect(() => {
+    const handleCloseDialogTranslations = (data: { requestId: string; count: number; details: string }) => {
+      console.log('[App] Close dialog: received translation request', data.requestId);
+      const currentT = tRef.current;
+      const translations = {
+        title: currentT('activeConnections'),
+        message: currentT('youHaveActiveConnections').replace('{{count}}', String(data.count)),
+        detail: `${data.details}\n\n${currentT('closeConnectionsConfirm')}`,
+        closeButton: currentT('closeAllAndExit'),
+        cancelButton: currentT('cancel')
+      };
+      console.log('[App] Close dialog: sending translations', translations.title);
+      (window as any).electron.ipcRenderer.send('app:close-dialog-translations', {
+        requestId: data.requestId,
+        translations
+      });
+    };
+    ipcRenderer.on('app:request-close-dialog-translations', handleCloseDialogTranslations);
+    return () => {
+      ipcRenderer.removeListener('app:request-close-dialog-translations', handleCloseDialogTranslations);
+    };
+  }, []); // Empty deps - handler uses ref for current t
 
   // Check GitLab/Box/Google Drive connection when backup modal opens
   useEffect(() => {
@@ -1484,7 +1561,10 @@ const App: React.FC = () => {
           const result = await ipcRenderer.invoke('app:checkForUpdates');
           
           if (result.success && result.latestVersion) {
-            const hasUpdate = result.latestVersion !== APP_VERSION && result.latestVersion > APP_VERSION;
+            // Use semver comparison instead of string comparison
+            const hasUpdate = isNewerVersion(result.latestVersion, APP_VERSION);
+            
+            console.log('[App] Version check:', result.latestVersion, 'vs', APP_VERSION, '-> hasUpdate:', hasUpdate);
             
             if (hasUpdate) {
               console.log('[App] New version available:', result.latestVersion);
@@ -1783,6 +1863,7 @@ const App: React.FC = () => {
 
       // Detect local OS info
       const osInfo = await ipcRenderer.invoke('local:getOsInfo');
+      const systemInfo = await ipcRenderer.invoke('system:getUserInfo');
 
       const sessionId = `local-${Date.now()}`;
       const localSession: Session = {
@@ -1792,7 +1873,7 @@ const App: React.FC = () => {
           name: forRDPInstall ? 'Installing RDP Dependencies...' : 'Local Terminal',
           host: 'localhost',
           port: 0,
-          username: require('os').userInfo().username,
+          username: systemInfo?.username || 'user',
           protocol: 'ssh',
         },
         connectionId: result.connectionId,
@@ -1904,6 +1985,15 @@ const App: React.FC = () => {
 
   // RDP connection function (used by handleConnect and after deps install)
   const connectToRDP = async (server: Server) => {
+    // Check if already connected to this server
+    const existingSession = sessions.find(s => s.server.id === server.id);
+    if (existingSession) {
+      setActiveSessionId(existingSession.id);
+      setSidebarOpen(false);
+      setConnectingServerId(null);
+      return;
+    }
+
     const connectionId = `rdp-${server.username}@${server.host}:${server.port}`;
     
     // Show connecting overlay
@@ -2014,6 +2104,12 @@ const App: React.FC = () => {
         return;
       }
 
+      // Check if already connecting to this server (prevent double-click race condition)
+      if (connectingServerId === server.id) {
+        console.log('[App] Already connecting to server:', server.name);
+        return;
+      }
+
       const protocol = server.protocol || 'ssh';
 
       // Validate inputs (WSS doesn't need host/username)
@@ -2111,25 +2207,22 @@ const App: React.FC = () => {
           url: wssUrl,
         });
 
-        if (!result.success) {
-          setConnectingServerId(null);
-          alert('WebSocket Connection failed:\n\n' + (result.error || 'Unknown error'));
-          return;
-        }
-
+        // Always open panel - show error state if connection failed
         const wssSession: Session = {
           id: connectionId,
           server: { ...server, wssUrl },
           connectionId,
           type: 'wss',
           theme: currentTheme,
+          wssStatus: result.success ? 'connected' : 'error',
+          wssError: result.success ? undefined : (result.error || 'Connection failed'),
         };
 
         setSessions([...sessions, wssSession]);
         setActiveSessionId(wssSession.id);
         setSidebarOpen(false);  // Auto-hide sidebar
         setConnectingServerId(null);
-        console.log('[App] WSS Session created:', wssSession.id);
+        console.log('[App] WSS Session created:', wssSession.id, 'status:', result.success ? 'connected' : 'error');
         return;
       }
 
@@ -2179,6 +2272,12 @@ const App: React.FC = () => {
         return;
       }
 
+      // Check if already connecting to this server (prevent double-click race condition)
+      if (connectingServerId === server.id) {
+        console.log('[App] Already connecting to server:', server.name);
+        return;
+      }
+
       // Only SSH supports direct SFTP
       const protocol = server.protocol || 'ssh';
       if (protocol !== 'ssh') {
@@ -2212,6 +2311,18 @@ const App: React.FC = () => {
   // Perform SSH connection and open SFTP directly
   const performSSHConnectSFTP = async (server: Server) => {
     try {
+      // Double-check for existing session (in case of race condition)
+      const existingSession = sessions.find(s => s.server.id === server.id);
+      if (existingSession) {
+        setActiveSessionId(existingSession.id);
+        setSessions(sessions.map(s => 
+          s.id === existingSession.id ? { ...s, type: 'sftp' } : s
+        ));
+        setSidebarOpen(false);
+        setConnectingServerId(null);
+        return;
+      }
+
       console.log('[App] Performing SSH connection (SFTP mode) to:', server.host);
       
       const result = await ipcRenderer.invoke('ssh:connect', {
@@ -2265,6 +2376,15 @@ const App: React.FC = () => {
 
   const performSSHConnect = async (server: Server) => {
     try {
+      // Double-check for existing session (in case of race condition)
+      const existingSession = sessions.find(s => s.server.id === server.id);
+      if (existingSession) {
+        setActiveSessionId(existingSession.id);
+        setSidebarOpen(false);
+        setConnectingServerId(null);
+        return;
+      }
+
       console.log('[App] Performing SSH connection to:', server.host);
       
       // SSH connection
@@ -2472,25 +2592,33 @@ const App: React.FC = () => {
     }
   };
 
-  const handleCloseSession = async (id: string) => {
+  const handleCloseSession = async (id: string, skipConfirm = false) => {
     const session = sessions.find(s => s.id === id);
-    if (session) {
-      const protocol = session.server.protocol || 'ssh';
-      
-      if (protocol === 'ftp' || protocol === 'ftps') {
-        // Disconnect FTP
-        await ipcRenderer.invoke('ftp:disconnect', session.connectionId);
-      } else if (protocol === 'wss') {
-        // Disconnect WebSocket - no need to destroy terminal
-        await ipcRenderer.invoke('wss:disconnect', session.connectionId);
-      } else if (['mysql', 'postgresql', 'mongodb', 'redis', 'sqlite'].includes(protocol)) {
-        // Disconnect database - handled by DatabaseClient component
-        await ipcRenderer.invoke('db:disconnect', session.connectionId);
-      } else {
-        // SSH/RDP - Destroy terminal instance
-        destroyTerminal(session.connectionId);
-        await ipcRenderer.invoke('ssh:disconnect', session.connectionId);
-      }
+    if (!session) return;
+    
+    // Ask for confirmation before closing (unless skipped)
+    if (!skipConfirm) {
+      const confirmed = window.confirm(
+        t('confirmCloseSession') || `Close connection to "${session.server.name}"?`
+      );
+      if (!confirmed) return;
+    }
+    
+    const protocol = session.server.protocol || 'ssh';
+    
+    if (protocol === 'ftp' || protocol === 'ftps') {
+      // Disconnect FTP
+      await ipcRenderer.invoke('ftp:disconnect', session.connectionId);
+    } else if (protocol === 'wss') {
+      // Disconnect WebSocket - no need to destroy terminal
+      await ipcRenderer.invoke('wss:disconnect', session.connectionId);
+    } else if (['mysql', 'postgresql', 'mongodb', 'redis', 'sqlite'].includes(protocol)) {
+      // Disconnect database - handled by DatabaseClient component
+      await ipcRenderer.invoke('db:disconnect', session.connectionId);
+    } else {
+      // SSH/RDP - Destroy terminal instance
+      destroyTerminal(session.connectionId);
+      await ipcRenderer.invoke('ssh:disconnect', session.connectionId);
     }
     
     const newSessions = sessions.filter(s => s.id !== id);
@@ -2619,7 +2747,7 @@ const App: React.FC = () => {
           </div>
         </div>
         
-        {/* Tabs - not draggable */}
+        {/* Tabs - not draggable for window, but draggable for reordering */}
         <div className="flex items-center h-full overflow-x-auto" style={{ WebkitAppRegion: 'no-drag' } as any}>
           {sessions.map(session => {
             const protocol = session.server.protocol || 'ssh';
@@ -2641,8 +2769,46 @@ const App: React.FC = () => {
             return (
               <div
                 key={session.id}
+                draggable
+                onDragStart={(e) => {
+                  setDraggedTabId(session.id);
+                  e.dataTransfer.effectAllowed = 'move';
+                  e.dataTransfer.setData('text/plain', session.id);
+                  setTimeout(() => (e.target as HTMLElement).classList.add('opacity-50'), 0);
+                }}
+                onDragEnd={(e) => {
+                  setDraggedTabId(null);
+                  setDragOverTabId(null);
+                  (e.target as HTMLElement).classList.remove('opacity-50');
+                }}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = 'move';
+                  if (draggedTabId && draggedTabId !== session.id) {
+                    setDragOverTabId(session.id);
+                  }
+                }}
+                onDragLeave={() => setDragOverTabId(null)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  if (!draggedTabId || draggedTabId === session.id) {
+                    setDragOverTabId(null);
+                    return;
+                  }
+                  const newSessions = [...sessions];
+                  const draggedIndex = newSessions.findIndex(s => s.id === draggedTabId);
+                  const targetIndex = newSessions.findIndex(s => s.id === session.id);
+                  const [dragged] = newSessions.splice(draggedIndex, 1);
+                  newSessions.splice(targetIndex, 0, dragged);
+                  setSessions(newSessions);
+                  setDragOverTabId(null);
+                }}
                 onClick={() => setActiveSessionId(session.id)}
-                className={`group flex items-center gap-2 px-3 h-full border-r border-navy-700 cursor-pointer transition text-xs ${
+                className={`group flex items-center gap-2 px-3 h-full border-r cursor-pointer transition text-xs ${
+                  dragOverTabId === session.id
+                    ? 'border-teal-400 border-l-2 bg-teal-500/10'
+                    : 'border-navy-700'
+                } ${
                   session.id === activeSessionId
                     ? 'bg-navy-900 text-white'
                     : 'text-gray-400 hover:text-white hover:bg-navy-700'
@@ -3044,6 +3210,18 @@ const App: React.FC = () => {
                   }}
                   selectedServerIds={selectedServerIdsForShare}
                   onSelectionChange={setSelectedServerIdsForShare}
+                  onReorder={async (reorderedServers) => {
+                    // Update local state immediately
+                    setServers(reorderedServers);
+                    // Persist to storage
+                    try {
+                      await ipcRenderer.invoke('servers:reorder', reorderedServers);
+                    } catch (err) {
+                      console.error('Failed to save server order:', err);
+                    }
+                  }}
+                  onAddNew={() => { setEditingServer(null); setShowModal(true); }}
+                  onQuickConnect={() => setQuickConnectOpen(true)}
                 />
               </div>
             </div>
@@ -4429,7 +4607,8 @@ const App: React.FC = () => {
                         try {
                           const result = await ipcRenderer.invoke('app:checkForUpdates');
                           if (result.success) {
-                            const hasUpdate = result.latestVersion && result.latestVersion !== APP_VERSION && result.latestVersion > APP_VERSION;
+                            // Use semver comparison instead of string comparison
+                            const hasUpdate = result.latestVersion && isNewerVersion(result.latestVersion, APP_VERSION);
                             setUpdateInfo({
                               checking: false,
                               latestVersion: result.latestVersion,
@@ -4438,6 +4617,8 @@ const App: React.FC = () => {
                               releaseNotes: result.releaseNotes,
                               hasUpdate
                             });
+                            // Update cache
+                            localStorage.setItem('last_update_check', Date.now().toString());
                           } else {
                             setUpdateInfo({ checking: false, error: result.error });
                           }
@@ -4742,9 +4923,11 @@ const App: React.FC = () => {
                   serverName={session.server.name || session.server.host}
                   url={session.server.wssUrl || `wss://${session.server.host}:${session.server.port}/`}
                   theme={currentTheme}
+                  initialStatus={(session as any).wssStatus || 'connected'}
+                  initialError={(session as any).wssError}
                   onConnect={() => console.log('[App] WSS connected:', session.connectionId)}
                   onClose={() => handleCloseSession(session.id)}
-                  onError={(err) => alert('WSS Error: ' + err)}
+                  onError={(err) => console.log('[App] WSS Error:', err)}
                 />
               ) : session.type === 'database' ? (
                 <DatabaseClient
@@ -4752,6 +4935,11 @@ const App: React.FC = () => {
                   connectionId={session.connectionId}
                   theme={appTheme}
                   onClose={() => handleCloseSession(session.id)}
+                  onDbInfo={(info) => {
+                    setSessions(prev => prev.map(s => 
+                      s.id === session.id ? { ...s, dbInfo: info } : s
+                    ));
+                  }}
                 />
               ) : (
                 <DualPaneSFTP 
@@ -4767,76 +4955,297 @@ const App: React.FC = () => {
           ))}
         </div>
 
-        {/* Footer Bar - Only show for SSH sessions, hide for RDP, WSS, FTP, FTPS, Database */}
-        {activeSession && activeSession.type !== 'rdp' && activeSession.type !== 'wss' && activeSession.type !== 'database' &&
-         activeSession.server.protocol !== 'ftp' && activeSession.server.protocol !== 'ftps' && (
-          <div className="bg-navy-800 border-t border-navy-700 px-4 py-2 flex items-center justify-between min-w-0">
-            {/* Left side - OS Info */}
-            <div className="flex items-center gap-4 text-xs min-w-0 overflow-hidden">
-              {activeSession.osInfo ? (
+        {/* Global Footer Bar */}
+        <div className={`border-t px-4 py-2 flex items-center justify-between min-w-0 ${appTheme === 'light' ? 'bg-gray-100 border-gray-200' : 'bg-navy-800 border-navy-700'}`}>
+          {/* Left side */}
+          <div className="flex items-center gap-4 text-xs min-w-0 overflow-hidden">
+            {/* SSH Session OS Info */}
+            {activeSession && activeSession.type !== 'rdp' && activeSession.type !== 'wss' && activeSession.type !== 'database' &&
+             activeSession.server.protocol !== 'ftp' && activeSession.server.protocol !== 'ftps' ? (
+              activeSession.osInfo ? (
                 <>
                   <div className="flex items-center gap-1.5 min-w-0">
                     <svg className="w-3.5 h-3.5 text-teal-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
                     </svg>
-                    <span className="text-gray-400 truncate">{activeSession.osInfo.os}</span>
+                    <span className={appTheme === 'light' ? 'text-gray-600' : 'text-gray-400'}>{activeSession.osInfo.os}</span>
                   </div>
                   <div className="flex items-center gap-1.5 min-w-0">
                     <svg className="w-3.5 h-3.5 text-purple-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
                     </svg>
-                    <span className="text-gray-400 truncate">{activeSession.osInfo.ip}</span>
+                    <span className={appTheme === 'light' ? 'text-gray-600' : 'text-gray-400'}>{activeSession.osInfo.ip}</span>
                   </div>
                   {activeSession.osInfo.provider && (
                     <div className="flex items-center gap-1.5 min-w-0">
                       <svg className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
                       </svg>
-                      <span className="text-gray-400 truncate">{activeSession.osInfo.provider}</span>
+                      <span className={appTheme === 'light' ? 'text-gray-600' : 'text-gray-400'}>{activeSession.osInfo.provider}</span>
                     </div>
                   )}
                 </>
               ) : (
-                <span className="text-gray-500">Detecting system info...</span>
-              )}
-            </div>
+                <span className={appTheme === 'light' ? 'text-gray-500' : 'text-gray-500'}>{t('detectingSystemInfo') || 'Detecting system info...'}</span>
+              )
+            ) : activeSession && activeSession.type === 'database' ? (
+              /* Database Session Info */
+              activeSession.dbInfo ? (
+                <>
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <svg className="w-3.5 h-3.5 text-teal-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
+                    </svg>
+                    <span className={appTheme === 'light' ? 'text-gray-600' : 'text-gray-400'}>{activeSession.dbInfo.version}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <svg className="w-3.5 h-3.5 text-purple-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+                    </svg>
+                    <span className={appTheme === 'light' ? 'text-gray-600' : 'text-gray-400'}>{activeSession.dbInfo.ip}</span>
+                  </div>
+                  {activeSession.dbInfo.provider && (
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <svg className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                      </svg>
+                      <span className={appTheme === 'light' ? 'text-gray-600' : 'text-gray-400'}>{activeSession.dbInfo.provider}</span>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <span className={appTheme === 'light' ? 'text-gray-500' : 'text-gray-500'}>{t('detectingSystemInfo') || 'Detecting system info...'}</span>
+              )
+            ) : (
+              /* Default: Show version and build info */
+              <>
+                <div className="flex items-center gap-1.5">
+                  <svg className="w-3.5 h-3.5 text-teal-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  </svg>
+                  <span className={appTheme === 'light' ? 'text-gray-700 font-medium' : 'text-gray-300 font-medium'}>Marix v{APP_VERSION}</span>
+                </div>
+                {buildInfo && (
+                  <>
+                    <div className="flex items-center gap-1.5">
+                      <svg className="w-3.5 h-3.5 text-purple-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+                      </svg>
+                      <span className={`${appTheme === 'light' ? 'text-gray-500' : 'text-gray-500'} font-mono`}>{buildInfo.commitShort || 'dev'}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <svg className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                      <span className={appTheme === 'light' ? 'text-gray-500' : 'text-gray-500'}>
+                        {buildInfo.buildTime ? new Date(buildInfo.buildTime).toLocaleDateString() : 'local'}
+                      </span>
+                    </div>
+                  </>
+                )}
+              </>
+            )}
+          </div>
 
-            {/* Right side - Controls */}
-            <div className="flex items-center gap-3 flex-shrink-0">
+          {/* Center - Update Toast */}
+          {showUpdateNotification && updateInfo.hasUpdate && (
+            <div className={`flex items-center gap-2 px-3 py-1 rounded-lg ${appTheme === 'light' ? 'bg-teal-50 border border-teal-200' : 'bg-teal-500/10 border border-teal-500/30'}`}>
+              <svg className="w-4 h-4 text-teal-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              <span className={`text-xs ${appTheme === 'light' ? 'text-teal-700' : 'text-teal-400'}`}>
+                {t('newVersionAvailable') || 'New version'} <span className="font-semibold">v{updateInfo.latestVersion}</span>
+              </span>
+              <button
+                onClick={() => {
+                  if (updateInfo.releaseUrl) {
+                    window.electron.shell.openExternal(updateInfo.releaseUrl);
+                  }
+                }}
+                className="px-2 py-0.5 text-xs font-medium bg-teal-500 text-white rounded hover:bg-teal-600 transition"
+              >
+                {t('update') || 'Update'}
+              </button>
+              <button
+                onClick={() => setShowUpdateNotification(false)}
+                className={`text-xs ${appTheme === 'light' ? 'text-gray-500 hover:text-gray-700' : 'text-gray-400 hover:text-white'} transition`}
+              >
+                {t('later') || 'Later'}
+              </button>
+              <button
+                onClick={() => setShowUpdateNotification(false)}
+                className={`p-0.5 ${appTheme === 'light' ? 'text-gray-400 hover:text-gray-600' : 'text-gray-500 hover:text-white'} transition`}
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          )}
+
+          {/* Right side - Controls */}
+          <div className="flex items-center gap-3 flex-shrink-0">
+            {/* Note button - show when session is active (not local terminal) */}
+            {activeSession && activeSession.server.id !== 'local' && (
+              <button
+                onClick={() => {
+                  // Load note content for current server
+                  const serverNote = servers.find(s => s.id === activeSession.server.id)?.notes || '';
+                  setNoteContent(serverNote);
+                  setShowNotePopup(true);
+                }}
+                className={`flex items-center gap-1 text-xs ${
+                  activeSession.server.notes 
+                    ? 'text-amber-500 hover:text-amber-400' 
+                    : appTheme === 'light' ? 'text-gray-500 hover:text-gray-700' : 'text-gray-500 hover:text-white'
+                } transition`}
+                title={t('notes')}
+              >
+                <svg className="w-3.5 h-3.5" fill={activeSession.server.notes ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+                {t('notes')}
+              </button>
+            )}
+            {/* Theme selector for SSH sessions */}
+            {activeSession && activeSession.type !== 'rdp' && activeSession.type !== 'wss' && activeSession.type !== 'database' &&
+             activeSession.server.protocol !== 'ftp' && activeSession.server.protocol !== 'ftps' && (
               <ThemeSelector
                 currentTheme={currentTheme}
                 onThemeChange={handleThemeChange}
               />
-              {/* Only show Terminal/SFTP switch for remote SSH sessions (not local terminal) */}
-              {activeSession.server.id !== 'local' && (
-                <div className="flex items-center bg-navy-900 rounded overflow-hidden">
-                  <button
-                    onClick={toggleSessionType}
-                    className={`px-3 py-1.5 text-xs font-medium transition ${
-                      activeSession.type === 'terminal'
-                        ? 'bg-teal-600 text-white'
-                        : 'text-gray-400 hover:text-white hover:bg-navy-700'
-                    }`}
-                  >
-                    {t('terminal')}
-                  </button>
-                  <button
-                    onClick={toggleSessionType}
-                    className={`px-3 py-1.5 text-xs font-medium transition ${
-                      activeSession.type === 'sftp'
-                        ? 'bg-teal-600 text-white'
-                        : 'text-gray-400 hover:text-white hover:bg-navy-700'
-                    }`}
-                  >
-                    {t('sftp')}
-                  </button>
-                </div>
-              )}
-            </div>
+            )}
+            {/* Terminal/SFTP switch for remote SSH sessions */}
+            {activeSession && activeSession.type !== 'rdp' && activeSession.type !== 'wss' && activeSession.type !== 'database' &&
+             activeSession.server.protocol !== 'ftp' && activeSession.server.protocol !== 'ftps' && activeSession.server.id !== 'local' && (
+              <div className={`flex items-center rounded overflow-hidden ${appTheme === 'light' ? 'bg-gray-200' : 'bg-navy-900'}`}>
+                <button
+                  onClick={toggleSessionType}
+                  className={`px-3 py-1 text-xs font-medium transition ${
+                    activeSession.type === 'terminal'
+                      ? 'bg-teal-600 text-white'
+                      : appTheme === 'light' ? 'text-gray-600 hover:text-gray-900 hover:bg-gray-300' : 'text-gray-400 hover:text-white hover:bg-navy-700'
+                  }`}
+                >
+                  {t('terminal')}
+                </button>
+                <button
+                  onClick={toggleSessionType}
+                  className={`px-3 py-1 text-xs font-medium transition ${
+                    activeSession.type === 'sftp'
+                      ? 'bg-teal-600 text-white'
+                      : appTheme === 'light' ? 'text-gray-600 hover:text-gray-900 hover:bg-gray-300' : 'text-gray-400 hover:text-white hover:bg-navy-700'
+                  }`}
+                >
+                  {t('sftp')}
+                </button>
+              </div>
+            )}
+            {/* About button when not in SSH session */}
+            {(!activeSession || activeSession.type === 'rdp' || activeSession.type === 'wss' || activeSession.type === 'database' ||
+              activeSession.server.protocol === 'ftp' || activeSession.server.protocol === 'ftps') && (
+              <button
+                onClick={() => setActiveMenu('about')}
+                className={`flex items-center gap-1 text-xs ${appTheme === 'light' ? 'text-gray-500 hover:text-gray-700' : 'text-gray-500 hover:text-white'} transition`}
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                {t('about')}
+              </button>
+            )}
           </div>
-        )}
+        </div>
       </div>
     </div>
+
+      {/* Sticky Note Popup */}
+      {showNotePopup && activeSession && activeSession.server.id !== 'local' && (
+        <div className="fixed inset-0 z-50 flex items-end justify-end p-4">
+          {/* Backdrop */}
+          <div 
+            className="absolute inset-0 bg-black/30"
+            onClick={() => setShowNotePopup(false)}
+          />
+          
+          {/* Sticky Note Panel */}
+          <div className={`relative w-80 max-h-96 rounded-lg shadow-2xl flex flex-col animate-in slide-in-from-bottom-4 duration-200 ${
+            appTheme === 'light' ? 'bg-amber-50 border border-amber-200' : 'bg-amber-900/90 border border-amber-700'
+          }`}>
+            {/* Header */}
+            <div className={`flex items-center justify-between px-3 py-2 border-b ${
+              appTheme === 'light' ? 'border-amber-200' : 'border-amber-700'
+            }`}>
+              <div className="flex items-center gap-2">
+                <svg className={`w-4 h-4 ${appTheme === 'light' ? 'text-amber-600' : 'text-amber-400'}`} fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+                <span className={`text-sm font-medium truncate ${appTheme === 'light' ? 'text-amber-800' : 'text-amber-100'}`}>
+                  {activeSession.server.name}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                {noteSaving && (
+                  <span className={`text-xs ${appTheme === 'light' ? 'text-amber-600' : 'text-amber-400'}`}>
+                    {t('noteSaving')}
+                  </span>
+                )}
+                <button
+                  onClick={() => setShowNotePopup(false)}
+                  className={`p-1 rounded hover:bg-black/10 transition ${appTheme === 'light' ? 'text-amber-600' : 'text-amber-300'}`}
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+            
+            {/* Note Content */}
+            <textarea
+              value={noteContent}
+              onChange={(e) => {
+                const newValue = e.target.value;
+                setNoteContent(newValue);
+                setNoteSaving(true);
+                
+                // Clear previous debounce timeout
+                if (noteDebounceRef.current) {
+                  clearTimeout(noteDebounceRef.current);
+                }
+                
+                // Auto-save with debounce (500ms)
+                noteDebounceRef.current = setTimeout(async () => {
+                  const updatedServer = { ...activeSession.server, notes: newValue };
+                  await ipcRenderer.invoke('servers:update', updatedServer);
+                  // Update local state
+                  setServers(prev => prev.map(s => s.id === activeSession.server.id ? updatedServer : s));
+                  // Update session server reference
+                  setSessions(prev => prev.map(sess => 
+                    sess.id === activeSession.id ? { ...sess, server: updatedServer } : sess
+                  ));
+                  setNoteSaving(false);
+                }, 500);
+              }}
+              placeholder={t('notePlaceholder')}
+              className={`flex-1 w-full p-3 text-sm resize-none focus:outline-none ${
+                appTheme === 'light' 
+                  ? 'bg-transparent text-amber-900 placeholder-amber-400' 
+                  : 'bg-transparent text-amber-50 placeholder-amber-500'
+              }`}
+              style={{ minHeight: '200px' }}
+              autoFocus
+            />
+            
+            {/* Footer */}
+            <div className={`px-3 py-2 border-t text-xs ${
+              appTheme === 'light' ? 'border-amber-200 text-amber-500' : 'border-amber-700 text-amber-500'
+            }`}>
+              {noteContent ? `${noteContent.length} chars` : t('noNotesYet')}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Tag Edit Popup */}
       {tagMenuOpen && (
@@ -5616,7 +6025,7 @@ const CloudflareTokenInput: React.FC<{
             {t('getApiTokenFrom')}{' '}
             <a
               href="#"
-              onClick={(e) => { e.preventDefault(); require('electron').shell.openExternal('https://dash.cloudflare.com/profile/api-tokens'); }}
+              onClick={(e) => { e.preventDefault(); window.electron.shell.openExternal('https://dash.cloudflare.com/profile/api-tokens'); }}
               className="text-orange-500 hover:underline"
             >
               Cloudflare Dashboard

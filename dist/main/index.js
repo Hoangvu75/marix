@@ -40,6 +40,7 @@ const electron_1 = require("electron");
 const path = __importStar(require("path"));
 const fs = __importStar(require("fs"));
 const dns = __importStar(require("dns"));
+const https = __importStar(require("https"));
 const util_1 = require("util");
 // ============================================================================
 // MEMORY OPTIMIZATION FLAGS (applied before app ready)
@@ -206,8 +207,9 @@ function createWindow() {
         trafficLightPosition: isMac ? { x: 12, y: 12 } : undefined,
         icon: path.join(__dirname, '../../icon/i.png'),
         webPreferences: {
-            nodeIntegration: true,
-            contextIsolation: false,
+            nodeIntegration: false,
+            contextIsolation: true,
+            preload: path.join(__dirname, 'preload.js'),
             backgroundThrottling: false, // Keep app responsive in background
             spellcheck: false, // Disable spellcheck for performance
         },
@@ -242,6 +244,85 @@ function createWindow() {
     else {
         mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
     }
+    // Handle close event - ask user if there are active connections
+    mainWindow.on('close', async (event) => {
+        // Check for active connections (only count NativeSSH, not SSH2 background)
+        const activeSSH = nativeSSH.getActiveCount();
+        const activeRDP = rdpManager.getActiveCount();
+        const activeWSS = wssManager.getActiveCount();
+        const activeFTP = ftpManager.getActiveCount();
+        const activeDB = (0, databaseService_1.getDatabaseConnectionCount)();
+        const totalActive = activeSSH + activeRDP + activeWSS + activeFTP + activeDB;
+        if (totalActive > 0) {
+            event.preventDefault();
+            // Build detail message
+            const details = [];
+            if (activeSSH > 0)
+                details.push(`SSH: ${activeSSH}`);
+            if (activeRDP > 0)
+                details.push(`RDP: ${activeRDP}`);
+            if (activeWSS > 0)
+                details.push(`WebSocket: ${activeWSS}`);
+            if (activeFTP > 0)
+                details.push(`FTP: ${activeFTP}`);
+            if (activeDB > 0)
+                details.push(`Database: ${activeDB}`);
+            // Request translations from renderer with unique request ID
+            const requestId = `close-dialog-${Date.now()}`;
+            const translations = await new Promise((resolve) => {
+                const onTranslations = (_, response) => {
+                    // Only accept response with matching request ID
+                    if (response.requestId !== requestId) {
+                        console.log('[App] Close dialog: ignoring response with wrong requestId');
+                        return;
+                    }
+                    console.log('[App] Close dialog: received translations', response.translations.title);
+                    clearTimeout(timeout);
+                    electron_1.ipcMain.removeListener('app:close-dialog-translations', onTranslations);
+                    resolve(response.translations);
+                };
+                const timeout = setTimeout(() => {
+                    // Fallback to English if no response
+                    console.log('[App] Close dialog: timeout, using English fallback');
+                    electron_1.ipcMain.removeListener('app:close-dialog-translations', onTranslations);
+                    resolve({
+                        title: 'Active Connections',
+                        message: `You have ${totalActive} active connection${totalActive > 1 ? 's' : ''}.`,
+                        detail: `${details.join(', ')}\n\nDo you want to close all connections and exit?`,
+                        closeButton: 'Close All & Exit',
+                        cancelButton: 'Cancel'
+                    });
+                }, 200);
+                electron_1.ipcMain.on('app:close-dialog-translations', onTranslations);
+                console.log('[App] Close dialog: requesting translations from renderer, requestId:', requestId);
+                mainWindow?.webContents.send('app:request-close-dialog-translations', {
+                    requestId,
+                    count: totalActive,
+                    details: details.join(', ')
+                });
+            });
+            const { response } = await electron_1.dialog.showMessageBox(mainWindow, {
+                type: 'question',
+                buttons: [translations.closeButton, translations.cancelButton],
+                defaultId: 1,
+                cancelId: 1,
+                title: translations.title,
+                message: translations.message,
+                detail: translations.detail,
+            });
+            if (response === 0) {
+                // User chose to close all and exit - close all connections quickly (no await)
+                rdpManager.closeAll();
+                nativeSSH.closeAll();
+                sshManager.closeAll();
+                wssManager.closeAll();
+                ftpManager.closeAll();
+                (0, databaseService_1.closeAllDatabaseConnections)(); // Don't await - let it run in background
+                mainWindow?.destroy();
+            }
+            // If response === 1, do nothing (cancel)
+        }
+    });
     mainWindow.on('closed', () => {
         mainWindow = null;
     });
@@ -312,8 +393,13 @@ else {
     });
 }
 electron_1.app.on('window-all-closed', () => {
-    // Close all RDP sessions before quitting
+    // Close all sessions before quitting
     rdpManager.closeAll();
+    nativeSSH.closeAll();
+    sshManager.closeAll();
+    wssManager.closeAll();
+    ftpManager.closeAll();
+    (0, databaseService_1.closeAllDatabaseConnections)();
     if (process.platform !== 'darwin') {
         electron_1.app.quit();
     }
@@ -324,6 +410,161 @@ electron_1.app.on('before-quit', () => {
     rdpManager.closeAll();
     nativeSSH.closeAll();
     sshManager.closeAll();
+    wssManager.closeAll();
+    ftpManager.closeAll();
+    (0, databaseService_1.closeAllDatabaseConnections)();
+});
+// System info handlers
+electron_1.ipcMain.handle('system:getUserInfo', () => {
+    const os = require('os');
+    return {
+        username: os.userInfo().username,
+        homedir: os.homedir(),
+        platform: os.platform(),
+    };
+});
+// Local filesystem handlers (for contextIsolation: true)
+electron_1.ipcMain.handle('local:homedir', () => {
+    const os = require('os');
+    return os.homedir();
+});
+electron_1.ipcMain.handle('local:pathJoin', (_, ...paths) => {
+    return path.join(...paths);
+});
+electron_1.ipcMain.handle('local:pathDirname', (_, p) => {
+    return path.dirname(p);
+});
+electron_1.ipcMain.handle('local:pathBasename', (_, p) => {
+    return path.basename(p);
+});
+electron_1.ipcMain.handle('local:readDir', async (_, dirPath) => {
+    try {
+        const items = fs.readdirSync(dirPath);
+        const files = items.map(name => {
+            try {
+                const fullPath = path.join(dirPath, name);
+                const stats = fs.statSync(fullPath);
+                return {
+                    name,
+                    type: stats.isDirectory() ? 'directory' : stats.isSymbolicLink() ? 'symlink' : 'file',
+                    size: stats.size,
+                    modifyTime: stats.mtimeMs,
+                };
+            }
+            catch (err) {
+                return { name, type: 'file', size: 0, modifyTime: 0 };
+            }
+        });
+        return { success: true, files };
+    }
+    catch (err) {
+        return { success: false, error: err.message };
+    }
+});
+electron_1.ipcMain.handle('local:exists', (_, filePath) => {
+    return fs.existsSync(filePath);
+});
+electron_1.ipcMain.handle('local:mkdir', (_, dirPath) => {
+    try {
+        fs.mkdirSync(dirPath, { recursive: true });
+        return { success: true };
+    }
+    catch (err) {
+        return { success: false, error: err.message };
+    }
+});
+electron_1.ipcMain.handle('local:writeFile', (_, filePath, content) => {
+    try {
+        fs.writeFileSync(filePath, content);
+        return { success: true };
+    }
+    catch (err) {
+        return { success: false, error: err.message };
+    }
+});
+electron_1.ipcMain.handle('local:chmod', (_, filePath, mode) => {
+    try {
+        fs.chmodSync(filePath, mode);
+        return { success: true };
+    }
+    catch (err) {
+        return { success: false, error: err.message };
+    }
+});
+electron_1.ipcMain.handle('local:stat', (_, filePath) => {
+    try {
+        const stats = fs.statSync(filePath);
+        return {
+            success: true,
+            isDirectory: stats.isDirectory(),
+            isFile: stats.isFile(),
+            size: stats.size,
+            modifyTime: stats.mtimeMs,
+        };
+    }
+    catch (err) {
+        return { success: false, error: err.message };
+    }
+});
+electron_1.ipcMain.handle('local:rm', (_, filePath, recursive = false) => {
+    try {
+        const stats = fs.statSync(filePath);
+        if (stats.isDirectory()) {
+            fs.rmSync(filePath, { recursive: true, force: true });
+        }
+        else {
+            fs.unlinkSync(filePath);
+        }
+        return { success: true };
+    }
+    catch (err) {
+        return { success: false, error: err.message };
+    }
+});
+electron_1.ipcMain.handle('local:rename', (_, oldPath, newPath) => {
+    try {
+        fs.renameSync(oldPath, newPath);
+        return { success: true };
+    }
+    catch (err) {
+        return { success: false, error: err.message };
+    }
+});
+electron_1.ipcMain.handle('local:copyFile', (_, srcPath, destPath) => {
+    try {
+        fs.copyFileSync(srcPath, destPath);
+        return { success: true };
+    }
+    catch (err) {
+        return { success: false, error: err.message };
+    }
+});
+// Copy directory recursively
+electron_1.ipcMain.handle('local:copyDir', (_, srcPath, destPath) => {
+    try {
+        const copyDirRecursive = (src, dest) => {
+            // Create destination directory
+            if (!fs.existsSync(dest)) {
+                fs.mkdirSync(dest, { recursive: true });
+            }
+            const entries = fs.readdirSync(src, { withFileTypes: true });
+            for (const entry of entries) {
+                const srcEntry = path.join(src, entry.name);
+                const destEntry = path.join(dest, entry.name);
+                if (entry.isDirectory()) {
+                    copyDirRecursive(srcEntry, destEntry);
+                }
+                else {
+                    fs.copyFileSync(srcEntry, destEntry);
+                }
+            }
+        };
+        copyDirRecursive(srcPath, destPath);
+        return { success: true };
+    }
+    catch (err) {
+        return { success: false, error: err.message };
+    }
 });
 // Window control handlers
 electron_1.ipcMain.handle('window:minimize', () => {
@@ -649,6 +890,18 @@ electron_1.ipcMain.handle('sftp:download', async (event, connectionId, remotePat
         return { success: false, error: error.message };
     }
 });
+electron_1.ipcMain.handle('sftp:downloadFolder', async (event, connectionId, remotePath, localPath) => {
+    try {
+        console.log('[Main] sftp:downloadFolder', connectionId, remotePath, '->', localPath);
+        await sftpManager.downloadFolder(connectionId, remotePath, localPath);
+        console.log('[Main] sftp:downloadFolder success');
+        return { success: true };
+    }
+    catch (error) {
+        console.error('[Main] sftp:downloadFolder error:', error.message);
+        return { success: false, error: error.message };
+    }
+});
 electron_1.ipcMain.handle('sftp:upload', async (event, connectionId, localPath, remotePath) => {
     try {
         console.log('[Main] sftp:upload', connectionId, localPath, '->', remotePath);
@@ -658,6 +911,18 @@ electron_1.ipcMain.handle('sftp:upload', async (event, connectionId, localPath, 
     }
     catch (error) {
         console.error('[Main] sftp:upload error:', error.message);
+        return { success: false, error: error.message };
+    }
+});
+electron_1.ipcMain.handle('sftp:uploadFolder', async (event, connectionId, localPath, remotePath) => {
+    try {
+        console.log('[Main] sftp:uploadFolder', connectionId, localPath, '->', remotePath);
+        await sftpManager.uploadFolder(connectionId, localPath, remotePath);
+        console.log('[Main] sftp:uploadFolder success');
+        return { success: true };
+    }
+    catch (error) {
+        console.error('[Main] sftp:uploadFolder error:', error.message);
         return { success: false, error: error.message };
     }
 });
@@ -756,6 +1021,59 @@ electron_1.ipcMain.handle('dns:resolve', async (event, hostname) => {
         return { success: false, hostname, error: error.message };
     }
 });
+// IP Info lookup handler - resolve hostname and get IP info from ipinfo.io
+electron_1.ipcMain.handle('lookup-ip-info', async (_, hostnameOrIp) => {
+    try {
+        // First, resolve hostname to IP if needed
+        let ip = hostnameOrIp;
+        const isIP = /^(\d{1,3}\.){3}\d{1,3}$/.test(hostnameOrIp) || hostnameOrIp.includes(':'); // IPv4 or IPv6
+        if (!isIP) {
+            try {
+                const dnsResult = await dnsLookup(hostnameOrIp, { family: 4 }); // Prefer IPv4
+                ip = dnsResult.address;
+            }
+            catch (e) {
+                console.log('[IPInfo] DNS resolution failed for', hostnameOrIp);
+                // Continue with original hostname
+            }
+        }
+        // Fetch IP info from ipinfo.io
+        return new Promise((resolve) => {
+            const req = https.get(`https://ipinfo.io/${ip}/json`, { timeout: 5000 }, (res) => {
+                let data = '';
+                res.on('data', (chunk) => data += chunk);
+                res.on('end', () => {
+                    try {
+                        const info = JSON.parse(data);
+                        resolve({
+                            success: true,
+                            ip: info.ip || ip,
+                            org: info.org || '',
+                            city: info.city || '',
+                            region: info.region || '',
+                            country: info.country || '',
+                        });
+                    }
+                    catch (e) {
+                        resolve({ success: true, ip, org: '' });
+                    }
+                });
+            });
+            req.on('error', (err) => {
+                console.log('[IPInfo] Request failed:', err.message);
+                resolve({ success: true, ip, org: '' });
+            });
+            req.on('timeout', () => {
+                req.destroy();
+                resolve({ success: true, ip, org: '' });
+            });
+        });
+    }
+    catch (error) {
+        console.error('[IPInfo] Error:', error);
+        return { success: false, ip: hostnameOrIp, org: '', error: error.message };
+    }
+});
 // Server storage handlers
 electron_1.ipcMain.handle('servers:getAll', async () => {
     try {
@@ -809,6 +1127,16 @@ electron_1.ipcMain.handle('servers:importAll', async (event, servers) => {
     }
     catch (error) {
         console.error('[Main] servers:importAll error:', error.message);
+        return { success: false, error: error.message };
+    }
+});
+electron_1.ipcMain.handle('servers:reorder', async (event, servers) => {
+    try {
+        serverStore.reorderServers(servers);
+        return { success: true };
+    }
+    catch (error) {
+        console.error('[Main] servers:reorder error:', error.message);
         return { success: false, error: error.message };
     }
 });
@@ -1104,6 +1432,7 @@ wssManager.on('connect', (connectionId) => {
     mainWindow?.webContents.send('wss:connect', connectionId);
 });
 wssManager.on('message', (connectionId, message) => {
+    console.log(`[Main] Forwarding WSS message to renderer: ${connectionId}`);
     mainWindow?.webContents.send('wss:message', connectionId, message);
 });
 wssManager.on('close', (connectionId, code, reason) => {
@@ -1114,10 +1443,12 @@ wssManager.on('error', (connectionId, error) => {
 });
 electron_1.ipcMain.handle('wss:connect', async (event, connectionId, config) => {
     try {
-        const result = wssManager.connect(connectionId, config);
-        return { success: result.success, error: result.error };
+        // connect() is now async and waits for connection result
+        const result = await wssManager.connect(connectionId, config);
+        return result;
     }
     catch (error) {
+        console.error('[Main] wss:connect error:', error);
         return { success: false, error: error.message };
     }
 });
@@ -1136,7 +1467,10 @@ electron_1.ipcMain.handle('wss:disconnect', async (event, connectionId) => {
         return { success: true };
     }
     catch (error) {
-        return { success: false, error: error.message };
+        console.error('[Main] wss:disconnect error:', error);
+        // Always return success for disconnect - we don't want UI to show error
+        // The connection is effectively closed even if there was an error
+        return { success: true };
     }
 });
 electron_1.ipcMain.handle('wss:history', async (event, connectionId) => {

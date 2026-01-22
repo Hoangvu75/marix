@@ -22,6 +22,7 @@
   "clickNewHostToStart": "Nhấn nút \"Thêm máy chủ\" ở trên để thêm kết nối máy chủ đầu tiên",
   "noMatchingServers": "Không tìm thấy máy chủ phù hợp",
   "clearSearch": "Xóa tìm kiếm",
+  "noActionsAvailable": "Không có hành động nào",
   
   "serverName": "Tên máy chủ",
   "serverAlreadyExists": "Máy Chủ Đã Tồn Tại",
@@ -151,7 +152,11 @@
   "all": "Tất cả",
   "none": "Không có",
   "copy": "Sao chép",
+  "cut": "Cắt",
   "paste": "Dán",
+  "copied": "Đã sao chép",
+  "pasted": "Đã dán",
+  "moved": "Đã di chuyển",
   "optional": "Tùy chọn",
   
   "switchToLightMode": "Chuyển sang chế độ sáng",
@@ -214,9 +219,15 @@
   "dbEdit": "Sửa",
   "dbNoPrimaryKey": "Không thể sửa: Không có khóa chính",
   "dbEditRow": "Sửa dòng",
-  "dbSaving": "Đang lưu...",  "dbAddColumn": "Thêm cột",
+  "dbSaving": "Đang lưu...",
+  "dbAddColumn": "Thêm cột",
   "dbDeleteColumn": "Xóa cột",
-  "dbConfirmDeleteColumn": "Bạn có chắc muốn xóa cột này? Hành động này không thể hoàn tác.",  "dbMysql": "MySQL / MariaDB",
+  "dbConfirmDeleteColumn": "Bạn có chắc muốn xóa cột này? Hành động này không thể hoàn tác.",
+  "dbShowing": "Hiển thị",
+  "dbOf": "trên",
+  "dbPage": "Trang",
+  "dbLoadAll": "Tải tất cả",
+  "dbMysql": "MySQL / MariaDB",
   "dbPostgresql": "PostgreSQL",
   "dbMongodb": "MongoDB",
   "dbRedis": "Redis",
@@ -305,6 +316,7 @@
   
   "confirmDelete": "Bạn có chắc muốn xóa?",
   "confirmDisconnect": "Bạn có chắc muốn ngắt kết nối?",
+  "confirmCloseSession": "Đóng kết nối này?",
   "confirmOverwrite": "Tệp đã tồn tại. Ghi đè?",
   
   "errorConnection": "Lỗi kết nối",
@@ -829,6 +841,8 @@
   "loadChangelog": "Tải nhật ký từ GitHub",
   
   "releaseNotes": "Ghi chú phát hành",
+  "later": "Để sau",
+  "detectingSystemInfo": "Đang phát hiện thông tin hệ thống...",
   "security": "Bảo mật",
   "techStack": "Công nghệ",
   "zeroKnowledge": "Kiến trúc zero-knowledge",
@@ -1028,5 +1042,19 @@
   "snippetHotkey": "Phím tắt",
   "snippetTagsPlaceholder": "Phân cách bằng dấu phẩy: disk, storage",
   "snippetAddFirst": "Thêm snippet đầu tiên",
-  "snippetReservedKeys": "Phím đã đặt trước:"
+  "snippetReservedKeys": "Phím đã đặt trước:",
+  
+  "activeConnections": "Kết nối đang hoạt động",
+  "closeAllAndExit": "Đóng tất cả & Thoát",
+  "youHaveActiveConnections": "Bạn có {{count}} kết nối đang hoạt động.",
+  "closeConnectionsConfirm": "Bạn có muốn đóng tất cả kết nối và thoát?",
+  "serverAlreadyConnected": "Đã kết nối",
+  "serverAlreadyConnectedMessage": "Máy chủ này đã được kết nối. Đang chuyển đến phiên hiện có.",
+  
+  "notes": "Ghi chú",
+  "serverNotes": "Ghi chú Server",
+  "noNotesYet": "Chưa có ghi chú. Nhấn để thêm ghi chú cho server này.",
+  "notePlaceholder": "Viết ghi chú ở đây... (ví dụ: công việc cần làm, nhắc nhở cấu hình)",
+  "noteSaved": "Đã lưu ghi chú",
+  "noteSaving": "Đang lưu..."
 }

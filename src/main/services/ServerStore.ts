@@ -209,6 +209,25 @@ export class ServerStore {
     this.store.set('servers', encryptedServers);
   }
 
+  /**
+   * Reorder servers - update the order in storage
+   * Servers come already in the new order, we just need to save them
+   */
+  reorderServers(servers: ServerConfig[]): void {
+    // Get raw servers to preserve encrypted data
+    const rawServers = this.getRawServers();
+    
+    // Create a map for quick lookup
+    const serverMap = new Map(rawServers.map(s => [s.id, s]));
+    
+    // Reorder based on incoming order, using raw (encrypted) data
+    const reorderedServers = servers
+      .map(s => serverMap.get(s.id))
+      .filter((s): s is ServerConfig => s !== undefined);
+    
+    this.store.set('servers', reorderedServers);
+  }
+
   // Set all tag colors (for backup restore)
   setTagColors(tagColors: { [tagName: string]: string }): void {
     this.store.set('tagColors', tagColors);

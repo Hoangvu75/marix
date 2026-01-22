@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import ReactDOM from 'react-dom';
-import { ipcRenderer } from 'electron';
+
+const { ipcRenderer } = window.electron;
 
 // CodeMirror imports
 import { EditorState, Compartment } from '@codemirror/state';

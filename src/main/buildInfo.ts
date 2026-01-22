@@ -3,6 +3,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { app } from 'electron';
 
 export interface BuildInfo {
   commitSha: string;
@@ -34,12 +35,16 @@ const defaultBuildInfo: BuildInfo = {
 let buildInfo: BuildInfo = defaultBuildInfo;
 
 try {
+  // Get the app path - works in both dev and packaged
+  const appPath = app?.getAppPath?.() || process.cwd();
+  
   // Try multiple paths for build-info.json
   const possiblePaths = [
-    path.join(__dirname, '..', '..', 'src', 'build-info.json'),  // Development: dist/main -> src
-    path.join(__dirname, 'build-info.json'),                      // If copied to same dir
-    path.join(process.cwd(), 'src', 'build-info.json'),          // From cwd
-    path.join(process.cwd(), 'resources', 'build-info.json'),    // Packaged app
+    path.join(__dirname, 'build-info.json'),                      // Same directory as compiled code (dist/main/)
+    path.join(appPath, 'dist', 'main', 'build-info.json'),        // Packaged app: app.asar/dist/main/
+    path.join(__dirname, '..', '..', 'src', 'build-info.json'),   // Development: dist/main -> src
+    path.join(process.cwd(), 'src', 'build-info.json'),           // From cwd
+    path.join(process.cwd(), 'dist', 'main', 'build-info.json'),  // From cwd dist
   ];
   
   for (const filePath of possiblePaths) {

@@ -58,6 +58,7 @@ export interface Translations {
   clickNewHostToStart: string;
   noMatchingServers: string;
   clearSearch: string;
+  noActionsAvailable: string;
   
   // Server form
   serverName: string;
@@ -197,7 +198,11 @@ export interface Translations {
   all: string;
   none: string;
   copy: string;
+  cut: string;
   paste: string;
+  copied: string;
+  pasted: string;
+  moved: string;
   optional: string;
   
   // Theme toggle
@@ -248,7 +253,24 @@ export interface Translations {
   // Confirmation dialogs
   confirmDelete: string;
   confirmDisconnect: string;
+  confirmCloseSession: string;
   confirmOverwrite: string;
+  
+  // Close dialog (when exiting with active connections)
+  activeConnections: string;
+  closeAllAndExit: string;
+  youHaveActiveConnections: string;
+  closeConnectionsConfirm: string;
+  serverAlreadyConnected: string;
+  serverAlreadyConnectedMessage: string;
+  
+  // Server Notes (Sticky Note feature)
+  notes: string;
+  serverNotes: string;
+  noNotesYet: string;
+  notePlaceholder: string;
+  noteSaved: string;
+  noteSaving: string;
   
   // Errors
   errorConnection: string;
@@ -503,6 +525,10 @@ export interface Translations {
   dbAddColumn: string;
   dbDeleteColumn: string;
   dbConfirmDeleteColumn: string;
+  dbShowing: string;
+  dbOf: string;
+  dbPage: string;
+  dbLoadAll: string;
   dbMysql: string;
   dbPostgresql: string;
   dbMongodb: string;
@@ -829,6 +855,8 @@ export interface Translations {
   newVersionAvailable: string;
   upToDate: string;
   releaseNotes: string;
+  later: string;
+  detectingSystemInfo: string;
   
   // 2FA Authenticator
   twoFactorAuth: string;
@@ -1098,6 +1126,8 @@ export interface Translations {
   serversToShare: string;
   noServersSelected: string;
   lanShareSecurity: string;
+  lanSecurityWarning: string;
+  lanSecurityWarningDesc: string;
   pairingCode: string;
   pairingCodeDesc: string;
   availableDevices: string;

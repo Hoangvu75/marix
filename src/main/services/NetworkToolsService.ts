@@ -2,7 +2,7 @@ import * as dns from 'dns';
 import * as net from 'net';
 import * as http from 'http';
 import * as https from 'https';
-import { exec } from 'child_process';
+import { exec, execFile } from 'child_process';
 import { promisify } from 'util';
 import { whoisService } from './WhoisService';
 
@@ -246,62 +246,68 @@ export class NetworkToolsService {
     }
   }
 
-  // Ping
+  // Ping - using execFile to prevent command injection
   async ping(host: string, count: number = 4): Promise<NetworkToolResult> {
-    try {
+    return new Promise((resolve) => {
       const isWindows = process.platform === 'win32';
-      const cmd = isWindows 
-        ? `ping -n ${count} ${host}`
-        : `ping -c ${count} ${host}`;
+      const command = 'ping';
+      const args = isWindows
+        ? ['-n', count.toString(), host]
+        : ['-c', count.toString(), host];
       
-      const { stdout, stderr } = await execAsync(cmd, { timeout: 30000 });
-      
-      return {
-        success: true,
-        tool: 'ping',
-        target: host,
-        data: stdout,
-        timestamp: new Date().toISOString()
-      };
-    } catch (error: any) {
-      return {
-        success: false,
-        tool: 'ping',
-        target: host,
-        error: error.message || 'Ping failed',
-        data: error.stdout || error.stderr,
-        timestamp: new Date().toISOString()
-      };
-    }
+      // execFile automatically escapes arguments, preventing command injection
+      execFile(command, args, { timeout: 30000 }, (error, stdout, stderr) => {
+        if (error) {
+          resolve({
+            success: false,
+            tool: 'ping',
+            target: host,
+            error: error.message || 'Ping failed',
+            data: stdout || stderr,
+            timestamp: new Date().toISOString()
+          });
+        } else {
+          resolve({
+            success: true,
+            tool: 'ping',
+            target: host,
+            data: stdout,
+            timestamp: new Date().toISOString()
+          });
+        }
+      });
+    });
   }
 
-  // Traceroute
+  // Traceroute - using execFile to prevent command injection
   async traceroute(host: string): Promise<NetworkToolResult> {
-    try {
+    return new Promise((resolve) => {
       const isWindows = process.platform === 'win32';
-      const cmd = isWindows 
-        ? `tracert -d ${host}`
-        : `traceroute -n ${host}`;
+      const command = isWindows ? 'tracert' : 'traceroute';
+      const args = isWindows ? ['-d', host] : ['-n', host];
       
-      const { stdout, stderr } = await execAsync(cmd, { timeout: 60000 });
-      
-      return {
-        success: true,
-        tool: 'trace',
-        target: host,
-        data: stdout,
-        timestamp: new Date().toISOString()
-      };
-    } catch (error: any) {
-      return {
-        success: false,
-        tool: 'trace',
-        target: host,
-        error: error.message || 'Traceroute failed',
-        data: error.stdout || error.stderr,
-        timestamp: new Date().toISOString()
-      };
-    }
+      // execFile automatically escapes arguments, preventing command injection
+      execFile(command, args, { timeout: 60000 }, (error, stdout, stderr) => {
+        if (error) {
+          resolve({
+            success: false,
+            tool: 'trace',
+            target: host,
+            error: error.message || 'Traceroute failed',
+            data: stdout || stderr,
+            timestamp: new Date().toISOString()
+          });
+        } else {
+          resolve({
+            success: true,
+            tool: 'trace',
+            target: host,
+            data: stdout,
+            timestamp: new Date().toISOString()
+          });
+        }
+      });
+    });
   }
 
   // TCP Connection Test

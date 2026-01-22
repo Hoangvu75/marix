@@ -305,13 +305,22 @@ export class NativeSSHManager {
     const session = this.sessions.get(connectionId);
     if (session) {
       console.log('[NativeSSH] Disconnecting:', connectionId);
-      session.pty.kill();
+      try {
+        // Force kill with SIGKILL for faster termination
+        session.pty.kill('SIGKILL');
+      } catch {
+        // Ignore errors during kill
+      }
       session.emitter.removeAllListeners();
       
       // Cleanup temp key file
       if (session.keyFile && fs.existsSync(session.keyFile)) {
-        fs.unlinkSync(session.keyFile);
-        console.log('[NativeSSH] Cleaned up temp key file');
+        try {
+          fs.unlinkSync(session.keyFile);
+          console.log('[NativeSSH] Cleaned up temp key file');
+        } catch {
+          // Ignore cleanup errors
+        }
       }
       
       this.sessions.delete(connectionId);
@@ -380,6 +389,13 @@ export class NativeSSHManager {
     });
 
     return { connectionId, emitter };
+  }
+
+  /**
+   * Get the number of active connections
+   */
+  getActiveCount(): number {
+    return this.sessions.size;
   }
 
   /**

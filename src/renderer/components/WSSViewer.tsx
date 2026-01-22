@@ -1,14 +1,17 @@
 import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
-import { ipcRenderer } from 'electron';
 import { terminalThemes } from '../themes';
 import ThemeSelector from './ThemeSelector';
 import { useLanguage } from '../contexts/LanguageContext';
+
+const { ipcRenderer } = window.electron;
 
 interface WSSViewerProps {
   connectionId: string;
   serverName?: string;
   url: string;
   theme?: string;
+  initialStatus?: 'connecting' | 'connected' | 'disconnected' | 'error';
+  initialError?: string;
   onThemeChange?: (theme: string) => void;
   onConnect?: () => void;
   onClose?: () => void;
@@ -27,14 +30,17 @@ const WSSViewer: React.FC<WSSViewerProps> = ({
   serverName,
   url,
   theme = 'Dracula',
+  initialStatus = 'connecting',
+  initialError,
   onThemeChange,
   onConnect,
   onClose,
   onError,
 }) => {
   const { t } = useLanguage();
-  const [status, setStatus] = useState<'connecting' | 'connected' | 'disconnected' | 'error'>('connecting');
-  const [errorMessage, setErrorMessage] = useState<string>('');
+  const [status, setStatus] = useState<'connecting' | 'connected' | 'disconnected' | 'error'>(initialStatus);
+  const [currentConnectionId, setCurrentConnectionId] = useState(connectionId);
+  const [errorMessage, setErrorMessage] = useState<string>(initialError || '');
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState<string>('');
   const [autoScroll, setAutoScroll] = useState(true);
@@ -79,15 +85,23 @@ const WSSViewer: React.FC<WSSViewerProps> = ({
   }, [messages, scrollToBottom]);
 
   useEffect(() => {
+    console.log('[WSSViewer] Setting up listeners for connectionId:', currentConnectionId);
+    
+    // Note: preload strips the event parameter, so handlers receive args directly
     const handleConnect = (receivedId: string) => {
-      if (receivedId === connectionId) {
+      console.log('[WSSViewer] Connect event - received:', receivedId, 'expected:', currentConnectionId);
+      if (receivedId === currentConnectionId) {
+        console.log('[WSSViewer] Connected event matched!');
         setStatus('connected');
+        setErrorMessage('');
         onConnect?.();
       }
     };
 
     const handleMessage = (receivedId: string, message: string) => {
-      if (receivedId === connectionId) {
+      console.log('[WSSViewer] Message event - received:', receivedId, 'expected:', currentConnectionId);
+      if (receivedId === currentConnectionId) {
+        console.log('[WSSViewer] Message matched:', message.substring(0, 100));
         // Try to parse as JSON for better formatting
         let content = message;
         try {
@@ -106,38 +120,44 @@ const WSSViewer: React.FC<WSSViewerProps> = ({
       }
     };
 
+    // Note: preload strips the event parameter
     const handleClose = (receivedId: string) => {
-      if (receivedId === connectionId) {
+      if (receivedId === currentConnectionId) {
+        console.log('[WSSViewer] Close event received:', receivedId);
         setStatus('disconnected');
-        onClose?.();
       }
     };
 
+    // Note: preload strips the event parameter  
     const handleError = (receivedId: string, error: string) => {
-      if (receivedId === connectionId) {
+      if (receivedId === currentConnectionId) {
+        console.log('[WSSViewer] Error event received:', receivedId, error);
         setStatus('error');
         setErrorMessage(error);
         onError?.(error);
       }
     };
 
-    ipcRenderer.on('wss:connect', (_, id) => handleConnect(id));
-    ipcRenderer.on('wss:message', (_, id, msg) => handleMessage(id, msg));
-    ipcRenderer.on('wss:close', (_, id) => handleClose(id));
-    ipcRenderer.on('wss:error', (_, id, error) => handleError(id, error));
+    // Use specific event names with handler references for proper cleanup
+    ipcRenderer.on('wss:connect', handleConnect);
+    ipcRenderer.on('wss:message', handleMessage);
+    ipcRenderer.on('wss:close', handleClose);
+    ipcRenderer.on('wss:error', handleError);
 
     return () => {
-      ipcRenderer.removeAllListeners('wss:connect');
-      ipcRenderer.removeAllListeners('wss:message');
-      ipcRenderer.removeAllListeners('wss:close');
-      ipcRenderer.removeAllListeners('wss:error');
+      // Remove only our handlers, not all listeners
+      ipcRenderer.removeListener('wss:connect', handleConnect);
+      ipcRenderer.removeListener('wss:message', handleMessage);
+      ipcRenderer.removeListener('wss:close', handleClose);
+      ipcRenderer.removeListener('wss:error', handleError);
     };
-  }, [connectionId, onConnect, onClose, onError]);
+  }, [currentConnectionId, onConnect, onClose, onError]);
 
   const handleSend = async () => {
     if (!inputMessage.trim()) return;
 
-    const result = await ipcRenderer.invoke('wss:send', connectionId, inputMessage);
+    console.log('[WSSViewer] Sending message via connectionId:', currentConnectionId);
+    const result = await ipcRenderer.invoke('wss:send', currentConnectionId, inputMessage);
     if (result.success) {
       setMessages(prev => [...prev, {
         id: messageIdRef.current++,
@@ -146,6 +166,8 @@ const WSSViewer: React.FC<WSSViewerProps> = ({
         timestamp: new Date(),
       }]);
       setInputMessage('');
+    } else {
+      console.log('[WSSViewer] Send failed:', result.error);
     }
   };
 
@@ -157,7 +179,28 @@ const WSSViewer: React.FC<WSSViewerProps> = ({
   };
 
   const handleDisconnect = () => {
-    ipcRenderer.invoke('wss:disconnect', connectionId);
+    ipcRenderer.invoke('wss:disconnect', currentConnectionId);
+  };
+
+  const handleReconnect = async () => {
+    // Disconnect existing if any
+    await ipcRenderer.invoke('wss:disconnect', currentConnectionId);
+    
+    // Create new connection ID
+    const newConnectionId = `wss-${Date.now()}`;
+    setCurrentConnectionId(newConnectionId);
+    setStatus('connecting');
+    setErrorMessage('');
+    
+    console.log('[WSSViewer] Reconnecting with new ID:', newConnectionId);
+    
+    const result = await ipcRenderer.invoke('wss:connect', newConnectionId, { url });
+    if (result.success) {
+      setStatus('connected');
+    } else {
+      setStatus('error');
+      setErrorMessage(result.error || 'Connection failed');
+    }
   };
 
   const clearMessages = () => {
@@ -266,12 +309,37 @@ const WSSViewer: React.FC<WSSViewerProps> = ({
               <svg className="w-12 h-12 mx-auto mb-3" style={{ color: themeColors.red }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
               </svg>
-              <p style={{ color: themeColors.red }}>{errorMessage || t('wssConnectionError')}</p>
+              <p className="mb-4" style={{ color: themeColors.red }}>{errorMessage || t('wssConnectionError')}</p>
+              <button
+                onClick={handleReconnect}
+                className="px-4 py-2 rounded font-medium transition hover:opacity-80"
+                style={{ backgroundColor: themeColors.cyan, color: themeColors.background }}
+              >
+                {t('reconnect')}
+              </button>
             </div>
           </div>
         )}
 
-        {(status === 'connected' || status === 'disconnected') && messages.length === 0 && (
+        {status === 'disconnected' && (
+          <div className="flex items-center justify-center h-full">
+            <div className="text-center">
+              <svg className="w-12 h-12 mx-auto mb-3" style={{ color: themeColors.yellow }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 5.636a9 9 0 010 12.728m-3.536-3.536a5 5 0 000-7.07M13 12a1 1 0 11-2 0 1 1 0 012 0z" />
+              </svg>
+              <p className="mb-4" style={{ color: themeColors.foreground }}>{t('disconnected')}</p>
+              <button
+                onClick={handleReconnect}
+                className="px-4 py-2 rounded font-medium transition hover:opacity-80"
+                style={{ backgroundColor: themeColors.cyan, color: themeColors.background }}
+              >
+                {t('reconnect')}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {status === 'connected' && messages.length === 0 && (
           <div className="flex items-center justify-center h-full" style={{ color: themeColors.white + '80' }}>
             {t('wssNoMessages')}
           </div>

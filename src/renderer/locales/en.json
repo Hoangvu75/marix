@@ -22,6 +22,7 @@
   "clickNewHostToStart": "Click \"New Host\" button above to add your first server connection",
   "noMatchingServers": "No matching servers found",
   "clearSearch": "Clear search",
+  "noActionsAvailable": "No actions available",
   
   "serverName": "Server Name",
   "serverAlreadyExists": "Server Already Exists",
@@ -151,7 +152,11 @@
   "all": "All",
   "none": "None",
   "copy": "Copy",
+  "cut": "Cut",
   "paste": "Paste",
+  "copied": "Copied",
+  "pasted": "Pasted",
+  "moved": "Moved",
   "optional": "Optional",
   
   "switchToLightMode": "Switch to Light Mode",
@@ -206,6 +211,10 @@
   "dbAddColumn": "Add Column",
   "dbDeleteColumn": "Delete Column",
   "dbConfirmDeleteColumn": "Are you sure you want to delete this column? This action cannot be undone.",
+  "dbShowing": "Showing",
+  "dbOf": "of",
+  "dbPage": "Page",
+  "dbLoadAll": "Load All",
   "dbMysql": "MySQL / MariaDB",
   "dbPostgresql": "PostgreSQL",
   "dbMongodb": "MongoDB",
@@ -295,6 +304,7 @@
   
   "confirmDelete": "Are you sure you want to delete?",
   "confirmDisconnect": "Are you sure you want to disconnect?",
+  "confirmCloseSession": "Close this connection?",
   "confirmOverwrite": "File exists. Overwrite?",
   
   "errorConnection": "Connection error",
@@ -745,6 +755,8 @@
   "upToDate": "You are up to date!",
   "download": "Download",
   "releaseNotes": "Release Notes",
+  "later": "Later",
+  "detectingSystemInfo": "Detecting system info...",
   
   "twoFactorAuth": "2FA",
   "totpDescription": "Generate TOTP codes for two-factor authentication",
@@ -1035,6 +1047,8 @@
   "selectServersToShare": "Select servers to share",
 
   "lanFileTransfer": "LAN File Transfer",
+  "lanSecurityWarning": "Security Notice",
+  "lanSecurityWarningDesc": "Files are transferred unencrypted over your local network. Only use this feature on trusted networks (home/office). Avoid public Wi-Fi.",
   "sendFiles": "Send Files",
   "receiveFiles": "Receive Files",
   "send": "Send",
@@ -1058,5 +1072,19 @@
   "transferFailed": "Transfer Failed",
   "transferCancelled": "Transfer Cancelled",
   "transferDirectly": "Transfer files directly to devices on your local network",
-  "noSenderFound": "No sender found with this code. Make sure the sender is waiting and both devices are on the same network."
+  "noSenderFound": "No sender found with this code. Make sure the sender is waiting and both devices are on the same network.",
+  
+  "activeConnections": "Active Connections",
+  "closeAllAndExit": "Close All & Exit",
+  "youHaveActiveConnections": "You have {{count}} active connection(s).",
+  "closeConnectionsConfirm": "Do you want to close all connections and exit?",
+  "serverAlreadyConnected": "Already Connected",
+  "serverAlreadyConnectedMessage": "This server is already connected. Switching to existing session.",
+  
+  "notes": "Notes",
+  "serverNotes": "Server Notes",
+  "noNotesYet": "No notes yet. Click to add notes for this server.",
+  "notePlaceholder": "Write your notes here... (e.g., tasks to complete, configuration reminders)",
+  "noteSaved": "Note saved",
+  "noteSaving": "Saving..."
 }

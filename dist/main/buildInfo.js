@@ -37,6 +37,7 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
+const electron_1 = require("electron");
 // Default build info for development
 const defaultBuildInfo = {
     commitSha: 'development',
@@ -52,12 +53,15 @@ const defaultBuildInfo = {
 };
 let buildInfo = defaultBuildInfo;
 try {
+    // Get the app path - works in both dev and packaged
+    const appPath = electron_1.app?.getAppPath?.() || process.cwd();
     // Try multiple paths for build-info.json
     const possiblePaths = [
+        path.join(__dirname, 'build-info.json'), // Same directory as compiled code (dist/main/)
+        path.join(appPath, 'dist', 'main', 'build-info.json'), // Packaged app: app.asar/dist/main/
         path.join(__dirname, '..', '..', 'src', 'build-info.json'), // Development: dist/main -> src
-        path.join(__dirname, 'build-info.json'), // If copied to same dir
         path.join(process.cwd(), 'src', 'build-info.json'), // From cwd
-        path.join(process.cwd(), 'resources', 'build-info.json'), // Packaged app
+        path.join(process.cwd(), 'dist', 'main', 'build-info.json'), // From cwd dist
     ];
     for (const filePath of possiblePaths) {
         if (fs.existsSync(filePath)) {

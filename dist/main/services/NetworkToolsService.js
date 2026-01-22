@@ -269,59 +269,67 @@ class NetworkToolsService {
             };
         }
     }
-    // Ping
+    // Ping - using execFile to prevent command injection
     async ping(host, count = 4) {
-        try {
+        return new Promise((resolve) => {
             const isWindows = process.platform === 'win32';
-            const cmd = isWindows
-                ? `ping -n ${count} ${host}`
-                : `ping -c ${count} ${host}`;
-            const { stdout, stderr } = await execAsync(cmd, { timeout: 30000 });
-            return {
-                success: true,
-                tool: 'ping',
-                target: host,
-                data: stdout,
-                timestamp: new Date().toISOString()
-            };
-        }
-        catch (error) {
-            return {
-                success: false,
-                tool: 'ping',
-                target: host,
-                error: error.message || 'Ping failed',
-                data: error.stdout || error.stderr,
-                timestamp: new Date().toISOString()
-            };
-        }
+            const command = 'ping';
+            const args = isWindows
+                ? ['-n', count.toString(), host]
+                : ['-c', count.toString(), host];
+            // execFile automatically escapes arguments, preventing command injection
+            (0, child_process_1.execFile)(command, args, { timeout: 30000 }, (error, stdout, stderr) => {
+                if (error) {
+                    resolve({
+                        success: false,
+                        tool: 'ping',
+                        target: host,
+                        error: error.message || 'Ping failed',
+                        data: stdout || stderr,
+                        timestamp: new Date().toISOString()
+                    });
+                }
+                else {
+                    resolve({
+                        success: true,
+                        tool: 'ping',
+                        target: host,
+                        data: stdout,
+                        timestamp: new Date().toISOString()
+                    });
+                }
+            });
+        });
     }
-    // Traceroute
+    // Traceroute - using execFile to prevent command injection
     async traceroute(host) {
-        try {
+        return new Promise((resolve) => {
             const isWindows = process.platform === 'win32';
-            const cmd = isWindows
-                ? `tracert -d ${host}`
-                : `traceroute -n ${host}`;
-            const { stdout, stderr } = await execAsync(cmd, { timeout: 60000 });
-            return {
-                success: true,
-                tool: 'trace',
-                target: host,
-                data: stdout,
-                timestamp: new Date().toISOString()
-            };
-        }
-        catch (error) {
-            return {
-                success: false,
-                tool: 'trace',
-                target: host,
-                error: error.message || 'Traceroute failed',
-                data: error.stdout || error.stderr,
-                timestamp: new Date().toISOString()
-            };
-        }
+            const command = isWindows ? 'tracert' : 'traceroute';
+            const args = isWindows ? ['-d', host] : ['-n', host];
+            // execFile automatically escapes arguments, preventing command injection
+            (0, child_process_1.execFile)(command, args, { timeout: 60000 }, (error, stdout, stderr) => {
+                if (error) {
+                    resolve({
+                        success: false,
+                        tool: 'trace',
+                        target: host,
+                        error: error.message || 'Traceroute failed',
+                        data: stdout || stderr,
+                        timestamp: new Date().toISOString()
+                    });
+                }
+                else {
+                    resolve({
+                        success: true,
+                        tool: 'trace',
+                        target: host,
+                        data: stdout,
+                        timestamp: new Date().toISOString()
+                    });
+                }
+            });
+        });
     }
     // TCP Connection Test
     async tcpTest(host, port, timeout = 5000) {

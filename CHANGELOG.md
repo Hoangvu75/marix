@@ -2,6 +2,122 @@
 
 All notable changes to Marix SSH Client will be documented in this file.
 
+## [1.0.12] - 2026-01-22
+
+### Added
+- **Server Notes (Sticky Note)**: Personal notes for each server
+  - Click the note icon in footer to add/edit notes
+  - Notes are saved automatically with 500ms debounce
+  - Visual indicator (dot) when server has notes
+  - Notes persist with server configuration
+  - File: `App.tsx`
+
+- **Close Confirmation Dialog i18n**: Multi-language support for app close dialog
+  - Translated to all 14 supported languages
+  - Shows active connection count before closing
+  - Uses request ID pattern to prevent race conditions
+  - Files: `index.ts`, all locale JSON files
+
+- **Duplicate Session Prevention**: Prevent opening same server twice
+  - Shows warning when attempting to connect to already active server
+  - Prevents accidental duplicate connections
+  - File: `App.tsx`
+
+- **SFTP Folder Transfer Progress**: Added total progress display for folder transfers
+  - Shows overall progress percentage and transferred/total bytes
+  - Semi-transparent overlay with loading animation
+  - Works for both upload and download operations
+  - File: `DualPaneSFTP.tsx`
+
+- **Compress Submenu**: Moved compression options to submenu in context menu
+  - Cleaner context menu organization
+  - Options: TAR, TAR.GZ, ZIP formats
+  - File: `DualPaneSFTP.tsx`
+
+- **Copy/Cut/Paste for File Transfers**: Full clipboard support for SFTP/FTP/FTPS
+  - Copy and Cut files/folders with context menu or keyboard shortcuts
+  - Paste within same pane or across local/remote panes
+  - Supports cross-pane transfers (local → remote, remote → local)
+  - Visual feedback for clipboard operations
+  - File: `DualPaneSFTP.tsx`
+
+- **Keyboard Shortcuts for File Operations**: Platform-aware shortcuts
+  - Ctrl+C / Cmd+C: Copy selected file/folder
+  - Ctrl+X / Cmd+X: Cut selected file/folder
+  - Ctrl+V / Cmd+V: Paste from clipboard
+  - Automatically detects Mac vs Windows/Linux
+  - File: `DualPaneSFTP.tsx`
+
+### Fixed
+- **New File Translation Bug**: Fixed "New File" showing as "New Folder" in non-English languages
+  - Changed from `t('newFolder').replace('Folder', 'File')` to `t('newFile')`
+  - Now correctly displays localized "New File" text in all 14 languages
+  - File: `DualPaneSFTP.tsx`
+
+### Security
+- **Command Injection Prevention**: Fixed critical vulnerability in Network Tools
+  - Replaced `exec()` with `execFile()` in ping and traceroute functions
+  - Arguments are now automatically escaped, preventing shell injection attacks
+  - File: `NetworkToolsService.ts`
+
+- **Memory Leak Prevention**: Fixed IPC listener leak in preload script
+  - Added Map to track listener references for proper cleanup
+  - `removeListener()` now correctly removes the wrapped callback
+  - Prevents memory leaks during long sessions
+  - File: `preload.ts`
+
+### Known Issues
+- **Slow App Close**: Closing app with active SSH connections may take 1-2 seconds
+  - Workaround: Disconnect servers manually before closing
+  - Will be optimized in v1.0.13
+
+- **LAN File Transfer Encryption**: All data now encrypted with AES-256-GCM
+  - Encryption key derived from pairing code using PBKDF2 (100,000 iterations)
+  - Protects against network sniffing on untrusted networks
+  - IV (12 bytes) + AuthTag (16 bytes) + Encrypted payload format
+  - File: `LANFileTransferService.ts`
+
+- **LAN Transfer Security Warning**: Added prominent warning banner
+  - Warns users about data transmission over LAN
+  - Advises to only share with trusted devices
+  - Full i18n support for warning messages
+
+- **IPC Standardization**: Migrated all renderer files to use `window.electron.ipcRenderer`
+  - Replaced direct `import { ipcRenderer } from 'electron'` with contextBridge API
+  - Added TypeScript type definitions for window.electron
+  - Supports `contextIsolation: true` for better security
+  - Updated 21 renderer files for consistency
+  - File: `src/renderer/types/electron.d.ts`
+
+### Added
+- **Window Close Confirmation**: Prevents accidental closure with active connections
+  - Shows browser confirmation dialog when closing window with open sessions
+  - Applies to all connection types: SSH, RDP, FTP, Database, etc.
+  - User can choose to stay or leave
+  - File: `App.tsx`
+
+### Fixed
+- **Auto Update Check**: Fixed version comparison and auto-check on startup
+  - Replaced string comparison with proper semver comparison
+  - Now correctly detects updates (e.g., 1.0.12 > 1.0.9)
+  - Auto-check runs 3 seconds after app launch
+  - Results cached for 24 hours to avoid API rate limits
+  - Shows notification badge when update is available
+
+### Dependencies
+- **Added react-window**: For future virtual list optimizations
+  - Installed `react-window` and `@types/react-window`
+
+### Removed
+- **Dead Code Cleanup**: Removed unused terminal components
+  - Deleted `DOMTerminal.tsx` and `CanvasTerminal.tsx`
+  - XTermTerminal.tsx is the only active terminal implementation
+  - Reduces bundle size and maintenance burden
+
+- **Windows Legacy Build**: Removed from GitHub Actions workflow
+  - Legacy Windows 7/8 build is no longer maintained
+  - Focus on Windows 10/11 with modern Electron
+
 ## [1.0.11] - 2026-01-21
 
 ### Added
@@ -31,7 +147,7 @@ All notable changes to Marix SSH Client will be documented in this file.
 - **Build System**: Added commit SHA injection for release transparency
   - `scripts/inject-build-info.js` generates build metadata at compile time
   - GitHub Actions workflow injects commit info into binaries
-  - Release notes now include build verification section   
+  - Release notes now include build verification section
 
 ## [1.0.10] - 2026-01-21
 

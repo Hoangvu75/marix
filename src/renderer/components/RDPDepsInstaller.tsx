@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useLanguage } from '../contexts/LanguageContext';
 
-const { ipcRenderer } = window.require('electron');
+const { ipcRenderer } = window.electron;
 
 interface Props {
   isOpen: boolean;

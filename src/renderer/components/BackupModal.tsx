@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { ipcRenderer } from 'electron';
+
+const { ipcRenderer } = window.electron;
 
 interface BackupModalProps {
   mode: 'create' | 'restore';

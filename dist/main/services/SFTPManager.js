@@ -1,12 +1,55 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.SFTPManager = void 0;
 const electron_1 = require("electron");
+const fs = __importStar(require("fs"));
+const path = __importStar(require("path"));
 class SFTPManager {
     constructor() {
         this.sftpConnections = new Map();
         // Track delete count for progress reporting
         this.deleteCount = 0;
+        // Transfer progress tracking
+        this.transferProgress = {
+            totalFiles: 0,
+            completedFiles: 0,
+            currentFile: '',
+            totalBytes: 0,
+            transferredBytes: 0,
+        };
     }
     async connect(connectionId, sshClient) {
         if (!sshClient) {
@@ -284,6 +327,190 @@ class SFTPManager {
         if (sftp) {
             sftp.end();
             this.sftpConnections.delete(connectionId);
+        }
+    }
+    // Emit transfer progress to renderer
+    emitTransferProgress(connectionId, type) {
+        const windows = electron_1.BrowserWindow.getAllWindows();
+        for (const win of windows) {
+            win.webContents.send('sftp:transfer-progress', {
+                connectionId,
+                type,
+                ...this.transferProgress
+            });
+        }
+    }
+    // Count all files in a remote directory recursively
+    async countRemoteFiles(connectionId, remotePath) {
+        const sftp = this.sftpConnections.get(connectionId);
+        if (!sftp)
+            throw new Error('SFTP connection not found');
+        let count = 0;
+        let totalBytes = 0;
+        const items = await this.listFiles(connectionId, remotePath);
+        for (const item of items) {
+            const itemPath = remotePath.endsWith('/') ? `${remotePath}${item.name}` : `${remotePath}/${item.name}`;
+            if (item.type === 'directory') {
+                const sub = await this.countRemoteFiles(connectionId, itemPath);
+                count += sub.count;
+                totalBytes += sub.totalBytes;
+            }
+            else {
+                count++;
+                totalBytes += item.size;
+            }
+        }
+        return { count, totalBytes };
+    }
+    // Count all files in a local directory recursively
+    countLocalFiles(localPath) {
+        let count = 0;
+        let totalBytes = 0;
+        const items = fs.readdirSync(localPath, { withFileTypes: true });
+        for (const item of items) {
+            const itemPath = path.join(localPath, item.name);
+            if (item.isDirectory()) {
+                const sub = this.countLocalFiles(itemPath);
+                count += sub.count;
+                totalBytes += sub.totalBytes;
+            }
+            else {
+                count++;
+                const stat = fs.statSync(itemPath);
+                totalBytes += stat.size;
+            }
+        }
+        return { count, totalBytes };
+    }
+    // Download folder recursively with progress
+    async downloadFolder(connectionId, remotePath, localPath) {
+        const sftp = this.sftpConnections.get(connectionId);
+        if (!sftp)
+            throw new Error('SFTP connection not found');
+        // Count files first
+        console.log('[SFTPManager] Counting remote files...');
+        const { count, totalBytes } = await this.countRemoteFiles(connectionId, remotePath);
+        this.transferProgress = {
+            totalFiles: count,
+            completedFiles: 0,
+            currentFile: remotePath,
+            totalBytes,
+            transferredBytes: 0,
+        };
+        this.emitTransferProgress(connectionId, 'download');
+        // Create local directory
+        if (!fs.existsSync(localPath)) {
+            fs.mkdirSync(localPath, { recursive: true });
+        }
+        // Download recursively
+        await this.downloadFolderRecursive(connectionId, remotePath, localPath);
+    }
+    async downloadFolderRecursive(connectionId, remotePath, localPath) {
+        const sftp = this.sftpConnections.get(connectionId);
+        if (!sftp)
+            throw new Error('SFTP connection not found');
+        const items = await this.listFiles(connectionId, remotePath);
+        for (const item of items) {
+            const remoteItemPath = remotePath.endsWith('/') ? `${remotePath}${item.name}` : `${remotePath}/${item.name}`;
+            const localItemPath = path.join(localPath, item.name);
+            if (item.type === 'directory') {
+                // Create local directory and recurse
+                if (!fs.existsSync(localItemPath)) {
+                    fs.mkdirSync(localItemPath, { recursive: true });
+                }
+                await this.downloadFolderRecursive(connectionId, remoteItemPath, localItemPath);
+            }
+            else {
+                // Update progress
+                this.transferProgress.currentFile = item.name;
+                this.emitTransferProgress(connectionId, 'download');
+                // Download file
+                await new Promise((resolve, reject) => {
+                    sftp.fastGet(remoteItemPath, localItemPath, (err) => {
+                        if (err) {
+                            console.error('[SFTPManager] Download failed:', remoteItemPath, err.message);
+                            reject(err);
+                            return;
+                        }
+                        this.transferProgress.completedFiles++;
+                        this.transferProgress.transferredBytes += item.size;
+                        this.emitTransferProgress(connectionId, 'download');
+                        console.log('[SFTPManager] Downloaded:', remoteItemPath);
+                        resolve();
+                    });
+                });
+            }
+        }
+    }
+    // Upload folder recursively with progress
+    async uploadFolder(connectionId, localPath, remotePath) {
+        const sftp = this.sftpConnections.get(connectionId);
+        if (!sftp)
+            throw new Error('SFTP connection not found');
+        // Count files first
+        console.log('[SFTPManager] Counting local files...');
+        const { count, totalBytes } = this.countLocalFiles(localPath);
+        this.transferProgress = {
+            totalFiles: count,
+            completedFiles: 0,
+            currentFile: localPath,
+            totalBytes,
+            transferredBytes: 0,
+        };
+        this.emitTransferProgress(connectionId, 'upload');
+        // Create remote directory
+        try {
+            await this.createDirectory(connectionId, remotePath);
+        }
+        catch (err) {
+            // Directory might already exist
+            if (!err.message?.includes('already exists')) {
+                console.log('[SFTPManager] Directory may exist:', remotePath);
+            }
+        }
+        // Upload recursively
+        await this.uploadFolderRecursive(connectionId, localPath, remotePath);
+    }
+    async uploadFolderRecursive(connectionId, localPath, remotePath) {
+        const sftp = this.sftpConnections.get(connectionId);
+        if (!sftp)
+            throw new Error('SFTP connection not found');
+        const items = fs.readdirSync(localPath, { withFileTypes: true });
+        for (const item of items) {
+            const localItemPath = path.join(localPath, item.name);
+            const remoteItemPath = remotePath.endsWith('/') ? `${remotePath}${item.name}` : `${remotePath}/${item.name}`;
+            if (item.isDirectory()) {
+                // Create remote directory and recurse
+                try {
+                    await this.createDirectory(connectionId, remoteItemPath);
+                }
+                catch (err) {
+                    // Directory might already exist
+                    console.log('[SFTPManager] Directory may exist:', remoteItemPath);
+                }
+                await this.uploadFolderRecursive(connectionId, localItemPath, remoteItemPath);
+            }
+            else {
+                // Update progress
+                this.transferProgress.currentFile = item.name;
+                this.emitTransferProgress(connectionId, 'upload');
+                const stat = fs.statSync(localItemPath);
+                // Upload file
+                await new Promise((resolve, reject) => {
+                    sftp.fastPut(localItemPath, remoteItemPath, (err) => {
+                        if (err) {
+                            console.error('[SFTPManager] Upload failed:', localItemPath, err.message);
+                            reject(err);
+                            return;
+                        }
+                        this.transferProgress.completedFiles++;
+                        this.transferProgress.transferredBytes += stat.size;
+                        this.emitTransferProgress(connectionId, 'upload');
+                        console.log('[SFTPManager] Uploaded:', localItemPath);
+                        resolve();
+                    });
+                });
+            }
         }
     }
     getFileType(mode) {

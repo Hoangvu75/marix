@@ -1,6 +1,8 @@
 import { Client } from 'ssh2';
 import { SFTPWrapper, FileEntry } from 'ssh2';
 import { BrowserWindow } from 'electron';
+import * as fs from 'fs';
+import * as path from 'path';
 
 export interface FileInfo {
   name: string;
@@ -331,6 +333,215 @@ export class SFTPManager {
     if (sftp) {
       sftp.end();
       this.sftpConnections.delete(connectionId);
+    }
+  }
+
+  // Transfer progress tracking
+  private transferProgress = {
+    totalFiles: 0,
+    completedFiles: 0,
+    currentFile: '',
+    totalBytes: 0,
+    transferredBytes: 0,
+  };
+
+  // Emit transfer progress to renderer
+  private emitTransferProgress(connectionId: string, type: 'download' | 'upload'): void {
+    const windows = BrowserWindow.getAllWindows();
+    for (const win of windows) {
+      win.webContents.send('sftp:transfer-progress', { 
+        connectionId, 
+        type,
+        ...this.transferProgress 
+      });
+    }
+  }
+
+  // Count all files in a remote directory recursively
+  private async countRemoteFiles(connectionId: string, remotePath: string): Promise<{ count: number; totalBytes: number }> {
+    const sftp = this.sftpConnections.get(connectionId);
+    if (!sftp) throw new Error('SFTP connection not found');
+
+    let count = 0;
+    let totalBytes = 0;
+
+    const items = await this.listFiles(connectionId, remotePath);
+    for (const item of items) {
+      const itemPath = remotePath.endsWith('/') ? `${remotePath}${item.name}` : `${remotePath}/${item.name}`;
+      if (item.type === 'directory') {
+        const sub = await this.countRemoteFiles(connectionId, itemPath);
+        count += sub.count;
+        totalBytes += sub.totalBytes;
+      } else {
+        count++;
+        totalBytes += item.size;
+      }
+    }
+    return { count, totalBytes };
+  }
+
+  // Count all files in a local directory recursively
+  private countLocalFiles(localPath: string): { count: number; totalBytes: number } {
+    let count = 0;
+    let totalBytes = 0;
+
+    const items = fs.readdirSync(localPath, { withFileTypes: true });
+    for (const item of items) {
+      const itemPath = path.join(localPath, item.name);
+      if (item.isDirectory()) {
+        const sub = this.countLocalFiles(itemPath);
+        count += sub.count;
+        totalBytes += sub.totalBytes;
+      } else {
+        count++;
+        const stat = fs.statSync(itemPath);
+        totalBytes += stat.size;
+      }
+    }
+    return { count, totalBytes };
+  }
+
+  // Download folder recursively with progress
+  async downloadFolder(connectionId: string, remotePath: string, localPath: string): Promise<void> {
+    const sftp = this.sftpConnections.get(connectionId);
+    if (!sftp) throw new Error('SFTP connection not found');
+
+    // Count files first
+    console.log('[SFTPManager] Counting remote files...');
+    const { count, totalBytes } = await this.countRemoteFiles(connectionId, remotePath);
+    
+    this.transferProgress = {
+      totalFiles: count,
+      completedFiles: 0,
+      currentFile: remotePath,
+      totalBytes,
+      transferredBytes: 0,
+    };
+    this.emitTransferProgress(connectionId, 'download');
+
+    // Create local directory
+    if (!fs.existsSync(localPath)) {
+      fs.mkdirSync(localPath, { recursive: true });
+    }
+
+    // Download recursively
+    await this.downloadFolderRecursive(connectionId, remotePath, localPath);
+  }
+
+  private async downloadFolderRecursive(connectionId: string, remotePath: string, localPath: string): Promise<void> {
+    const sftp = this.sftpConnections.get(connectionId);
+    if (!sftp) throw new Error('SFTP connection not found');
+
+    const items = await this.listFiles(connectionId, remotePath);
+    
+    for (const item of items) {
+      const remoteItemPath = remotePath.endsWith('/') ? `${remotePath}${item.name}` : `${remotePath}/${item.name}`;
+      const localItemPath = path.join(localPath, item.name);
+
+      if (item.type === 'directory') {
+        // Create local directory and recurse
+        if (!fs.existsSync(localItemPath)) {
+          fs.mkdirSync(localItemPath, { recursive: true });
+        }
+        await this.downloadFolderRecursive(connectionId, remoteItemPath, localItemPath);
+      } else {
+        // Update progress
+        this.transferProgress.currentFile = item.name;
+        this.emitTransferProgress(connectionId, 'download');
+
+        // Download file
+        await new Promise<void>((resolve, reject) => {
+          sftp.fastGet(remoteItemPath, localItemPath, (err) => {
+            if (err) {
+              console.error('[SFTPManager] Download failed:', remoteItemPath, err.message);
+              reject(err);
+              return;
+            }
+            this.transferProgress.completedFiles++;
+            this.transferProgress.transferredBytes += item.size;
+            this.emitTransferProgress(connectionId, 'download');
+            console.log('[SFTPManager] Downloaded:', remoteItemPath);
+            resolve();
+          });
+        });
+      }
+    }
+  }
+
+  // Upload folder recursively with progress
+  async uploadFolder(connectionId: string, localPath: string, remotePath: string): Promise<void> {
+    const sftp = this.sftpConnections.get(connectionId);
+    if (!sftp) throw new Error('SFTP connection not found');
+
+    // Count files first
+    console.log('[SFTPManager] Counting local files...');
+    const { count, totalBytes } = this.countLocalFiles(localPath);
+    
+    this.transferProgress = {
+      totalFiles: count,
+      completedFiles: 0,
+      currentFile: localPath,
+      totalBytes,
+      transferredBytes: 0,
+    };
+    this.emitTransferProgress(connectionId, 'upload');
+
+    // Create remote directory
+    try {
+      await this.createDirectory(connectionId, remotePath);
+    } catch (err: any) {
+      // Directory might already exist
+      if (!err.message?.includes('already exists')) {
+        console.log('[SFTPManager] Directory may exist:', remotePath);
+      }
+    }
+
+    // Upload recursively
+    await this.uploadFolderRecursive(connectionId, localPath, remotePath);
+  }
+
+  private async uploadFolderRecursive(connectionId: string, localPath: string, remotePath: string): Promise<void> {
+    const sftp = this.sftpConnections.get(connectionId);
+    if (!sftp) throw new Error('SFTP connection not found');
+
+    const items = fs.readdirSync(localPath, { withFileTypes: true });
+    
+    for (const item of items) {
+      const localItemPath = path.join(localPath, item.name);
+      const remoteItemPath = remotePath.endsWith('/') ? `${remotePath}${item.name}` : `${remotePath}/${item.name}`;
+
+      if (item.isDirectory()) {
+        // Create remote directory and recurse
+        try {
+          await this.createDirectory(connectionId, remoteItemPath);
+        } catch (err: any) {
+          // Directory might already exist
+          console.log('[SFTPManager] Directory may exist:', remoteItemPath);
+        }
+        await this.uploadFolderRecursive(connectionId, localItemPath, remoteItemPath);
+      } else {
+        // Update progress
+        this.transferProgress.currentFile = item.name;
+        this.emitTransferProgress(connectionId, 'upload');
+
+        const stat = fs.statSync(localItemPath);
+
+        // Upload file
+        await new Promise<void>((resolve, reject) => {
+          sftp.fastPut(localItemPath, remoteItemPath, (err) => {
+            if (err) {
+              console.error('[SFTPManager] Upload failed:', localItemPath, err.message);
+              reject(err);
+              return;
+            }
+            this.transferProgress.completedFiles++;
+            this.transferProgress.transferredBytes += stat.size;
+            this.emitTransferProgress(connectionId, 'upload');
+            console.log('[SFTPManager] Uploaded:', localItemPath);
+            resolve();
+          });
+        });
+      }
     }
   }
 

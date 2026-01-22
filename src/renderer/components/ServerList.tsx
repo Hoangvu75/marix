@@ -22,6 +22,9 @@ interface Props {
   onShareOnLAN?: (serverIds: string[]) => void;
   selectedServerIds?: string[];
   onSelectionChange?: (ids: string[]) => void;
+  onReorder?: (servers: Server[]) => void;
+  onAddNew?: () => void;
+  onQuickConnect?: () => void;
 }
 
 // Protocol colors and icons
@@ -148,13 +151,69 @@ const ServerList: React.FC<Props> = ({
   onShareOnLAN,
   selectedServerIds = [],
   onSelectionChange,
+  onReorder,
+  onAddNew,
+  onQuickConnect,
 }) => {
   const { t } = useLanguage();
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; server: Server } | null>(null);
+  const [emptyContextMenu, setEmptyContextMenu] = useState<{ x: number; y: number } | null>(null);
   const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
   const [showTagSelector, setShowTagSelector] = useState(false);
+  
+  // Drag and drop state
+  const [draggedServer, setDraggedServer] = useState<Server | null>(null);
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
+
+  // Drag handlers
+  const handleDragStart = (e: React.DragEvent, server: Server) => {
+    setDraggedServer(server);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', server.id);
+    // Add dragging class after a small delay to prevent visual glitch
+    setTimeout(() => {
+      (e.target as HTMLElement).classList.add('opacity-50');
+    }, 0);
+  };
+
+  const handleDragEnd = (e: React.DragEvent) => {
+    setDraggedServer(null);
+    setDragOverId(null);
+    (e.target as HTMLElement).classList.remove('opacity-50');
+  };
+
+  const handleDragOver = (e: React.DragEvent, serverId: string) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (draggedServer && draggedServer.id !== serverId) {
+      setDragOverId(serverId);
+    }
+  };
+
+  const handleDragLeave = () => {
+    setDragOverId(null);
+  };
+
+  const handleDrop = (e: React.DragEvent, targetServer: Server) => {
+    e.preventDefault();
+    if (!draggedServer || draggedServer.id === targetServer.id || !onReorder) {
+      setDragOverId(null);
+      return;
+    }
+
+    const newServers = [...servers];
+    const draggedIndex = newServers.findIndex(s => s.id === draggedServer.id);
+    const targetIndex = newServers.findIndex(s => s.id === targetServer.id);
+
+    // Remove dragged item and insert at new position
+    newServers.splice(draggedIndex, 1);
+    newServers.splice(targetIndex, 0, draggedServer);
+
+    onReorder(newServers);
+    setDragOverId(null);
+  };
 
   // Get all unique tags from servers
   const allTags = useMemo(() => {
@@ -213,18 +272,27 @@ const ServerList: React.FC<Props> = ({
   useEffect(() => {
     const handleClick = () => {
       setContextMenu(null);
+      setEmptyContextMenu(null);
       setShowTagSelector(false);
     };
-    if (contextMenu || showTagSelector) {
+    if (contextMenu || emptyContextMenu || showTagSelector) {
       window.addEventListener('click', handleClick);
       return () => window.removeEventListener('click', handleClick);
     }
-  }, [contextMenu, showTagSelector]);
+  }, [contextMenu, emptyContextMenu, showTagSelector]);
 
   const handleContextMenu = (e: React.MouseEvent, server: Server) => {
     e.preventDefault();
     e.stopPropagation();
+    setEmptyContextMenu(null);
     setContextMenu({ x: e.clientX, y: e.clientY, server });
+  };
+
+  const handleEmptyContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setContextMenu(null);
+    setEmptyContextMenu({ x: e.clientX, y: e.clientY });
   };
 
   // Filter servers by search
@@ -257,11 +325,11 @@ const ServerList: React.FC<Props> = ({
   return (
     <div className="h-full flex flex-col">
       {/* Search and LAN Discovery Toggle */}
-      <div className="flex-shrink-0 px-4 pt-4 pb-3 space-y-2">
+      <div className="flex-shrink-0 px-4 pt-4 pb-3 space-y-2 relative z-10">
         <div className="flex items-center gap-2">
           {/* Search input */}
           <div className="relative flex-1">
-            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
             <input
@@ -270,9 +338,10 @@ const ServerList: React.FC<Props> = ({
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder={t('searchServers') || 'Search servers...'}
               className="w-full pl-9 pr-8 py-2 bg-navy-800/60 border border-navy-700/50 rounded-lg text-sm text-white placeholder-gray-500 focus:outline-none focus:border-teal-500/50 transition-all"
+              onClick={(e) => e.stopPropagation()}
             />
             {searchTerm && (
-              <button onClick={() => setSearchTerm('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white">
+              <button onClick={() => setSearchTerm('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white z-10">
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
@@ -360,7 +429,10 @@ const ServerList: React.FC<Props> = ({
       </div>
 
       {/* Server Grid */}
-      <div className="flex-1 overflow-y-auto px-4 pb-4">
+      <div 
+        className="flex-1 overflow-y-auto px-4 pb-4"
+        onContextMenu={handleEmptyContextMenu}
+      >
         {filteredServers.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-32">
             <p className="text-sm text-gray-400">{t('noMatchingServers') || 'No servers found'}</p>
@@ -381,9 +453,17 @@ const ServerList: React.FC<Props> = ({
               return (
                 <div
                   key={server.id}
+                  draggable={!isMultiSelectMode && !searchTerm}
+                  onDragStart={(e) => handleDragStart(e, server)}
+                  onDragEnd={handleDragEnd}
+                  onDragOver={(e) => handleDragOver(e, server.id)}
+                  onDragLeave={handleDragLeave}
+                  onDrop={(e) => handleDrop(e, server)}
                   className={`group relative bg-navy-800 rounded-lg border transition-all duration-200 cursor-pointer ${
                     isSelected
                       ? 'border-teal-500 shadow-lg shadow-teal-500/20 ring-2 ring-teal-500/30'
+                      : dragOverId === server.id
+                      ? 'border-teal-400 border-dashed bg-teal-500/10'
                       : isHovered 
                       ? 'border-teal-500/50 shadow-lg shadow-teal-500/10' 
                       : 'border-navy-700 hover:border-navy-600'
@@ -617,6 +697,49 @@ const ServerList: React.FC<Props> = ({
             </svg>
             {t('delete')}
           </button>
+        </div>
+      )}
+
+      {/* Empty Area Context Menu */}
+      {emptyContextMenu && (
+        <div
+          className="fixed bg-navy-800 border border-navy-700 rounded-lg shadow-2xl py-1 min-w-[180px] z-50"
+          style={{ top: emptyContextMenu.y, left: emptyContextMenu.x }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {onQuickConnect && (
+            <button
+              onClick={() => {
+                onQuickConnect();
+                setEmptyContextMenu(null);
+              }}
+              className="w-full px-4 py-2 text-left text-sm text-white hover:bg-navy-700 flex items-center gap-2"
+            >
+              <svg className="w-4 h-4 text-teal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+              {t('quickConnect') || 'Quick Connect'}
+            </button>
+          )}
+          {onAddNew && (
+            <button
+              onClick={() => {
+                onAddNew();
+                setEmptyContextMenu(null);
+              }}
+              className="w-full px-4 py-2 text-left text-sm text-white hover:bg-navy-700 flex items-center gap-2"
+            >
+              <svg className="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              {t('addNewHost') || 'New Host'}
+            </button>
+          )}
+          {!onQuickConnect && !onAddNew && (
+            <div className="px-4 py-2 text-sm text-gray-500">
+              {t('noActionsAvailable')}
+            </div>
+          )}
         </div>
       )}
     </div>

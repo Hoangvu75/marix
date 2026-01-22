@@ -153,6 +153,21 @@ class ServerStore {
         const encryptedServers = servers.map(server => SecureStorage_1.SecureStorage.encryptFields(server, SENSITIVE_FIELDS));
         this.store.set('servers', encryptedServers);
     }
+    /**
+     * Reorder servers - update the order in storage
+     * Servers come already in the new order, we just need to save them
+     */
+    reorderServers(servers) {
+        // Get raw servers to preserve encrypted data
+        const rawServers = this.getRawServers();
+        // Create a map for quick lookup
+        const serverMap = new Map(rawServers.map(s => [s.id, s]));
+        // Reorder based on incoming order, using raw (encrypted) data
+        const reorderedServers = servers
+            .map(s => serverMap.get(s.id))
+            .filter((s) => s !== undefined);
+        this.store.set('servers', reorderedServers);
+    }
     // Set all tag colors (for backup restore)
     setTagColors(tagColors) {
         this.store.set('tagColors', tagColors);

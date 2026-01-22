@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { ipcRenderer } from 'electron';
 import { Server } from '../App';
 import { useLanguage } from '../contexts/LanguageContext';
 import PortKnockingGuideModal from './PortKnockingGuideModal';
+
+const { ipcRenderer } = window.electron;
 
 interface SSHKeyInfo {
   id: string;
