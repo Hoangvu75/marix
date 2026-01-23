@@ -1126,8 +1126,6 @@ export interface Translations {
   serversToShare: string;
   noServersSelected: string;
   lanShareSecurity: string;
-  lanSecurityWarning: string;
-  lanSecurityWarningDesc: string;
   pairingCode: string;
   pairingCodeDesc: string;
   availableDevices: string;
@@ -1146,6 +1144,71 @@ export interface Translations {
   stopBeforeEdit: string;
   start: string;
   stop: string;
+  
+  // LAN File Transfer
+  lanFileTransfer: string;
+  transferDirectly: string;
+  sendFiles: string;
+  receiveFiles: string;
+  selectDevice: string;
+  filesToSend: string;
+  selectFiles: string;
+  selectFolder: string;
+  digitCode: string;
+  generateNewCode: string;
+  shareCodeWithReceiver: string;
+  send: string;
+  files: string;
+  incomingTransferFrom: string;
+  andMore: string;
+  enterPairingCodeFromSender: string;
+  acceptAndSave: string;
+  waitingForIncomingTransfers: string;
+  makeSureLANEnabled: string;
+  sending: string;
+  receiving: string;
+  cancelTransfer: string;
+  yourDevice: string;
+  incomingFileTransfer: string;
+  wantsToSendFiles: string;
+  transferProgress: string;
+  transferCompleted: string;
+  transferFailed: string;
+  transferCancelled: string;
+  pleaseSelectDeviceFilesCode: string;
+  waitingForReceiverAccept: string;
+  pleaseEnterPairingCode: string;
+  failedToSelectSaveLocation: string;
+  receivingFilesProgress: string;
+  failedToAcceptWrongCode: string;
+  transferRejected: string;
+  
+  // LAN File Transfer Page
+  shareCodeWithReceiverDesc: string;
+  prepareToSend: string;
+  waitingForReceiver: string;
+  tellReceiverCode: string;
+  enterSenderPairingCode: string;
+  askSenderForCode: string;
+  searchingForSender: string;
+  findSender: string;
+  senderFound: string;
+  howToReceiveFiles: string;
+  receiveStep1: string;
+  receiveStep2: string;
+  receiveStep3: string;
+  receiveStep4: string;
+  recentTransfers: string;
+  waitingForReceiverToConnect: string;
+  connectedStartingTransfer: string;
+  transferInProgress: string;
+  foundSender: string;
+  preparingFiles: string;
+  enterValid6DigitCode: string;
+  searchingOnNetwork: string;
+  noSenderFoundWithCode: string;
+  pleaseSearchFindSenderFirst: string;
+  connectingToSender: string;
 }
 
 interface LanguageContextType {

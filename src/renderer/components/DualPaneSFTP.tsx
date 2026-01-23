@@ -93,6 +93,11 @@ const DualPaneSFTP: React.FC<Props> = ({ connectionId, server, initialLocalPath,
   // Toast notification state
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'info' | 'error' } | null>(null);
 
+  // Local drives state
+  const [localDrives, setLocalDrives] = useState<{ name: string; path: string; type: string; mounted?: boolean; device?: string }[]>([]);
+  const [showDriveSelector, setShowDriveSelector] = useState(false);
+  const [mountingDrive, setMountingDrive] = useState<string | null>(null);
+
   // Show toast notification
   const showToast = (message: string, type: 'success' | 'info' | 'error' = 'info') => {
     setToast({ message, type });
@@ -137,6 +142,78 @@ const DualPaneSFTP: React.FC<Props> = ({ connectionId, server, initialLocalPath,
     };
     initHomedir();
   }, []);
+
+  // Load local drives on mount
+  useEffect(() => {
+    const loadDrives = async () => {
+      try {
+        const drives = await ipcRenderer.invoke('local:getDrives');
+        setLocalDrives(drives);
+      } catch (err) {
+        console.error('[DualPaneSFTP] Failed to load drives:', err);
+      }
+    };
+    loadDrives();
+  }, []);
+
+  // Refresh drives list
+  const refreshDrives = async () => {
+    try {
+      const drives = await ipcRenderer.invoke('local:getDrives');
+      setLocalDrives(drives);
+    } catch (err) {
+      console.error('[DualPaneSFTP] Failed to refresh drives:', err);
+    }
+  };
+
+  // Mount a drive and navigate to it
+  const mountAndNavigate = async (drive: { name: string; path: string; type: string; mounted?: boolean; device?: string }) => {
+    if (drive.mounted && drive.path) {
+      // Already mounted, just navigate
+      navigateLocal(drive.path);
+      setShowDriveSelector(false);
+      return;
+    }
+
+    if (!drive.device) {
+      showToast('Cannot mount: no device path', 'error');
+      return;
+    }
+
+    setMountingDrive(drive.device);
+    setShowDriveSelector(false);
+
+    try {
+      // Try to mount using udisksctl first (handles polkit auth)
+      const result = await ipcRenderer.invoke('local:mountDrive', drive.device);
+      
+      if (result.success) {
+        showToast(`Mounted ${drive.name}`, 'success');
+        await refreshDrives();
+        if (result.mountPoint) {
+          navigateLocal(result.mountPoint);
+        }
+      } else if (result.needsAuth) {
+        // Need authentication - try with pkexec (graphical sudo prompt)
+        const authResult = await ipcRenderer.invoke('local:mountDriveWithAuth', drive.device);
+        if (authResult.success) {
+          showToast(`Mounted ${drive.name}`, 'success');
+          await refreshDrives();
+          if (authResult.mountPoint) {
+            navigateLocal(authResult.mountPoint);
+          }
+        } else if (!authResult.cancelled) {
+          showToast(authResult.error || 'Failed to mount drive', 'error');
+        }
+      } else {
+        showToast(result.error || 'Failed to mount drive', 'error');
+      }
+    } catch (err: any) {
+      showToast(err.message || 'Failed to mount drive', 'error');
+    } finally {
+      setMountingDrive(null);
+    }
+  };
 
   // Custom prompt function
   const showPrompt = (title: string, message: string, defaultValue = ''): Promise<string | null> => {
@@ -1340,6 +1417,104 @@ const DualPaneSFTP: React.FC<Props> = ({ connectionId, server, initialLocalPath,
           <div className="bg-navy-800 border-b border-navy-700 p-2">
             <div className="flex items-center gap-1 mb-2">
               <span className="text-xs text-teal-400 font-medium mr-2">{t('sftpLocal')}</span>
+              {/* Drive selector */}
+              {localDrives.length > 0 && (
+                <div className="relative">
+                  <button
+                    onClick={() => setShowDriveSelector(!showDriveSelector)}
+                    className="flex items-center gap-1 px-2 py-1 text-xs bg-navy-700 hover:bg-navy-600 rounded border border-navy-600 text-gray-300 transition max-w-[140px]"
+                    title="Select Drive"
+                  >
+                    <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                    </svg>
+                    <span className="truncate">{localDrives.find(d => d.path === localPath || localPath.startsWith(d.path + '/'))?.name || '/'}</span>
+                    <svg className="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+                  {showDriveSelector && (
+                    <>
+                      <div className="fixed inset-0 z-40" onClick={() => setShowDriveSelector(false)} />
+                      <div className="absolute left-0 top-full mt-1 bg-navy-800 border border-navy-600 rounded shadow-lg z-50 min-w-[200px] max-h-[300px] overflow-auto">
+                        {/* Refresh button */}
+                        <button
+                          onClick={async () => {
+                            await refreshDrives();
+                            showToast('Drives refreshed', 'info');
+                          }}
+                          className="w-full flex items-center gap-2 px-3 py-2 text-xs text-left hover:bg-navy-700 transition text-gray-400 border-b border-navy-700"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                          </svg>
+                          <span>Refresh drives</span>
+                        </button>
+                        {localDrives.map((drive, i) => (
+                          <button
+                            key={i}
+                            onClick={() => mountAndNavigate(drive)}
+                            disabled={mountingDrive === drive.device}
+                            className={`w-full flex items-center gap-2 px-3 py-2 text-xs text-left hover:bg-navy-700 transition ${
+                              drive.mounted === false ? 'text-gray-500' : 'text-gray-300'
+                            } ${mountingDrive === drive.device ? 'opacity-50' : ''}`}
+                          >
+                            {/* Drive icon based on type */}
+                            {drive.type === 'USB' || drive.type === 'usb' || drive.type === 'Removable' ? (
+                              <svg className="w-4 h-4 text-green-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                              </svg>
+                            ) : drive.type === 'NTFS' || drive.type === 'ntfs' || drive.type === 'fuseblk' ? (
+                              <svg className="w-4 h-4 text-blue-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
+                              </svg>
+                            ) : drive.type === 'ExFAT' || drive.type === 'exfat' ? (
+                              <svg className="w-4 h-4 text-cyan-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4" />
+                              </svg>
+                            ) : drive.type === 'Network' || drive.type === 'network' ? (
+                              <svg className="w-4 h-4 text-blue-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+                              </svg>
+                            ) : drive.type === 'CD-ROM' || drive.type === 'cdrom' ? (
+                              <svg className="w-4 h-4 text-purple-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <circle cx="12" cy="12" r="10" strokeWidth={2} />
+                                <circle cx="12" cy="12" r="3" strokeWidth={2} />
+                              </svg>
+                            ) : drive.type === 'Home' || drive.type === 'home' ? (
+                              <svg className="w-4 h-4 text-amber-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                              </svg>
+                            ) : drive.type === 'System' || drive.type === 'root' ? (
+                              <svg className="w-4 h-4 text-red-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+                              </svg>
+                            ) : (
+                              <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                              </svg>
+                            )}
+                            <div className="flex flex-col min-w-0 flex-1">
+                              <div className="flex items-center gap-1">
+                                <span className="truncate font-medium">{drive.name}</span>
+                                {drive.mounted === false && (
+                                  <span className="text-[9px] px-1 py-0.5 bg-navy-600 text-gray-400 rounded">
+                                    {mountingDrive === drive.device ? 'Mounting...' : 'Not mounted'}
+                                  </span>
+                                )}
+                              </div>
+                              <span className="text-[10px] text-gray-500 truncate">
+                                {drive.path || drive.device || 'Unknown'}
+                              </span>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+              <div className="w-px h-4 bg-navy-600 mx-1"></div>
               <button onClick={localBack} disabled={localHistoryIndex === 0} className="p-1.5 hover:bg-navy-700 rounded disabled:opacity-30 transition text-gray-400" title={t('back')}>
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
               </button>

@@ -454,38 +454,149 @@ class RDPManager {
             stdio: ['ignore', 'pipe', 'pipe'],
         });
         let connected = false;
-        rdpProcess.stdout?.on('data', (data) => {
-            const output = data.toString();
-            console.log(`[RDPManager] stdout: ${output}`);
-            if (!connected && (output.includes('connected') || output.includes('Connection'))) {
+        let hasError = false;
+        let errorMessage = '';
+        const ERROR_DETECTION_TIMEOUT = 5000; // Wait 5s for errors before assuming success
+        const CONNECTION_TIMEOUT = 20000; // 20 seconds max timeout
+        // Error detection timeout - if no error after 5s, assume connected
+        const errorDetectionId = setTimeout(() => {
+            if (!connected && !hasError) {
                 connected = true;
+                clearTimeout(connectionTimeoutId);
                 const conn = this.connections.get(connectionId);
                 if (conn)
                     conn.connected = true;
+                console.log(`[RDPManager] No errors detected after 5s, assuming connected`);
+                emitter.emit('connect');
+            }
+        }, ERROR_DETECTION_TIMEOUT);
+        // Max connection timeout
+        const connectionTimeoutId = setTimeout(() => {
+            if (!connected && !hasError) {
+                hasError = true;
+                clearTimeout(errorDetectionId);
+                errorMessage = 'Connection timeout (20s). Server may be unreachable.';
+                console.log(`[RDPManager] Connection timeout for ${connectionId}`);
+                emitter.emit('error', new Error(errorMessage));
+            }
+        }, CONNECTION_TIMEOUT);
+        rdpProcess.stdout?.on('data', (data) => {
+            const output = data.toString();
+            console.log(`[RDPManager] stdout: ${output}`);
+            // Detect successful connection - GDI initialization means we're connected
+            if (!connected && !hasError && (output.includes('gdi_init_ex') ||
+                output.includes('Local framebuffer format') ||
+                output.includes('Remote framebuffer format'))) {
+                connected = true;
+                clearTimeout(errorDetectionId);
+                clearTimeout(connectionTimeoutId);
+                const conn = this.connections.get(connectionId);
+                if (conn)
+                    conn.connected = true;
+                console.log(`[RDPManager] Connection confirmed via GDI init`);
                 emitter.emit('connect');
             }
         });
         rdpProcess.stderr?.on('data', (data) => {
             const output = data.toString();
             console.log(`[RDPManager] stderr: ${output}`);
-            if (output.includes('[ERROR]') &&
-                !output.includes('CONNECT_CANCELLED') &&
-                !output.includes('term_handler') &&
-                (output.includes('ERRCONNECT') ||
-                    output.includes('connect failed') ||
-                    output.includes('Authentication failure') ||
-                    output.includes('unable to connect'))) {
-                emitter.emit('error', new Error(output.trim()));
+            // Detect authentication errors - these are critical, check immediately
+            if (!hasError && (output.includes('ERRCONNECT_LOGON_FAILURE') ||
+                output.includes('ERRCONNECT_WRONG_PASSWORD') ||
+                output.includes('ERRCONNECT_AUTHENTICATION_FAILED') ||
+                output.includes('ERRCONNECT_ACCESS_DENIED') ||
+                output.includes('NLA_AUTH_FAILED') ||
+                output.includes('Authentication failure') ||
+                output.includes('LOGON_FAILURE') ||
+                output.includes('0x00000014') || // ERRCONNECT_LOGON_FAILURE hex
+                output.includes('0x00000015') // ERRCONNECT_WRONG_PASSWORD hex
+            )) {
+                hasError = true;
+                clearTimeout(errorDetectionId);
+                clearTimeout(connectionTimeoutId);
+                errorMessage = 'Authentication failed. Check username/password.';
+                console.log(`[RDPManager] Auth error detected`);
+                emitter.emit('error', new Error(errorMessage));
+                return;
+            }
+            // Detect account issues
+            if (!hasError && (output.includes('ERRCONNECT_ACCOUNT_DISABLED') ||
+                output.includes('ERRCONNECT_ACCOUNT_LOCKED_OUT') ||
+                output.includes('ERRCONNECT_ACCOUNT_EXPIRED') ||
+                output.includes('ERRCONNECT_ACCOUNT_RESTRICTION'))) {
+                hasError = true;
+                clearTimeout(errorDetectionId);
+                clearTimeout(connectionTimeoutId);
+                errorMessage = 'Account issue. Account may be disabled, locked or expired.';
+                console.log(`[RDPManager] Account error detected`);
+                emitter.emit('error', new Error(errorMessage));
+                return;
+            }
+            // Detect connection errors
+            if (!hasError && (output.includes('ERRCONNECT_CONNECT_FAILED') ||
+                output.includes('ERRCONNECT_CONNECT_TRANSPORT_FAILED') ||
+                output.includes('TRANSPORT_CONNECT_FAILED') ||
+                output.includes('ERRCONNECT_TLS_CONNECT_FAILED') ||
+                output.includes('ERRCONNECT_SECURITY_NEGO_CONNECT_FAILED') ||
+                output.includes('Connection refused') ||
+                output.includes('Network is unreachable') ||
+                output.includes('No route to host') ||
+                output.includes('unable to connect') ||
+                output.includes('0x00000006') // ERRCONNECT_CONNECT_FAILED hex
+            )) {
+                hasError = true;
+                clearTimeout(errorDetectionId);
+                clearTimeout(connectionTimeoutId);
+                errorMessage = 'Connection failed. Check if server is reachable and RDP is enabled.';
+                console.log(`[RDPManager] Connection error detected`);
+                emitter.emit('error', new Error(errorMessage));
+                return;
+            }
+            // Detect DNS errors
+            if (!hasError && (output.includes('ERRCONNECT_DNS_ERROR') ||
+                output.includes('ERRCONNECT_DNS_NAME_NOT_FOUND') ||
+                output.includes('getaddrinfo') ||
+                output.includes('Name or service not known'))) {
+                hasError = true;
+                clearTimeout(errorDetectionId);
+                clearTimeout(connectionTimeoutId);
+                errorMessage = 'Cannot resolve hostname. Check server address.';
+                console.log(`[RDPManager] DNS error detected`);
+                emitter.emit('error', new Error(errorMessage));
+                return;
+            }
+            // Detect license errors
+            if (!hasError && (output.includes('ERRINFO_LICENSE_') ||
+                output.includes('LICENSE_'))) {
+                hasError = true;
+                clearTimeout(errorDetectionId);
+                clearTimeout(connectionTimeoutId);
+                errorMessage = 'License error. Server may have licensing issues.';
+                console.log(`[RDPManager] License error detected`);
+                emitter.emit('error', new Error(errorMessage));
+                return;
             }
         });
         rdpProcess.on('close', (code) => {
             console.log(`[RDPManager] xfreerdp3 exited with code ${code}`);
+            clearTimeout(errorDetectionId);
+            clearTimeout(connectionTimeoutId);
             this.connections.delete(connectionId);
+            // If process exited before we detected connection and no error was emitted
+            if (!connected && !hasError && code !== 0) {
+                errorMessage = `Connection failed (exit code: ${code})`;
+                emitter.emit('error', new Error(errorMessage));
+            }
             emitter.emit('close');
         });
         rdpProcess.on('error', (err) => {
             console.error(`[RDPManager] Process error:`, err);
-            emitter.emit('error', err);
+            clearTimeout(errorDetectionId);
+            clearTimeout(connectionTimeoutId);
+            if (!hasError) {
+                hasError = true;
+                emitter.emit('error', err);
+            }
         });
         this.connections.set(connectionId, {
             process: rdpProcess,
@@ -493,38 +604,6 @@ class RDPManager {
             emitter,
             config,
         });
-        // Emit connect after window appears (check via xdotool)
-        // We check for window every 500ms for up to 15 seconds
-        let checkCount = 0;
-        const maxChecks = 30; // 15 seconds
-        const checkWindow = () => {
-            checkCount++;
-            const conn = this.connections.get(connectionId);
-            if (!conn)
-                return; // Already disconnected
-            // Check if xfreerdp window exists
-            (0, child_process_1.exec)(`xdotool search --name "RDP - ${config.host}" 2>/dev/null | head -1`, (err, stdout) => {
-                if (stdout && stdout.trim()) {
-                    // Window found - connected!
-                    if (!conn.connected) {
-                        conn.connected = true;
-                        console.log(`[RDPManager] RDP window detected, connection confirmed`);
-                        emitter.emit('connect');
-                    }
-                }
-                else if (checkCount < maxChecks && this.connections.has(connectionId)) {
-                    // Keep checking
-                    setTimeout(checkWindow, 500);
-                }
-                else if (checkCount >= maxChecks && !conn.connected) {
-                    // Timeout - no window appeared
-                    console.log(`[RDPManager] RDP window not detected after ${maxChecks * 0.5}s`);
-                    // Don't emit error - let the process stderr handler deal with it
-                }
-            });
-        };
-        // Start checking after 1 second (give xfreerdp time to start)
-        setTimeout(checkWindow, 1000);
         return { emitter, success: true };
     }
     /**

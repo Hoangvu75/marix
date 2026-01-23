@@ -15,7 +15,6 @@ import LanguageSelector from './components/LanguageSelector';
 import SSHFingerprintModal from './components/SSHFingerprintModal';
 import SSHKeyManager from './components/SSHKeyManager';
 import LANShareModal from './components/LANShareModal';
-import LANFileTransferModal from './components/LANFileTransferModal';
 import LANFileTransferPage from './components/LANFileTransferPage';
 import PairCodePopup from './components/PairCodePopup';
 import KnownHostsPage from './components/KnownHostsPage';
@@ -232,7 +231,6 @@ const App: React.FC = () => {
   const [pendingIncomingShare, setPendingIncomingShare] = useState<any>(null); // Store incoming share for modal
   const [showServerSelectionModal, setShowServerSelectionModal] = useState(false); // Server selection before share
   const [showPairCodePopup, setShowPairCodePopup] = useState(false); // Inline popup for entering pair code
-  const [showLANFileTransfer, setShowLANFileTransfer] = useState(false); // File transfer modal
   const [lanPeers, setLanPeers] = useState<{id: string; name: string; address: string; port: number}[]>([]); // LAN discovered peers
   
   // Connecting state (for UI feedback)
@@ -512,40 +510,26 @@ const App: React.FC = () => {
 
   // Listen for main menu commands
   useEffect(() => {
-    const handleSendFiles = () => setShowLANFileTransfer(true);
+    const handleSendFiles = () => {
+      setActiveSessionId(null);
+      setActiveMenu('sendfiles');
+    };
     ipcRenderer.on('menu:send-files', handleSendFiles);
     return () => {
       ipcRenderer.removeListener('menu:send-files', handleSendFiles);
     };
   }, []);
 
-  // Listen for close dialog translation request from main process
-  // Use ref to store current t function to avoid stale closure issues
-  const tRef = React.useRef(t);
-  tRef.current = t;
-  
+  // Send close dialog translations to main process when language changes
   useEffect(() => {
-    const handleCloseDialogTranslations = (data: { requestId: string; count: number; details: string }) => {
-      console.log('[App] Close dialog: received translation request', data.requestId);
-      const currentT = tRef.current;
-      const translations = {
-        title: currentT('activeConnections'),
-        message: currentT('youHaveActiveConnections').replace('{{count}}', String(data.count)),
-        detail: `${data.details}\n\n${currentT('closeConnectionsConfirm')}`,
-        closeButton: currentT('closeAllAndExit'),
-        cancelButton: currentT('cancel')
-      };
-      console.log('[App] Close dialog: sending translations', translations.title);
-      (window as any).electron.ipcRenderer.send('app:close-dialog-translations', {
-        requestId: data.requestId,
-        translations
-      });
-    };
-    ipcRenderer.on('app:request-close-dialog-translations', handleCloseDialogTranslations);
-    return () => {
-      ipcRenderer.removeListener('app:request-close-dialog-translations', handleCloseDialogTranslations);
-    };
-  }, []); // Empty deps - handler uses ref for current t
+    (window as any).electron.ipcRenderer.send('app:setCloseDialogTranslations', {
+      title: t('activeConnections'),
+      message: t('youHaveActiveConnections'),
+      detail: t('closeConnectionsConfirm'),
+      closeButton: t('closeAllAndExit'),
+      cancelButton: t('cancel')
+    });
+  }, [t]);
 
   // Check GitLab/Box/Google Drive connection when backup modal opens
   useEffect(() => {
@@ -1998,56 +1982,7 @@ const App: React.FC = () => {
     
     // Show connecting overlay
     setRdpConnecting({ server, status: 'connecting' });
-    
-    // Set up one-time listeners for connect/error before invoking
-    const connectPromise = new Promise<{ success: boolean; error?: string }>((resolve) => {
-      let resolved = false;
-      
-      const onConnect = (_event: any, connId: string) => {
-        if (connId === connectionId && !resolved) {
-          resolved = true;
-          ipcRenderer.removeListener('rdp:connect', onConnect);
-          ipcRenderer.removeListener('rdp:error', onError);
-          ipcRenderer.removeListener('rdp:close', onClose);
-          resolve({ success: true });
-        }
-      };
-      
-      const onError = (_event: any, connId: string, errorMsg: string) => {
-        if (connId === connectionId && !resolved) {
-          resolved = true;
-          ipcRenderer.removeListener('rdp:connect', onConnect);
-          ipcRenderer.removeListener('rdp:error', onError);
-          ipcRenderer.removeListener('rdp:close', onClose);
-          resolve({ success: false, error: errorMsg });
-        }
-      };
-      
-      const onClose = (_event: any, connId: string) => {
-        if (connId === connectionId && !resolved) {
-          resolved = true;
-          ipcRenderer.removeListener('rdp:connect', onConnect);
-          ipcRenderer.removeListener('rdp:error', onError);
-          ipcRenderer.removeListener('rdp:close', onClose);
-          resolve({ success: false, error: 'Connection closed unexpectedly' });
-        }
-      };
-      
-      ipcRenderer.on('rdp:connect', onConnect);
-      ipcRenderer.on('rdp:error', onError);
-      ipcRenderer.on('rdp:close', onClose);
-      
-      // Timeout after 20 seconds
-      setTimeout(() => {
-        if (!resolved) {
-          resolved = true;
-          ipcRenderer.removeListener('rdp:connect', onConnect);
-          ipcRenderer.removeListener('rdp:error', onError);
-          ipcRenderer.removeListener('rdp:close', onClose);
-          resolve({ success: false, error: 'Connection timeout (20s)' });
-        }
-      }, 20000);
-    });
+    console.log('[App] Starting RDP connection...');
     
     const result = await ipcRenderer.invoke('rdp:connect', connectionId, {
       host: server.host,
@@ -2058,39 +1993,107 @@ const App: React.FC = () => {
       screen: { width: 1280, height: 720 },
     });
 
+    console.log('[App] RDP invoke result:', result);
+
     if (!result.success) {
       setConnectingServerId(null);
       setRdpConnecting({ server, status: 'error', error: parseRDPError(result.error || 'Unknown error') });
       return;
     }
 
-    // Wait for actual connection or error
-    const connectResult = await connectPromise;
-    
-    if (!connectResult.success) {
-      setConnectingServerId(null);
-      // Disconnect the failed attempt
-      await ipcRenderer.invoke('rdp:disconnect', connectionId).catch(() => {});
-      setRdpConnecting({ server, status: 'error', error: parseRDPError(connectResult.error || 'Unknown error') });
-      return;
-    }
+    console.log('[App] RDP process started, waiting for connection confirmation...');
 
-    // Success - close overlay and create session
-    setRdpConnecting(null);
-
-    const rdpSession: Session = {
-      id: `rdp-${Date.now()}`,
-      server,
-      connectionId,
-      type: 'rdp',
-      theme: currentTheme,
-    };
-
-    setSessions(prev => [...prev, rdpSession]);
-    setActiveSessionId(rdpSession.id);
-    setSidebarOpen(false);
-    setConnectingServerId(null);
-    console.log('[App] RDP Session created:', rdpSession.id);
+    // Wait for connect/error event from main process
+    return new Promise<void>((resolve) => {
+      let resolved = false;
+      
+      const cleanup = () => {
+        ipcRenderer.removeListener('rdp:connect', onConnect);
+        ipcRenderer.removeListener('rdp:error', onError);
+        ipcRenderer.removeListener('rdp:close', onClose);
+      };
+      
+      const onConnect = (connId: string) => {
+        console.log('[App] Received rdp:connect event:', connId, 'expected:', connectionId);
+        if (connId === connectionId && !resolved) {
+          resolved = true;
+          console.log('[App] RDP connected successfully!');
+          
+          // Create session
+          const rdpSession: Session = {
+            id: `rdp-${Date.now()}`,
+            server,
+            connectionId,
+            type: 'rdp',
+            theme: currentTheme,
+          };
+          
+          setSessions(prev => [...prev, rdpSession]);
+          setActiveSessionId(rdpSession.id);
+          setSidebarOpen(false);
+          setConnectingServerId(null);
+          setRdpConnecting(null); // Close overlay
+          
+          console.log('[App] RDP Session created:', rdpSession.id);
+          
+          // Keep close listener to remove session when xfreerdp closes
+          ipcRenderer.removeListener('rdp:connect', onConnect);
+          ipcRenderer.removeListener('rdp:error', onError);
+          // Keep onClose listener active
+          resolve();
+        }
+      };
+      
+      const onError = (connId: string, errorMsg: string) => {
+        console.log('[App] Received rdp:error event:', connId, errorMsg);
+        if (connId === connectionId && !resolved) {
+          resolved = true;
+          console.log('[App] RDP error:', errorMsg);
+          
+          setConnectingServerId(null);
+          setRdpConnecting({ server, status: 'error', error: parseRDPError(errorMsg) });
+          
+          cleanup();
+          resolve();
+        }
+      };
+      
+      const onClose = (connId: string) => {
+        console.log('[App] Received rdp:close event:', connId);
+        if (connId === connectionId) {
+          console.log('[App] RDP closed:', connId);
+          
+          if (!resolved) {
+            // Closed before connected - treat as error
+            resolved = true;
+            setConnectingServerId(null);
+            setRdpConnecting({ server, status: 'error', error: 'Connection closed unexpectedly' });
+            cleanup();
+            resolve();
+          } else {
+            // Closed after connected - remove session and go back to server list
+            console.log('[App] Removing RDP session and resetting view');
+            setSessions(prev => {
+              const newSessions = prev.filter(s => s.connectionId !== connectionId);
+              // If no sessions left, activeSessionId will be null
+              if (newSessions.length === 0) {
+                setActiveSessionId(null);
+                setSidebarOpen(true);
+              } else {
+                // Switch to last session
+                setActiveSessionId(newSessions[newSessions.length - 1].id);
+              }
+              return newSessions;
+            });
+            ipcRenderer.removeListener('rdp:close', onClose);
+          }
+        }
+      };
+      
+      ipcRenderer.on('rdp:connect', onConnect);
+      ipcRenderer.on('rdp:error', onError);
+      ipcRenderer.on('rdp:close', onClose);
+    });
   };
 
   const handleConnect = async (server: Server) => {
@@ -2180,13 +2183,18 @@ const App: React.FC = () => {
 
       // Handle RDP connections (Windows Remote Desktop)
       if (protocol === 'rdp') {
+        console.log('[App] handleConnect: RDP protocol detected');
         // On Linux, check for dependencies first
-        const platform = process.platform;
-        if (platform === 'linux') {
+        const isLinux = navigator.userAgent.toLowerCase().includes('linux');
+        console.log('[App] handleConnect: isLinux =', isLinux);
+        if (isLinux) {
+          console.log('[App] handleConnect: Checking RDP deps...');
           const depsResult = await ipcRenderer.invoke('rdp:checkDeps');
+          console.log('[App] handleConnect: depsResult =', depsResult);
           if (depsResult.success && depsResult.deps) {
             if (!depsResult.deps.xfreerdp3 || !depsResult.deps.xdotool) {
               // Show dependency installer
+              console.log('[App] handleConnect: Missing deps, showing installer');
               setPendingRDPServer(server);
               setShowRDPDepsInstaller(true);
               setConnectingServerId(null);
@@ -2195,6 +2203,7 @@ const App: React.FC = () => {
           }
         }
         
+        console.log('[App] handleConnect: Calling connectToRDP...');
         await connectToRDP(server);
         return;
       }
@@ -3021,7 +3030,7 @@ const App: React.FC = () => {
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                 </svg>
-                <span className="text-sm font-medium">Send Files</span>
+                <span className="text-sm font-medium">{t('sendFiles') || 'Send Files'}</span>
               </button>
               
               {/* Tools */}
@@ -5725,14 +5734,6 @@ const App: React.FC = () => {
           }}
           initialIncomingShare={pendingIncomingShare}
           onClearIncomingShare={() => setPendingIncomingShare(null)}
-        />
-      )}
-
-      {/* LAN File Transfer Modal */}
-      {showLANFileTransfer && (
-        <LANFileTransferModal
-          onClose={() => setShowLANFileTransfer(false)}
-          peers={lanPeers}
         />
       )}
 

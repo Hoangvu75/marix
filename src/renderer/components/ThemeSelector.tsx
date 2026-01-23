@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { terminalThemes } from '../themes';
+import React, { useState, useEffect } from 'react';
+import { getAllThemes, ThemeInfo } from '../themeService';
 
 interface Props {
   currentTheme: string;
@@ -10,8 +10,18 @@ interface Props {
 const ThemeSelector: React.FC<Props> = ({ currentTheme, onThemeChange, direction = 'up' }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
+  const [themes, setThemes] = useState<ThemeInfo[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const filteredThemes = terminalThemes.filter(t => 
+  // Load themes on mount
+  useEffect(() => {
+    getAllThemes().then(list => {
+      setThemes(list);
+      setLoading(false);
+    });
+  }, []);
+
+  const filteredThemes = themes.filter(t => 
     t.name.toLowerCase().includes(search.toLowerCase())
   );
 

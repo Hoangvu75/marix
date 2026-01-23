@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useTerminalContext } from '../contexts/TerminalContext';
-import { terminalThemes } from '../themes';
+import { getThemeSync, getTheme } from '../themeService';
 import '@xterm/xterm/css/xterm.css';
 import { getCustomHotkeys } from '../services/snippetStore';
 import SnippetPanel from './SnippetPanel';
@@ -54,10 +54,16 @@ const XTermTerminal: React.FC<Props> = ({ connectionId, theme = 'Dracula', serve
 
   // Get background color from theme
   useEffect(() => {
-    const found = terminalThemes.find(t => t.name === theme);
-    if (found?.theme?.background) {
-      setBgColor(found.theme.background);
+    const themeData = getThemeSync(theme);
+    if (themeData?.background) {
+      setBgColor(themeData.background);
     }
+    // Also try async load for non-inline themes
+    getTheme(theme).then(data => {
+      if (data?.background) {
+        setBgColor(data.background);
+      }
+    });
   }, [theme]);
 
   useEffect(() => {

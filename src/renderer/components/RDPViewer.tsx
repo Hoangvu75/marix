@@ -19,7 +19,8 @@ const RDPViewer: React.FC<RDPViewerProps> = ({
   onError,
 }) => {
   const { t } = useLanguage();
-  const [status, setStatus] = useState<'connecting' | 'connected' | 'disconnected' | 'error'>('connecting');
+  // Start as 'connected' since xfreerdp opens externally and is already running when this component mounts
+  const [status, setStatus] = useState<'connecting' | 'connected' | 'disconnected' | 'error'>('connected');
   const [errorMessage, setErrorMessage] = useState<string>('');
 
   useEffect(() => {

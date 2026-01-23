@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useRef, ReactNode } from 'react';
 import { Terminal as XTerm, ITheme } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
-import { terminalThemes } from '../themes';
+import { getThemeSync, getTheme } from '../themeService';
 
 const { ipcRenderer } = window.electron;
 
@@ -21,12 +21,6 @@ interface TerminalContextType {
   applyThemeToAll: (themeName: string) => void;
 }
 
-// Helper to get theme by name
-const getThemeByName = (name: string): ITheme => {
-  const found = terminalThemes.find(t => t.name === name);
-  return found?.theme || terminalThemes[0].theme;
-};
-
 const TerminalContext = createContext<TerminalContextType | undefined>(undefined);
 
 export const TerminalProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
@@ -37,19 +31,24 @@ export const TerminalProvider: React.FC<{ children: ReactNode }> = ({ children }
     return terminalsRef.current.get(connectionId);
   };
 
-  // Apply theme to a specific terminal
-  const applyTheme = (connectionId: string, themeName: string) => {
+  // Apply theme to a specific terminal (async for non-inline themes)
+  const applyTheme = async (connectionId: string, themeName: string) => {
     const instance = terminalsRef.current.get(connectionId);
     if (instance) {
-      const theme = getThemeByName(themeName);
-      instance.xterm.options.theme = theme;
+      // First apply sync (instant for inline themes)
+      const syncTheme = getThemeSync(themeName);
+      instance.xterm.options.theme = syncTheme;
+      
+      // Then load full theme async if needed
+      const asyncTheme = await getTheme(themeName);
+      instance.xterm.options.theme = asyncTheme;
       console.log('[TerminalContext] Applied theme:', themeName, 'to', connectionId);
     }
   };
 
   // Apply theme to all terminals
-  const applyThemeToAll = (themeName: string) => {
-    const theme = getThemeByName(themeName);
+  const applyThemeToAll = async (themeName: string) => {
+    const theme = await getTheme(themeName);
     terminalsRef.current.forEach((instance, connId) => {
       instance.xterm.options.theme = theme;
       console.log('[TerminalContext] Applied theme:', themeName, 'to', connId);
@@ -66,8 +65,8 @@ export const TerminalProvider: React.FC<{ children: ReactNode }> = ({ children }
 
     console.log('[TerminalContext] Creating new terminal:', connectionId, 'with theme:', themeName);
 
-    // Get theme
-    const theme = getThemeByName(themeName);
+    // Get theme (sync for instant startup, async will update later)
+    const theme = getThemeSync(themeName);
 
     // Create new terminal with copy/paste support (optimized for performance)
     const xterm = new XTerm({

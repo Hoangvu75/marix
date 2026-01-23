@@ -45,6 +45,16 @@ import buildInfo from './buildInfo';
 
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
+
+// Cached close dialog translations (updated when language changes)
+let closeDialogTranslations = {
+  title: 'Active Connections',
+  message: 'You have {{count}} active connection(s).',
+  detail: 'Do you want to close all connections and exit?',
+  closeButton: 'Close All & Exit',
+  cancelButton: 'Cancel'
+};
+
 const nativeSSH = new NativeSSHManager();  // For terminal (with MOTD)
 const sshManager = new SSHConnectionManager();  // For SFTP
 const sftpManager = new SFTPManager();
@@ -225,14 +235,24 @@ function createWindow() {
   }
 
   // Handle close event - ask user if there are active connections
-  mainWindow.on('close', async (event) => {
-    // Check for active connections (only count NativeSSH, not SSH2 background)
+  // Uses pre-cached translations for instant response
+  let isQuitting = false;
+  
+  mainWindow.on('close', (event) => {
+    console.log('[App] Close event triggered, isQuitting:', isQuitting);
+    const startTime = Date.now();
+    
+    if (isQuitting) return; // Already confirmed, let it close
+    
+    // Check for active connections
     const activeSSH = nativeSSH.getActiveCount();
     const activeRDP = rdpManager.getActiveCount();
     const activeWSS = wssManager.getActiveCount();
     const activeFTP = ftpManager.getActiveCount();
     const activeDB = getDatabaseConnectionCount();
     const totalActive = activeSSH + activeRDP + activeWSS + activeFTP + activeDB;
+    
+    console.log('[App] Active connections check took:', Date.now() - startTime, 'ms, total:', totalActive);
 
     if (totalActive > 0) {
       event.preventDefault();
@@ -245,71 +265,38 @@ function createWindow() {
       if (activeFTP > 0) details.push(`FTP: ${activeFTP}`);
       if (activeDB > 0) details.push(`Database: ${activeDB}`);
       
-      // Request translations from renderer with unique request ID
-      const requestId = `close-dialog-${Date.now()}`;
-      const translations = await new Promise<{
-        title: string;
-        message: string;
-        detail: string;
-        closeButton: string;
-        cancelButton: string;
-      }>((resolve) => {
-        const onTranslations = (_: any, response: { requestId: string; translations: any }) => {
-          // Only accept response with matching request ID
-          if (response.requestId !== requestId) {
-            console.log('[App] Close dialog: ignoring response with wrong requestId');
-            return;
-          }
-          console.log('[App] Close dialog: received translations', response.translations.title);
-          clearTimeout(timeout);
-          ipcMain.removeListener('app:close-dialog-translations', onTranslations);
-          resolve(response.translations);
-        };
-        
-        const timeout = setTimeout(() => {
-          // Fallback to English if no response
-          console.log('[App] Close dialog: timeout, using English fallback');
-          ipcMain.removeListener('app:close-dialog-translations', onTranslations);
-          resolve({
-            title: 'Active Connections',
-            message: `You have ${totalActive} active connection${totalActive > 1 ? 's' : ''}.`,
-            detail: `${details.join(', ')}\n\nDo you want to close all connections and exit?`,
-            closeButton: 'Close All & Exit',
-            cancelButton: 'Cancel'
-          });
-        }, 200);
-        
-        ipcMain.on('app:close-dialog-translations', onTranslations);
-        
-        console.log('[App] Close dialog: requesting translations from renderer, requestId:', requestId);
-        mainWindow?.webContents.send('app:request-close-dialog-translations', {
-          requestId,
-          count: totalActive,
-          details: details.join(', ')
-        });
-      });
+      // Use cached translations - instant, no IPC needed
+      const t = closeDialogTranslations;
+      const message = t.message.replace('{{count}}', String(totalActive));
       
-      const { response } = await dialog.showMessageBox(mainWindow!, {
+      console.log('[App] Showing dialog (sync) at:', Date.now() - startTime, 'ms');
+      
+      // Use SYNCHRONOUS dialog for instant display
+      const response = dialog.showMessageBoxSync(mainWindow!, {
         type: 'question',
-        buttons: [translations.closeButton, translations.cancelButton],
+        buttons: [t.closeButton, t.cancelButton],
         defaultId: 1,
         cancelId: 1,
-        title: translations.title,
-        message: translations.message,
-        detail: translations.detail,
+        title: t.title,
+        message: message,
+        detail: `${details.join(', ')}\n\n${t.detail}`,
       });
-
+      
+      console.log('[App] Dialog response:', response, 'at:', Date.now() - startTime, 'ms');
+      
       if (response === 0) {
-        // User chose to close all and exit - close all connections quickly (no await)
+        isQuitting = true;
+        console.log('[App] Closing all connections...');
         rdpManager.closeAll();
         nativeSSH.closeAll();
         sshManager.closeAll();
         wssManager.closeAll();
         ftpManager.closeAll();
-        closeAllDatabaseConnections(); // Don't await - let it run in background
+        closeAllDatabaseConnections();
+        console.log('[App] Destroying window at:', Date.now() - startTime, 'ms');
         mainWindow?.destroy();
       }
-      // If response === 1, do nothing (cancel)
+      // If cancelled, do nothing - event already prevented
     }
   });
 
@@ -415,6 +402,62 @@ app.on('before-quit', () => {
   closeAllDatabaseConnections();
 });
 
+// Theme loading handlers (for lazy theme loading)
+ipcMain.handle('themes:getList', async () => {
+  try {
+    const themesDir = path.join(__dirname, '../../theme');
+    const files = fs.readdirSync(themesDir);
+    const themeNames = files
+      .filter(f => f.endsWith('.json'))
+      .map(f => f.replace('.json', ''))
+      .sort();
+    return { success: true, themes: themeNames };
+  } catch (err: any) {
+    console.error('[Themes] Failed to list themes:', err);
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('themes:getTheme', async (_, themeName: string) => {
+  try {
+    const themePath = path.join(__dirname, '../../theme', `${themeName}.json`);
+    if (!fs.existsSync(themePath)) {
+      return { success: false, error: 'Theme not found' };
+    }
+    const themeData = JSON.parse(fs.readFileSync(themePath, 'utf-8'));
+    
+    // Convert VSCode terminal color format to xterm.js format
+    const colors = themeData.workbench?.colorCustomizations || themeData;
+    const theme = {
+      background: colors['terminal.background'] || '#1a1d2e',
+      foreground: colors['terminal.foreground'] || '#f8f8f2',
+      cursor: colors['terminalCursor.foreground'] || colors['terminal.foreground'] || '#f8f8f2',
+      cursorAccent: colors['terminalCursor.background'] || colors['terminal.background'] || '#000000',
+      selectionBackground: colors['terminal.selectionBackground'] || '#44475a',
+      black: colors['terminal.ansiBlack'] || '#000000',
+      red: colors['terminal.ansiRed'] || '#ff5555',
+      green: colors['terminal.ansiGreen'] || '#50fa7b',
+      yellow: colors['terminal.ansiYellow'] || '#f1fa8c',
+      blue: colors['terminal.ansiBlue'] || '#bd93f9',
+      magenta: colors['terminal.ansiMagenta'] || '#ff79c6',
+      cyan: colors['terminal.ansiCyan'] || '#8be9fd',
+      white: colors['terminal.ansiWhite'] || '#f8f8f2',
+      brightBlack: colors['terminal.ansiBrightBlack'] || '#6272a4',
+      brightRed: colors['terminal.ansiBrightRed'] || '#ff6e6e',
+      brightGreen: colors['terminal.ansiBrightGreen'] || '#69ff94',
+      brightYellow: colors['terminal.ansiBrightYellow'] || '#ffffa5',
+      brightBlue: colors['terminal.ansiBrightBlue'] || '#d6acff',
+      brightMagenta: colors['terminal.ansiBrightMagenta'] || '#ff92df',
+      brightCyan: colors['terminal.ansiBrightCyan'] || '#a4ffff',
+      brightWhite: colors['terminal.ansiBrightWhite'] || '#ffffff',
+    };
+    return { success: true, theme };
+  } catch (err: any) {
+    console.error('[Themes] Failed to load theme:', err);
+    return { success: false, error: err.message };
+  }
+});
+
 // System info handlers
 ipcMain.handle('system:getUserInfo', () => {
   const os = require('os');
@@ -425,10 +468,313 @@ ipcMain.handle('system:getUserInfo', () => {
   };
 });
 
+// Update close dialog translations (called when language changes)
+ipcMain.on('app:setCloseDialogTranslations', (_, translations: {
+  title: string;
+  message: string;
+  detail: string;
+  closeButton: string;
+  cancelButton: string;
+}) => {
+  closeDialogTranslations = translations;
+});
+
 // Local filesystem handlers (for contextIsolation: true)
 ipcMain.handle('local:homedir', () => {
   const os = require('os');
   return os.homedir();
+});
+
+// Get available drives/mount points
+ipcMain.handle('local:getDrives', async () => {
+  const os = require('os');
+  const { execSync } = require('child_process');
+  const platform = os.platform();
+  const drives: { name: string; path: string; type: string; mounted: boolean; device?: string }[] = [];
+  
+  if (platform === 'win32') {
+    // Windows: Check drive letters A-Z
+    try {
+      // Use WMIC to get drives
+      const output = execSync('wmic logicaldisk get caption,drivetype', { encoding: 'utf8' });
+      const lines = output.split('\n').slice(1); // Skip header
+      for (const line of lines) {
+        const match = line.trim().match(/^([A-Z]:)\s+(\d+)/i);
+        if (match) {
+          const letter = match[1];
+          const driveType = parseInt(match[2]);
+          // DriveType: 2=Removable, 3=Local, 4=Network, 5=CD-ROM
+          const typeNames: { [key: number]: string } = {
+            2: 'USB',
+            3: 'Local',
+            4: 'Network',
+            5: 'CD-ROM'
+          };
+          drives.push({
+            name: letter,
+            path: letter + '\\',
+            type: typeNames[driveType] || 'Unknown',
+            mounted: true
+          });
+        }
+      }
+    } catch (e) {
+      // Fallback: check common drive letters
+      for (const letter of 'CDEFGHIJKLMNOPQRSTUVWXYZ') {
+        const drivePath = `${letter}:\\`;
+        try {
+          fs.accessSync(drivePath);
+          drives.push({ name: `${letter}:`, path: drivePath, type: 'Local', mounted: true });
+        } catch {}
+      }
+    }
+  } else if (platform === 'darwin') {
+    // macOS: /Volumes contains mounted drives + use diskutil for unmounted
+    try {
+      drives.push({ name: 'Macintosh HD', path: '/', type: 'System', mounted: true });
+      drives.push({ name: 'Home', path: os.homedir(), type: 'Home', mounted: true });
+      
+      // Get mounted volumes
+      const volumes = fs.readdirSync('/Volumes');
+      for (const vol of volumes) {
+        if (vol !== 'Macintosh HD') {
+          const volPath = `/Volumes/${vol}`;
+          // Determine type
+          let volType = 'Volume';
+          try {
+            const diskInfo = execSync(`diskutil info "${volPath}" 2>/dev/null`, { encoding: 'utf8' });
+            if (diskInfo.includes('USB') || diskInfo.includes('External')) {
+              volType = 'USB';
+            } else if (diskInfo.includes('NTFS') || diskInfo.includes('Windows_NTFS')) {
+              volType = 'NTFS';
+            } else if (diskInfo.includes('Network')) {
+              volType = 'Network';
+            }
+          } catch {}
+          drives.push({ name: vol, path: volPath, type: volType, mounted: true });
+        }
+      }
+      
+      // Check for unmounted disks using diskutil
+      try {
+        const listOutput = execSync('diskutil list -plist external 2>/dev/null', { encoding: 'utf8' });
+        // Parse plist output for unmounted external drives
+        // This is simplified - in practice you'd parse the plist properly
+      } catch {}
+    } catch (e) {
+      drives.push({ name: '/', path: '/', type: 'System', mounted: true });
+    }
+  } else {
+    // Linux: Use lsblk to get all block devices including unmounted ones
+    drives.push({ name: '/', path: '/', type: 'System', mounted: true });
+    drives.push({ name: 'Home', path: os.homedir(), type: 'Home', mounted: true });
+    
+    try {
+      // Get all block devices with lsblk (JSON output)
+      const lsblkOutput = execSync('lsblk -J -o NAME,SIZE,TYPE,MOUNTPOINT,FSTYPE,LABEL,HOTPLUG 2>/dev/null', { encoding: 'utf8' });
+      const lsblkData = JSON.parse(lsblkOutput);
+      
+      const processDevices = (devices: any[], parentDevice?: string) => {
+        for (const dev of devices) {
+          // Process partitions (type === 'part') and check if it's a filesystem we care about
+          if (dev.type === 'part' || dev.type === 'disk') {
+            const fstype = dev.fstype?.toLowerCase() || '';
+            const isRemovable = dev.hotplug === '1' || dev.hotplug === true;
+            const label = dev.label || dev.name;
+            const mountpoint = dev.mountpoint;
+            const devicePath = `/dev/${dev.name}`;
+            
+            // Skip swap, boot, and system partitions
+            if (fstype === 'swap' || fstype === 'vfat' && dev.size?.includes('M')) continue;
+            
+            // Include ntfs, ext4, exfat, btrfs, xfs partitions
+            if (['ntfs', 'ext4', 'ext3', 'exfat', 'btrfs', 'xfs', 'vfat', 'fuseblk'].includes(fstype)) {
+              let driveType = 'Partition';
+              if (fstype === 'ntfs' || fstype === 'fuseblk') driveType = 'NTFS';
+              else if (fstype === 'exfat') driveType = 'ExFAT';
+              else if (isRemovable) driveType = 'USB';
+              
+              // Skip if already in drives (by mountpoint or label)
+              const alreadyExists = drives.some(d => 
+                (mountpoint && d.path === mountpoint) || 
+                (d.name === label && d.mounted)
+              );
+              
+              if (!alreadyExists) {
+                drives.push({
+                  name: label,
+                  path: mountpoint || '', // Empty if not mounted
+                  type: driveType,
+                  mounted: !!mountpoint,
+                  device: devicePath
+                });
+              }
+            }
+          }
+          
+          // Process children (partitions)
+          if (dev.children) {
+            processDevices(dev.children, dev.name);
+          }
+        }
+      };
+      
+      if (lsblkData.blockdevices) {
+        processDevices(lsblkData.blockdevices);
+      }
+    } catch (e) {
+      console.error('[getDrives] lsblk failed:', e);
+    }
+    
+    // Also add mounted points from /media and /mnt that might not show in lsblk
+    const mountPoints = ['/mnt', '/media', `/media/${os.userInfo().username}`, `/run/media/${os.userInfo().username}`];
+    for (const mp of mountPoints) {
+      try {
+        const subdirs = fs.readdirSync(mp);
+        for (const subdir of subdirs) {
+          const fullPath = path.join(mp, subdir);
+          try {
+            const stat = fs.statSync(fullPath);
+            if (stat.isDirectory()) {
+              // Check if already added
+              if (!drives.some(d => d.path === fullPath)) {
+                const contents = fs.readdirSync(fullPath);
+                if (contents.length > 0) {
+                  drives.push({ 
+                    name: subdir, 
+                    path: fullPath, 
+                    type: mp.includes('media') ? 'Media' : 'Mount',
+                    mounted: true 
+                  });
+                }
+              }
+            }
+          } catch {}
+        }
+      } catch {}
+    }
+  }
+  
+  return drives;
+});
+
+// Mount a drive (Linux/macOS) - may require password for NTFS on some systems
+ipcMain.handle('local:mountDrive', async (_, device: string, password?: string) => {
+  const os = require('os');
+  const { exec, execSync } = require('child_process');
+  const platform = os.platform();
+  
+  if (platform === 'win32') {
+    return { success: false, error: 'Mount not supported on Windows' };
+  }
+  
+  // Get device info
+  let mountPoint = '';
+  let fstype = '';
+  
+  try {
+    const lsblkOutput = execSync(`lsblk -J -o NAME,FSTYPE,LABEL,MOUNTPOINT ${device} 2>/dev/null`, { encoding: 'utf8' });
+    const data = JSON.parse(lsblkOutput);
+    const devInfo = data.blockdevices?.[0];
+    if (devInfo) {
+      fstype = devInfo.fstype || '';
+      if (devInfo.mountpoint) {
+        return { success: true, mountPoint: devInfo.mountpoint, alreadyMounted: true };
+      }
+      // Create mount point based on label or device name
+      const label = devInfo.label || path.basename(device);
+      mountPoint = `/media/${os.userInfo().username}/${label}`;
+    }
+  } catch (e) {
+    return { success: false, error: 'Failed to get device info' };
+  }
+  
+  // For NTFS on Debian/Ubuntu, we might need to use udisksctl which handles polkit auth
+  return new Promise((resolve) => {
+    if (platform === 'linux') {
+      // Try udisksctl first (handles polkit authentication automatically with GUI prompt)
+      const udisksCmd = `udisksctl mount -b ${device}`;
+      
+      exec(udisksCmd, (error: any, stdout: string, stderr: string) => {
+        if (!error) {
+          // Parse mount point from output: "Mounted /dev/sdb1 at /media/user/DriveName"
+          const match = stdout.match(/at (.+?)\.?\s*$/);
+          if (match) {
+            resolve({ success: true, mountPoint: match[1].trim() });
+          } else {
+            resolve({ success: true, mountPoint: '' });
+          }
+        } else {
+          // Check if it's an authentication error
+          if (stderr.includes('Not authorized') || stderr.includes('authentication') || stderr.includes('polkit')) {
+            resolve({ 
+              success: false, 
+              error: 'Authentication required',
+              needsAuth: true,
+              device 
+            });
+          } else {
+            resolve({ success: false, error: stderr || error.message });
+          }
+        }
+      });
+    } else if (platform === 'darwin') {
+      // macOS: use diskutil
+      exec(`diskutil mount ${device}`, (error: any, stdout: string, stderr: string) => {
+        if (!error) {
+          const match = stdout.match(/mounted at (.+)/i);
+          resolve({ success: true, mountPoint: match ? match[1] : '' });
+        } else {
+          resolve({ success: false, error: stderr || error.message });
+        }
+      });
+    } else {
+      resolve({ success: false, error: 'Unsupported platform' });
+    }
+  });
+});
+
+// Mount with pkexec (for systems that need root password)
+ipcMain.handle('local:mountDriveWithAuth', async (_, device: string) => {
+  const os = require('os');
+  const { exec } = require('child_process');
+  const platform = os.platform();
+  
+  if (platform !== 'linux') {
+    return { success: false, error: 'Only supported on Linux' };
+  }
+  
+  return new Promise((resolve) => {
+    // Use pkexec to get graphical password prompt
+    // First, we need to create mount point and mount
+    const username = os.userInfo().username;
+    
+    // Get device label for mount point name
+    const { execSync } = require('child_process');
+    let label = path.basename(device);
+    try {
+      const lsblkOutput = execSync(`lsblk -n -o LABEL ${device} 2>/dev/null`, { encoding: 'utf8' });
+      label = lsblkOutput.trim() || label;
+    } catch {}
+    
+    const mountPoint = `/media/${username}/${label}`;
+    
+    // Use pkexec to mount with graphical auth dialog
+    const cmd = `pkexec sh -c "mkdir -p '${mountPoint}' && mount '${device}' '${mountPoint}' && chown ${username}:${username} '${mountPoint}'"`;
+    
+    exec(cmd, (error: any, stdout: string, stderr: string) => {
+      if (!error) {
+        resolve({ success: true, mountPoint });
+      } else {
+        // User cancelled or auth failed
+        if (stderr.includes('dismissed') || stderr.includes('cancelled')) {
+          resolve({ success: false, error: 'Authentication cancelled', cancelled: true });
+        } else {
+          resolve({ success: false, error: stderr || error.message });
+        }
+      }
+    });
+  });
 });
 
 ipcMain.handle('local:pathJoin', (_, ...paths: string[]) => {
@@ -1386,19 +1732,27 @@ ipcMain.handle('rdp:connect', async (event, connectionId, config) => {
 
     // Forward RDP events to renderer
     emitter.on('connect', () => {
+      console.log(`[Main] RDP connect event received for ${connectionId}`);
       if (event.sender && !event.sender.isDestroyed()) {
+        console.log(`[Main] Sending rdp:connect to renderer`);
         event.sender.send('rdp:connect', connectionId);
+      } else {
+        console.log(`[Main] Cannot send rdp:connect - sender destroyed`);
       }
     });
 
     emitter.on('close', () => {
+      console.log(`[Main] RDP close event received for ${connectionId}`);
       if (event.sender && !event.sender.isDestroyed()) {
+        console.log(`[Main] Sending rdp:close to renderer`);
         event.sender.send('rdp:close', connectionId);
       }
     });
 
     emitter.on('error', (err: Error) => {
+      console.log(`[Main] RDP error event received for ${connectionId}:`, err.message);
       if (event.sender && !event.sender.isDestroyed()) {
+        console.log(`[Main] Sending rdp:error to renderer`);
         event.sender.send('rdp:error', connectionId, err.message);
       }
     });

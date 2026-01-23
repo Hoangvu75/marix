@@ -2,6 +2,58 @@
 
 All notable changes to Marix SSH Client will be documented in this file.
 
+## [1.0.13] - 2026-01-23
+
+### Added
+- **Lazy Theme Loading**: Terminal themes are now loaded on-demand from JSON files
+  - Reduces initial bundle size by ~300KB
+  - 7 popular themes inlined for instant access (Dracula, Nord, Monokai, etc.)
+  - Other 300+ themes loaded via IPC when selected
+  - Improves app startup time
+  - Files: `themeService.ts`, `index.ts`
+
+- **SFTP Drive Selector**: Added drive/disk selection dropdown in local file browser
+  - Shows all available drives, partitions, and removable devices
+  - Windows: Lists all drive letters with type (Local, USB, Network, CD-ROM)
+  - macOS: Shows Macintosh HD, Home, and /Volumes
+  - Linux: Detects partitions via `lsblk` including NTFS, ext4, exFAT, USB drives
+  - Unmounted drives shown with "Not mounted" badge
+  - Click to mount with automatic polkit/pkexec authentication prompt
+  - Refresh button to detect newly plugged USB drives
+  - Files: `index.ts`, `DualPaneSFTP.tsx`
+
+- **LAN File Transfer Encryption**: AES-256-GCM encryption for file transfers
+  - All files are now encrypted during LAN transfer
+  - Encryption key derived from pairing code via PBKDF2 (100,000 iterations)
+  - Removed security warning banner (no longer needed)
+  - Files: `LANFileTransferService.ts`, `LANFileTransferPage.tsx`
+
+- **LAN File Transfer i18n**: Full internationalization support
+  - Translated to all 14 supported languages
+  - Languages: EN, VI, JA, KO, ZH, ID, FR, DE, ES, TH, MS, RU, FIL, PT
+  - Files: All locale JSON files
+
+### Fixed
+- **RDP Connection Detection**: Fixed "endless waiting" issue when connecting to Windows servers
+  - Proper connection detection by parsing xfreerdp stdout for `gdi_init_ex`
+  - 5-second error detection window, then assumes connected
+  - 20-second maximum timeout for unresponsive servers
+  - File: `RDPManager.ts`
+
+- **RDP Error Handling**: Improved error messages for common RDP failures
+  - Authentication failed → "Check username/password"
+  - Connection refused → "Check if server is reachable and RDP is enabled"
+  - Network unreachable → "Check server address and network connection"
+  - Connection timeout → "Server may be behind firewall"
+  - Account locked/disabled detection
+  - File: `RDPManager.ts`
+
+- **RDP Session Cleanup**: Fixed session not removing when xfreerdp window closes
+  - Properly resets activeSessionId when all sessions closed
+  - Auto-opens sidebar when last session ends
+  - Switches to last active session when current one closes
+  - File: `App.tsx`
+
 ## [1.0.12] - 2026-01-22
 
 ### Added

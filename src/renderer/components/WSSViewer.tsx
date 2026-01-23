@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
-import { terminalThemes } from '../themes';
+import { getThemeSync, getTheme } from '../themeService';
+import { ITheme } from '@xterm/xterm';
 import ThemeSelector from './ThemeSelector';
 import { useLanguage } from '../contexts/LanguageContext';
 
@@ -45,8 +46,17 @@ const WSSViewer: React.FC<WSSViewerProps> = ({
   const [inputMessage, setInputMessage] = useState<string>('');
   const [autoScroll, setAutoScroll] = useState(true);
   const [currentTheme, setCurrentTheme] = useState(theme);
+  const [loadedTheme, setLoadedTheme] = useState<ITheme | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messageIdRef = useRef(0);
+
+  // Load theme data
+  useEffect(() => {
+    // First set sync theme
+    setLoadedTheme(getThemeSync(currentTheme));
+    // Then load async
+    getTheme(currentTheme).then(setLoadedTheme);
+  }, [currentTheme]);
 
   // Handle theme change
   const handleThemeChange = (newTheme: string) => {
@@ -56,8 +66,7 @@ const WSSViewer: React.FC<WSSViewerProps> = ({
 
   // Get theme colors
   const themeColors = useMemo(() => {
-    const selectedTheme = terminalThemes.find(t => t.name === currentTheme) || terminalThemes.find(t => t.name === 'Dracula');
-    const t = selectedTheme?.theme || {};
+    const t = loadedTheme || getThemeSync('Dracula');
     return {
       background: t.background || '#282a36',
       foreground: t.foreground || '#f8f8f2',
@@ -72,7 +81,7 @@ const WSSViewer: React.FC<WSSViewerProps> = ({
       cyan: t.cyan || '#8be9fd',
       white: t.white || '#f8f8f2',
     };
-  }, [currentTheme]);
+  }, [loadedTheme]);
 
   const scrollToBottom = useCallback(() => {
     if (autoScroll && messagesEndRef.current) {
