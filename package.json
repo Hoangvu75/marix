@@ -12,7 +12,7 @@
     "url": "https://github.com/marixdev/marix/issues"
   },
   "overrides": {
-    "tar": "^7.5.6"
+    "tar": "^6.2.1"
   },
   "scripts": {
     "postinstall": "electron-rebuild -f -w sqlite3 || true",

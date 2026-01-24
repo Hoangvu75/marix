@@ -171,11 +171,29 @@ jobs:
           node-version: '22'
           cache: 'npm'
 
-      - name: Run npm audit
-        run: npm audit --audit-level=high || true
-        continue-on-error: true
+      - name: Install dependencies
+        run: npm ci
 
-      - name: Check for known vulnerabilities
+      # Note: Using audit-level=critical because:
+      # - tar@6 is required by @electron/rebuild for build process
+      # - tar@6 has "high" severity path traversal vulns, but these only affect
+      #   extracting untrusted archives, which doesn't apply to our build process
+      # - tar@7 is ESM-only and breaks @electron/rebuild on Node.js 22
+      - name: Run npm audit
+        run: |
+          # Check for critical vulnerabilities only (high vulns from tar@6 are accepted)
+          CRITICAL_COUNT=$(npm audit --json 2>/dev/null | jq '.metadata.vulnerabilities.critical // 0')
+          echo "Critical vulnerabilities: $CRITICAL_COUNT"
+          if [ "$CRITICAL_COUNT" -gt 0 ]; then
+            echo "❌ Critical vulnerabilities found!"
+            npm audit
+            exit 1
+          fi
+          echo "✅ No critical vulnerabilities"
+          # Show full audit for information
+          npm audit || true
+
+      - name: Check for known vulnerabilities (informational)
         run: npx better-npm-audit audit || true
         continue-on-error: true
 

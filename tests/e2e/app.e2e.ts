@@ -14,12 +14,22 @@ let page: Page;
 
 test.describe('Marix E2E Tests', () => {
   test.beforeAll(async () => {
+    // Build launch args - add --no-sandbox for CI environments (Linux)
+    const launchArgs = [path.join(__dirname, '../../dist/main/index.js')];
+    
+    // Disable sandbox on CI (required for GitHub Actions Linux runners)
+    if (process.env.CI) {
+      launchArgs.unshift('--no-sandbox', '--disable-gpu', '--disable-dev-shm-usage');
+    }
+    
     // Launch Electron app
     electronApp = await electron.launch({
-      args: [path.join(__dirname, '../../dist/main/index.js')],
+      args: launchArgs,
       env: {
         ...process.env,
-        NODE_ENV: 'test'
+        NODE_ENV: 'test',
+        // Disable sandbox via env var as well
+        ELECTRON_DISABLE_SANDBOX: process.env.CI ? '1' : undefined
       }
     });
 
