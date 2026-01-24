@@ -15,10 +15,11 @@ interface TerminalInstance {
 
 interface TerminalContextType {
   getTerminal: (connectionId: string) => TerminalInstance | undefined;
-  createTerminal: (connectionId: string, container: HTMLDivElement, themeName?: string, config?: any) => TerminalInstance;
+  createTerminal: (connectionId: string, container: HTMLDivElement, themeName?: string, config?: any, fontFamily?: string) => TerminalInstance;
   destroyTerminal: (connectionId: string) => void;
   applyTheme: (connectionId: string, themeName: string) => void;
   applyThemeToAll: (themeName: string) => void;
+  applyFontToAll: (fontFamily: string) => void;
 }
 
 const TerminalContext = createContext<TerminalContextType | undefined>(undefined);
@@ -55,7 +56,17 @@ export const TerminalProvider: React.FC<{ children: ReactNode }> = ({ children }
     });
   };
 
-  const createTerminal = (connectionId: string, container: HTMLDivElement, themeName: string = 'Dracula', config?: any): TerminalInstance => {
+  // Apply font to all terminals
+  const applyFontToAll = (fontFamily: string) => {
+    const fontString = `"${fontFamily}", "JetBrains Mono", "Fira Code", monospace`;
+    terminalsRef.current.forEach((instance, connId) => {
+      instance.xterm.options.fontFamily = fontString;
+      instance.fitAddon.fit(); // Refit after font change
+      console.log('[TerminalContext] Applied font:', fontFamily, 'to', connId);
+    });
+  };
+
+  const createTerminal = (connectionId: string, container: HTMLDivElement, themeName: string = 'Dracula', config?: any, fontFamily?: string): TerminalInstance => {
     // Check if already exists
     let instance = terminalsRef.current.get(connectionId);
     if (instance) {
@@ -72,7 +83,7 @@ export const TerminalProvider: React.FC<{ children: ReactNode }> = ({ children }
     const xterm = new XTerm({
       cursorBlink: true,
       fontSize: 14,
-      fontFamily: '"JetBrains Mono", "Fira Code", monospace',
+      fontFamily: fontFamily ? `"${fontFamily}", "JetBrains Mono", "Fira Code", monospace` : '"JetBrains Mono", "Fira Code", monospace',
       lineHeight: 1.2,
       theme: theme,
       scrollback: 3000,  // Reduced from 10000 for memory savings
@@ -267,7 +278,7 @@ export const TerminalProvider: React.FC<{ children: ReactNode }> = ({ children }
   };
 
   return (
-    <TerminalContext.Provider value={{ getTerminal, createTerminal, destroyTerminal, applyTheme, applyThemeToAll }}>
+    <TerminalContext.Provider value={{ getTerminal, createTerminal, destroyTerminal, applyTheme, applyThemeToAll, applyFontToAll }}>
       {children}
     </TerminalContext.Provider>
   );

@@ -2,6 +2,62 @@
 
 All notable changes to Marix SSH Client will be documented in this file.
 
+## [1.0.14] - 2026-01-24
+
+### Added
+- **Command Recall Panel**: Command history per server with smart features
+  - Side panel on the left of terminal (matching Snippet Panel style)
+  - Stores up to 50 commands per server with LRU pruning
+  - Right-click context menu for Save as Snippet / Delete
+  - Search commands with real-time filtering
+  - Shows command metadata: time since used, execution count
+  - **Security**: Auto-filters sensitive commands (passwords, tokens, secrets, API keys)
+  - Tab key expands panel when terminal input is empty
+  - Collapsible panel with toggle button
+  - Default: Disabled (enable in Settings → Command Recall)
+  - Local storage only, never synced or backed up
+  - Full i18n support (all 14 languages)
+  - Files: `CommandRecallPanel.tsx`, `commandRecallStore.ts`, `XTermTerminal.tsx`
+
+- **SSH Session Monitor**: Real-time monitoring for SSH connection health
+  - TCP ping-based latency measurement (measures actual network RTT to SSH port)
+  - Visual indicator in footer: 🟢 Stable (<100ms), 🟡 High (100-300ms), 🔴 Very High (>300ms)
+  - Rolling average of last 10 latency samples
+  - **Throughput tracking**: Real-time download/upload speed (↓ ↑) with total bytes transferred
+  - Connection status tracking (connected, unstable, stalled, disconnected)
+  - Shell activity tracking (detects active/idle state)
+  - Auto-disconnect detection (indicator updates when SSH closes)
+  - Tooltip with detailed stats: latency, average, download/upload speed, status, warnings
+  - Configurable: Toggle on/off in Settings with persistent storage
+  - Full i18n support (all 14 languages)
+  - Files: `SSHSessionMonitor.ts`, `SessionMonitorIndicator.tsx`, `AppSettingsStore.ts`, `App.tsx`
+
+- **Terminal Font Selection**: Customize terminal font in Settings
+  - 14 monospace fonts with full Unicode support
+  - Fonts: JetBrains Mono, Fira Code, Cascadia Code, Source Code Pro, Ubuntu Mono, Roboto Mono, Inconsolata, IBM Plex Mono, Hack, Anonymous Pro, Consolas, Monaco, Menlo, DejaVu Sans Mono
+  - Live preview with Unicode characters (Chinese, Vietnamese, emojis, symbols)
+  - Apply to all open terminals instantly
+  - Persistent storage via `AppSettingsStore`
+  - Full i18n support (all 14 languages)
+
+- **App Lock Screen**: Security feature to lock app after inactivity
+  - 3 lock methods: Password, 4-digit PIN, or Blur-only (click to continue)
+  - Configurable timeout: 1, 2, 5, 10, 15, 30, 60 minutes
+  - Disabled by default, enable in Settings
+  - PIN auto-advance on input, backspace support
+  - Encrypted credential storage via electron-store
+  - "Test Now" button to preview lock screen
+  - Full i18n support (all 14 languages)
+  - Files: `LockScreen.tsx`, `AppSettingsStore.ts`, `App.tsx`
+
+### Changed
+- Moved session monitor indicator from tab bar to footer for cleaner UI
+- **App Lock Screen UI**: Redesigned with inline styles for consistent appearance
+  - Dark overlay background (92% opacity) works on both light and dark themes
+  - All text now white for maximum readability
+  - PIN/Password inputs with dark background and white text
+  - No dependency on Tailwind CSS classes for critical styling
+
 ## [1.0.13] - 2026-01-23
 
 ### Added

@@ -1209,6 +1209,101 @@ export interface Translations {
   noSenderFoundWithCode: string;
   pleaseSearchFindSenderFirst: string;
   connectingToSender: string;
+  
+  // Session Monitor
+  sessionLatency: string;
+  sessionLatencyAvg: string;
+  sessionStatus: string;
+  sessionConnected: string;
+  sessionUnstable: string;
+  sessionStalled: string;
+  sessionDisconnected: string;
+  sessionKeepaliveFailures: string;
+  sessionMonitor: string;
+  sessionMonitorEnabled: string;
+  sessionMonitorDesc: string;
+  sessionDownload: string;
+  sessionUpload: string;
+  terminalFont: string;
+  terminalFontFamily: string;
+  terminalFontDesc: string;
+  
+  // Command Recall
+  commandRecall: string;
+  commandRecallEnabled: string;
+  commandRecallDesc: string;
+  commandRecallSecurityNote: string;
+  commandRecallSearch: string;
+  commandRecallEmpty: string;
+  commandRecallEmptyHint: string;
+  commandRecallNoMatch: string;
+  commandRecallSaveSnippet: string;
+  commandRecallNavigate: string;
+  commandRecallInsert: string;
+  commandRecallClose: string;
+  commandRecallDelete: string;
+  commandRecallClearAll: string;
+  commandRecallUsed: string;
+  commandRecallTimes: string;
+  rightClickForOptions: string;
+  
+  // App Lock
+  appLock: string;
+  appLockDesc: string;
+  appLockEnable: string;
+  appLockMethod: string;
+  appLockMethodBlur: string;
+  appLockMethodPin: string;
+  appLockMethodPassword: string;
+  appLockTimeout: string;
+  appLockPinCode: string;
+  appLockCredentialSet: string;
+  appLockCredentialNotSet: string;
+  appLockTestNow: string;
+  appLocked: string;
+  appLockClickToContinue: string;
+  appLockEnterPin: string;
+  appLockEnterPassword: string;
+  appLockUnlock: string;
+  appLockWrongCredential: string;
+  appLockPinHint: string;
+  appLockPasswordHint: string;
+  appLockSetPin: string;
+  appLockSetPassword: string;
+  appLockConfirmCredential: string;
+  appLockPinRequirement: string;
+  appLockPasswordRequirement: string;
+  appLockCredentialMismatch: string;
+  change: string;
+  set: string;
+
+  // What's New & Features
+  whatsNew: string;
+  terminalFontSelection: string;
+  appLockInfoDesc: string;
+  previousVersions: string;
+  changelog1013: string;
+  changelog1012: string;
+  changelog1011: string;
+  changelog1010: string;
+  
+  // Feature Grid
+  featureSsh: string;
+  featureSftp: string;
+  featureFtp: string;
+  featureRdp: string;
+  feature2fa: string;
+  featurePortForward: string;
+  featureCloudflareDns: string;
+  featureDnsWhois: string;
+  featureSessionMonitor: string;
+  featureTerminalFont: string;
+  featureAppLock: string;
+  featureThemes: string;
+  
+  // Author
+  authorRole: string;
+  viewOnGithub: string;
 }
 
 interface LanguageContextType {

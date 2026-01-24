@@ -40,6 +40,8 @@ import { PortKnockService } from './services/PortKnockService';
 import { LANSharingService } from './services/LANSharingService';
 import { lanFileTransferService } from './services/LANFileTransferService';
 import { getGoogleDriveService } from './services/GoogleDriveService';
+import { sessionMonitor, SessionMonitorData } from './services/SSHSessionMonitor';
+import { appSettings } from './services/AppSettingsStore';
 import { initDatabaseHandlers, getDatabaseConnectionCount, closeAllDatabaseConnections } from './databaseService';
 import buildInfo from './buildInfo';
 
@@ -333,6 +335,9 @@ app.whenReady().then(() => {
   // Initialize database handlers
   initDatabaseHandlers();
   
+  // Initialize session monitor with saved setting
+  sessionMonitor.setEnabled(appSettings.get('sessionMonitorEnabled'));
+  
   // LAN sharing and file transfer services are started on-demand
   // when user enables LAN Discovery toggle in the UI
   // (via 'lan-share:start' IPC handler)
@@ -379,6 +384,7 @@ if (!gotTheLock) {
 
 app.on('window-all-closed', () => {
   // Close all sessions before quitting
+  sessionMonitor.cleanup();
   rdpManager.closeAll();
   nativeSSH.closeAll();
   sshManager.closeAll();
@@ -394,6 +400,7 @@ app.on('window-all-closed', () => {
 // Cleanup before quit
 app.on('before-quit', () => {
   console.log('[App] Cleaning up before quit...');
+  sessionMonitor.cleanup();
   rdpManager.closeAll();
   nativeSSH.closeAll();
   sshManager.closeAll();
@@ -969,16 +976,21 @@ ipcMain.handle('ssh:connect', async (event, config) => {
     
     // Helper to setup event forwarding
     const setupEventForwarding = (connectionId: string, emitter: any) => {
-      const dataHandler = (data: string) => {
+      const dataHandler = (data: string | Buffer) => {
         if (event.sender && !event.sender.isDestroyed()) {
           event.sender.send('ssh:shellData', connectionId, data);
         }
+        // Track bytes received (download) for session monitor
+        const bytes = typeof data === 'string' ? Buffer.byteLength(data, 'utf8') : data.length;
+        sessionMonitor.recordBytesReceived(connectionId, bytes);
       };
       
       const closeHandler = () => {
         if (event.sender && !event.sender.isDestroyed()) {
           event.sender.send('ssh:shellClose', connectionId);
         }
+        // Mark session as disconnected
+        sessionMonitor.markDisconnected(connectionId);
       };
       
       emitter.on('data', dataHandler);
@@ -996,6 +1008,9 @@ ipcMain.handle('ssh:connect', async (event, config) => {
       }).catch(err => {
         console.log('[Main] SSH2 background connect failed:', err.message);
       });
+      
+      // Start session monitoring (uses TCP ping, doesn't need SSH2)
+      sessionMonitor.startMonitoring(connectionId);
       
       return { success: true, connectionId };
     } catch (firstError: any) {
@@ -1022,6 +1037,9 @@ ipcMain.handle('ssh:connect', async (event, config) => {
         }).catch(err => {
           console.log('[Main] SSH2 background connect failed:', err.message);
         });
+        
+        // Start session monitoring (uses TCP ping, doesn't need SSH2)
+        sessionMonitor.startMonitoring(connectionId);
         
         return { success: true, connectionId };
       }
@@ -1130,6 +1148,8 @@ ipcMain.handle('ssh:closeShell', async (event, connectionId) => {
 
 ipcMain.handle('ssh:disconnect', async (event, connectionId) => {
   try {
+    // Stop session monitoring
+    sessionMonitor.stopMonitoring(connectionId);
     nativeSSH.disconnect(connectionId);
     await sshManager.disconnect(connectionId).catch(() => {});
     return { success: true };
@@ -1201,6 +1221,9 @@ ipcMain.handle('ssh:createShell', async (event, connectionId, cols, rows) => {
 ipcMain.handle('ssh:writeShell', async (event, connectionId, data) => {
   try {
     nativeSSH.writeToShell(connectionId, data);
+    // Track bytes sent (upload) for session monitor
+    const bytes = typeof data === 'string' ? Buffer.byteLength(data, 'utf8') : data.length;
+    sessionMonitor.recordBytesSent(connectionId, bytes);
     return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message };
@@ -1215,6 +1238,100 @@ ipcMain.handle('ssh:resizeShell', async (event, connectionId, cols, rows) => {
     return { success: false, error: error.message };
   }
 });
+
+// ============================================================================
+// SESSION MONITOR IPC HANDLERS
+// ============================================================================
+
+// Get monitor data for a specific session
+ipcMain.handle('session-monitor:getData', async (event, connectionId: string) => {
+  return sessionMonitor.getSessionData(connectionId);
+});
+
+// Get monitor data for all sessions
+ipcMain.handle('session-monitor:getAllData', async () => {
+  return sessionMonitor.getAllSessionsData();
+});
+
+// Enable/disable session monitoring
+ipcMain.handle('session-monitor:setEnabled', async (event, enabled: boolean) => {
+  sessionMonitor.setEnabled(enabled);
+  appSettings.set('sessionMonitorEnabled', enabled);
+  return { success: true };
+});
+
+// Check if monitoring is enabled
+ipcMain.handle('session-monitor:isEnabled', async () => {
+  return appSettings.get('sessionMonitorEnabled');
+});
+
+// Terminal font settings
+ipcMain.handle('settings:getTerminalFont', async () => {
+  return appSettings.get('terminalFont');
+});
+
+ipcMain.handle('settings:setTerminalFont', async (event, fontFamily: string) => {
+  appSettings.set('terminalFont', fontFamily);
+  return { success: true };
+});
+
+// App Lock settings
+ipcMain.handle('settings:getAppLockSettings', async () => {
+  return {
+    enabled: appSettings.get('appLockEnabled'),
+    method: appSettings.get('appLockMethod'),
+    timeout: appSettings.get('appLockTimeout'),
+    hasCredential: !!appSettings.get('appLockHash'),
+  };
+});
+
+ipcMain.handle('settings:setAppLockEnabled', async (event, enabled: boolean) => {
+  appSettings.set('appLockEnabled', enabled);
+  return { success: true };
+});
+
+ipcMain.handle('settings:setAppLockMethod', async (event, method: string) => {
+  appSettings.set('appLockMethod', method as any);
+  // Clear credential when switching to blur mode
+  if (method === 'blur' || method === 'none') {
+    appSettings.clearCredential();
+  }
+  return { success: true };
+});
+
+ipcMain.handle('settings:setAppLockTimeout', async (event, timeout: number) => {
+  appSettings.set('appLockTimeout', timeout);
+  return { success: true };
+});
+
+ipcMain.handle('settings:setAppLockCredential', async (event, credential: string) => {
+  appSettings.setCredential(credential);
+  return { success: true };
+});
+
+ipcMain.handle('settings:verifyAppLockCredential', async (event, credential: string) => {
+  return appSettings.verifyCredential(credential);
+});
+
+ipcMain.handle('settings:clearAppLockCredential', async () => {
+  appSettings.clearCredential();
+  return { success: true };
+});
+
+// Forward session monitor updates to renderer
+sessionMonitor.on('update', (data: SessionMonitorData) => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('session-monitor:update', data);
+  }
+});
+
+sessionMonitor.on('session-closed', (connectionId: string) => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('session-monitor:closed', connectionId);
+  }
+});
+
+// ============================================================================
 
 ipcMain.handle('sftp:connect', async (event, connectionId, config) => {
   try {

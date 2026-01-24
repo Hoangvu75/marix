@@ -50,6 +50,29 @@ const SnippetPage: React.FC<Props> = ({ appTheme }) => {
     return () => unsubscribe();
   }, []);
 
+  // Listen for openSnippetEditor event from Command Recall
+  useEffect(() => {
+    const handleOpenSnippetEditor = (e: CustomEvent) => {
+      const detail = e.detail as { command: string; category?: string };
+      if (detail?.command) {
+        // Pre-fill the form with the command
+        setFormData({
+          name: '',
+          command: detail.command,
+          description: '',
+          category: detail.category || 'Custom',
+          hotkey: '',
+          tags: ''
+        });
+        setEditingId(null);
+        setShowForm(true);
+      }
+    };
+
+    window.addEventListener('openSnippetEditor', handleOpenSnippetEditor as EventListener);
+    return () => window.removeEventListener('openSnippetEditor', handleOpenSnippetEditor as EventListener);
+  }, []);
+
   // Filter snippets
   const filteredSnippets = useMemo(() => {
     let result = snippets;

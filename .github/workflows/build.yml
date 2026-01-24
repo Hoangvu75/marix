@@ -34,6 +34,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Inject build info (commit SHA)
+        run: npm run inject-build-info
+
       - name: Build Linux packages
         run: npm run package:linux
         env:
@@ -64,6 +67,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Inject build info (commit SHA)
+        run: npm run inject-build-info
+
       - name: Build Windows package
         run: npm run package:win
         env:
@@ -90,6 +96,9 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Inject build info (commit SHA)
+        run: npm run inject-build-info
 
       - name: Build macOS packages
         run: npm run package:mac
@@ -164,22 +173,27 @@ jobs:
           body: |
             ## Marix SSH Client ${{ steps.package-version.outputs.version }}
             
+            ### 🔐 Build Verification
+            
+            | Property | Value |
+            |----------|-------|
+            | **Commit SHA** | `${{ github.sha }}` |
+            | **Short SHA** | `${{ github.sha }}` |
+            | **Build Run** | [#${{ github.run_id }}](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) |
+            | **Build Time** | ${{ github.event.head_commit.timestamp || 'N/A' }} |
+            
+            > ℹ️ You can verify the commit SHA in the app: **Settings → About → Build Info**
+            
             ### Downloads
-            | Platform | File |
-            |----------|------|
-            | **Linux** | AppImage, DEB, RPM |
-            | **Windows** | EXE installer |
-            | **macOS** | ZIP (Intel & Apple Silicon) |
-            
-            ### Installation
-            
-            **macOS**:
-            1. Download and extract the ZIP file
-            2. Right-click Marix.app → Open (bypass Gatekeeper)
-            3. If blocked: System Settings → Privacy & Security → Open Anyway
+            | Platform | File | Supported OS |
+            |----------|------|--------------|
+            | **Linux** | AppImage, DEB, RPM | Ubuntu 18.04+, Debian 10+, Fedora 32+ |
+            | **Windows** | EXE installer | Windows 10/11 |
+            | **macOS** | ZIP (Universal) | macOS 10.15+ (Intel & Apple Silicon) |
             
             ---
             
             📋 **[View Full Changelog](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md)**
+            🔒 **[Security Documentation](https://github.com/${{ github.repository }}/blob/main/SECURITY.md)**
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

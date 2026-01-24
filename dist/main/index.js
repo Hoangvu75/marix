@@ -76,6 +76,8 @@ const PortKnockService_1 = require("./services/PortKnockService");
 const LANSharingService_1 = require("./services/LANSharingService");
 const LANFileTransferService_1 = require("./services/LANFileTransferService");
 const GoogleDriveService_1 = require("./services/GoogleDriveService");
+const SSHSessionMonitor_1 = require("./services/SSHSessionMonitor");
+const AppSettingsStore_1 = require("./services/AppSettingsStore");
 const databaseService_1 = require("./databaseService");
 const buildInfo_1 = __importDefault(require("./buildInfo"));
 let mainWindow = null;
@@ -341,6 +343,8 @@ electron_1.app.whenReady().then(() => {
     createAppMenu();
     // Initialize database handlers
     (0, databaseService_1.initDatabaseHandlers)();
+    // Initialize session monitor with saved setting
+    SSHSessionMonitor_1.sessionMonitor.setEnabled(AppSettingsStore_1.appSettings.get('sessionMonitorEnabled'));
     // LAN sharing and file transfer services are started on-demand
     // when user enables LAN Discovery toggle in the UI
     // (via 'lan-share:start' IPC handler)
@@ -383,6 +387,7 @@ else {
 }
 electron_1.app.on('window-all-closed', () => {
     // Close all sessions before quitting
+    SSHSessionMonitor_1.sessionMonitor.cleanup();
     rdpManager.closeAll();
     nativeSSH.closeAll();
     sshManager.closeAll();
@@ -396,6 +401,7 @@ electron_1.app.on('window-all-closed', () => {
 // Cleanup before quit
 electron_1.app.on('before-quit', () => {
     console.log('[App] Cleaning up before quit...');
+    SSHSessionMonitor_1.sessionMonitor.cleanup();
     rdpManager.closeAll();
     nativeSSH.closeAll();
     sshManager.closeAll();
@@ -952,11 +958,16 @@ electron_1.ipcMain.handle('ssh:connect', async (event, config) => {
                 if (event.sender && !event.sender.isDestroyed()) {
                     event.sender.send('ssh:shellData', connectionId, data);
                 }
+                // Track bytes received (download) for session monitor
+                const bytes = typeof data === 'string' ? Buffer.byteLength(data, 'utf8') : data.length;
+                SSHSessionMonitor_1.sessionMonitor.recordBytesReceived(connectionId, bytes);
             };
             const closeHandler = () => {
                 if (event.sender && !event.sender.isDestroyed()) {
                     event.sender.send('ssh:shellClose', connectionId);
                 }
+                // Mark session as disconnected
+                SSHSessionMonitor_1.sessionMonitor.markDisconnected(connectionId);
             };
             emitter.on('data', dataHandler);
             emitter.on('close', closeHandler);
@@ -971,6 +982,8 @@ electron_1.ipcMain.handle('ssh:connect', async (event, config) => {
             }).catch(err => {
                 console.log('[Main] SSH2 background connect failed:', err.message);
             });
+            // Start session monitoring (uses TCP ping, doesn't need SSH2)
+            SSHSessionMonitor_1.sessionMonitor.startMonitoring(connectionId);
             return { success: true, connectionId };
         }
         catch (firstError) {
@@ -994,6 +1007,8 @@ electron_1.ipcMain.handle('ssh:connect', async (event, config) => {
                 }).catch(err => {
                     console.log('[Main] SSH2 background connect failed:', err.message);
                 });
+                // Start session monitoring (uses TCP ping, doesn't need SSH2)
+                SSHSessionMonitor_1.sessionMonitor.startMonitoring(connectionId);
                 return { success: true, connectionId };
             }
             // Not an algorithm error, rethrow
@@ -1097,6 +1112,8 @@ electron_1.ipcMain.handle('ssh:closeShell', async (event, connectionId) => {
 });
 electron_1.ipcMain.handle('ssh:disconnect', async (event, connectionId) => {
     try {
+        // Stop session monitoring
+        SSHSessionMonitor_1.sessionMonitor.stopMonitoring(connectionId);
         nativeSSH.disconnect(connectionId);
         await sshManager.disconnect(connectionId).catch(() => { });
         return { success: true };
@@ -1164,6 +1181,9 @@ electron_1.ipcMain.handle('ssh:createShell', async (event, connectionId, cols, r
 electron_1.ipcMain.handle('ssh:writeShell', async (event, connectionId, data) => {
     try {
         nativeSSH.writeToShell(connectionId, data);
+        // Track bytes sent (upload) for session monitor
+        const bytes = typeof data === 'string' ? Buffer.byteLength(data, 'utf8') : data.length;
+        SSHSessionMonitor_1.sessionMonitor.recordBytesSent(connectionId, bytes);
         return { success: true };
     }
     catch (error) {
@@ -1179,6 +1199,83 @@ electron_1.ipcMain.handle('ssh:resizeShell', async (event, connectionId, cols, r
         return { success: false, error: error.message };
     }
 });
+// ============================================================================
+// SESSION MONITOR IPC HANDLERS
+// ============================================================================
+// Get monitor data for a specific session
+electron_1.ipcMain.handle('session-monitor:getData', async (event, connectionId) => {
+    return SSHSessionMonitor_1.sessionMonitor.getSessionData(connectionId);
+});
+// Get monitor data for all sessions
+electron_1.ipcMain.handle('session-monitor:getAllData', async () => {
+    return SSHSessionMonitor_1.sessionMonitor.getAllSessionsData();
+});
+// Enable/disable session monitoring
+electron_1.ipcMain.handle('session-monitor:setEnabled', async (event, enabled) => {
+    SSHSessionMonitor_1.sessionMonitor.setEnabled(enabled);
+    AppSettingsStore_1.appSettings.set('sessionMonitorEnabled', enabled);
+    return { success: true };
+});
+// Check if monitoring is enabled
+electron_1.ipcMain.handle('session-monitor:isEnabled', async () => {
+    return AppSettingsStore_1.appSettings.get('sessionMonitorEnabled');
+});
+// Terminal font settings
+electron_1.ipcMain.handle('settings:getTerminalFont', async () => {
+    return AppSettingsStore_1.appSettings.get('terminalFont');
+});
+electron_1.ipcMain.handle('settings:setTerminalFont', async (event, fontFamily) => {
+    AppSettingsStore_1.appSettings.set('terminalFont', fontFamily);
+    return { success: true };
+});
+// App Lock settings
+electron_1.ipcMain.handle('settings:getAppLockSettings', async () => {
+    return {
+        enabled: AppSettingsStore_1.appSettings.get('appLockEnabled'),
+        method: AppSettingsStore_1.appSettings.get('appLockMethod'),
+        timeout: AppSettingsStore_1.appSettings.get('appLockTimeout'),
+        hasCredential: !!AppSettingsStore_1.appSettings.get('appLockHash'),
+    };
+});
+electron_1.ipcMain.handle('settings:setAppLockEnabled', async (event, enabled) => {
+    AppSettingsStore_1.appSettings.set('appLockEnabled', enabled);
+    return { success: true };
+});
+electron_1.ipcMain.handle('settings:setAppLockMethod', async (event, method) => {
+    AppSettingsStore_1.appSettings.set('appLockMethod', method);
+    // Clear credential when switching to blur mode
+    if (method === 'blur' || method === 'none') {
+        AppSettingsStore_1.appSettings.clearCredential();
+    }
+    return { success: true };
+});
+electron_1.ipcMain.handle('settings:setAppLockTimeout', async (event, timeout) => {
+    AppSettingsStore_1.appSettings.set('appLockTimeout', timeout);
+    return { success: true };
+});
+electron_1.ipcMain.handle('settings:setAppLockCredential', async (event, credential) => {
+    AppSettingsStore_1.appSettings.setCredential(credential);
+    return { success: true };
+});
+electron_1.ipcMain.handle('settings:verifyAppLockCredential', async (event, credential) => {
+    return AppSettingsStore_1.appSettings.verifyCredential(credential);
+});
+electron_1.ipcMain.handle('settings:clearAppLockCredential', async () => {
+    AppSettingsStore_1.appSettings.clearCredential();
+    return { success: true };
+});
+// Forward session monitor updates to renderer
+SSHSessionMonitor_1.sessionMonitor.on('update', (data) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('session-monitor:update', data);
+    }
+});
+SSHSessionMonitor_1.sessionMonitor.on('session-closed', (connectionId) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('session-monitor:closed', connectionId);
+    }
+});
+// ============================================================================
 electron_1.ipcMain.handle('sftp:connect', async (event, connectionId, config) => {
     try {
         // Check if ssh2 already connected

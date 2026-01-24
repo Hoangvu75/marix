@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { version as APP_VERSION } from '../../package.json';
 
 const { ipcRenderer } = window.electron;
@@ -21,6 +21,8 @@ import KnownHostsPage from './components/KnownHostsPage';
 import TwoFactorPage from './components/TwoFactorPage';
 import SnippetPage from './components/SnippetPage';
 import PortForwardingPage from './components/PortForwardingPage';
+import SessionMonitorIndicator from './components/SessionMonitorIndicator';
+import LockScreen from './components/LockScreen';
 import { BackupModal } from './components/BackupModal';
 import { useTerminalContext } from './contexts/TerminalContext';
 import { useLanguage } from './contexts/LanguageContext';
@@ -262,8 +264,57 @@ const App: React.FC = () => {
   const [githubLoading, setGithubLoading] = useState(false);
   const [githubPolling, setGithubPolling] = useState(false);
   
-  const { destroyTerminal, applyThemeToAll } = useTerminalContext();
+  // Session Monitor state
+  const [sessionMonitorEnabled, setSessionMonitorEnabled] = useState(true);
+  
+  // Command Recall state (default disabled - user enables in Settings)
+  const [commandRecallEnabled, setCommandRecallEnabled] = useState(false);
+  
+  // Terminal Font state
+  const [terminalFont, setTerminalFont] = useState('JetBrains Mono');
+  
+  // App Lock state
+  const [appLockEnabled, setAppLockEnabled] = useState(false);
+  const [appLockMethod, setAppLockMethod] = useState<'blur' | 'pin' | 'password'>('blur');
+  const [appLockTimeout, setAppLockTimeout] = useState(5);
+  const [appLockHasCredential, setAppLockHasCredential] = useState(false);
+  const [isAppLocked, setIsAppLocked] = useState(false);
+  const [showSetCredentialModal, setShowSetCredentialModal] = useState(false);
+  const [pendingLockMethod, setPendingLockMethod] = useState<'pin' | 'password' | null>(null);
+  const lastActivityRef = useRef(Date.now());
+  const lockCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Available terminal fonts (monospace, Unicode support)
+  const TERMINAL_FONTS = [
+    { name: 'JetBrains Mono', value: 'JetBrains Mono' },
+    { name: 'Fira Code', value: 'Fira Code' },
+    { name: 'Cascadia Code', value: 'Cascadia Code' },
+    { name: 'Source Code Pro', value: 'Source Code Pro' },
+    { name: 'Ubuntu Mono', value: 'Ubuntu Mono' },
+    { name: 'Roboto Mono', value: 'Roboto Mono' },
+    { name: 'Inconsolata', value: 'Inconsolata' },
+    { name: 'IBM Plex Mono', value: 'IBM Plex Mono' },
+    { name: 'Hack', value: 'Hack' },
+    { name: 'Anonymous Pro', value: 'Anonymous Pro' },
+    { name: 'Consolas', value: 'Consolas' },
+    { name: 'Monaco', value: 'Monaco' },
+    { name: 'Menlo', value: 'Menlo' },
+    { name: 'DejaVu Sans Mono', value: 'DejaVu Sans Mono' },
+  ];
+  
+  const { destroyTerminal, applyThemeToAll, applyFontToAll } = useTerminalContext();
   const { t } = useLanguage();
+
+  // Available lock timeout options (minutes) - must be after t() is available
+  const LOCK_TIMEOUT_OPTIONS = [
+    { label: '1 ' + (t('minute') || 'min'), value: 1 },
+    { label: '2 ' + (t('minutes') || 'min'), value: 2 },
+    { label: '5 ' + (t('minutes') || 'min'), value: 5 },
+    { label: '10 ' + (t('minutes') || 'min'), value: 10 },
+    { label: '15 ' + (t('minutes') || 'min'), value: 15 },
+    { label: '30 ' + (t('minutes') || 'min'), value: 30 },
+    { label: '60 ' + (t('minutes') || 'min'), value: 60 },
+  ];
 
   // Available tag colors (preset + custom)
   const TAG_COLORS = [
@@ -396,6 +447,17 @@ const App: React.FC = () => {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [activeSession]);
+
+  // Listen for navigateToSnippets event from Command Recall
+  useEffect(() => {
+    const handleNavigateToSnippets = () => {
+      setActiveMenu('snippets');
+      setActiveSessionId(null);
+    };
+
+    window.addEventListener('navigateToSnippets', handleNavigateToSnippets);
+    return () => window.removeEventListener('navigateToSnippets', handleNavigateToSnippets);
+  }, []);
 
   // Fix keyboard stuck issue - reset keyboard state when window regains focus
   // This prevents modifier keys from being "stuck" after extended use
@@ -1518,6 +1580,64 @@ const App: React.FC = () => {
     loadTagColors();
     loadGitHubAuth();
     
+    // Load session monitor setting
+    const loadSessionMonitorSetting = async () => {
+      try {
+        const enabled = await ipcRenderer.invoke('session-monitor:isEnabled');
+        setSessionMonitorEnabled(enabled);
+      } catch (err) {
+        console.error('[App] Failed to load session monitor setting:', err);
+      }
+    };
+    loadSessionMonitorSetting();
+    
+    // Load command recall setting (from localStorage)
+    const loadCommandRecallSetting = () => {
+      try {
+        const settings = localStorage.getItem('app_settings');
+        if (settings) {
+          const parsed = JSON.parse(settings);
+          // Default to false - user must explicitly enable
+          setCommandRecallEnabled(parsed.enableCommandRecall === true);
+        } else {
+          setCommandRecallEnabled(false); // Default disabled
+        }
+      } catch (err) {
+        console.error('[App] Failed to load command recall setting:', err);
+        setCommandRecallEnabled(false); // Default disabled on error
+      }
+    };
+    loadCommandRecallSetting();
+    
+    // Load terminal font setting
+    const loadTerminalFontSetting = async () => {
+      try {
+        const font = await ipcRenderer.invoke('settings:getTerminalFont');
+        if (font) {
+          setTerminalFont(font);
+        }
+      } catch (err) {
+        console.error('[App] Failed to load terminal font setting:', err);
+      }
+    };
+    loadTerminalFontSetting();
+    
+    // Load app lock settings
+    const loadAppLockSettings = async () => {
+      try {
+        const settings = await ipcRenderer.invoke('settings:getAppLockSettings');
+        if (settings) {
+          setAppLockEnabled(settings.enabled);
+          setAppLockMethod(settings.method || 'blur');
+          setAppLockTimeout(settings.timeout || 5);
+          setAppLockHasCredential(settings.hasCredential);
+        }
+      } catch (err) {
+        console.error('[App] Failed to load app lock settings:', err);
+      }
+    };
+    loadAppLockSettings();
+    
     // Load build info
     const loadBuildInfo = async () => {
       try {
@@ -1584,6 +1704,174 @@ const App: React.FC = () => {
       setTagMenuOpen(null);
     } catch (err) {
       console.error('[App] Failed to set tag color:', err);
+    }
+  };
+
+  // Toggle session monitor
+  const toggleSessionMonitor = async () => {
+    try {
+      const newValue = !sessionMonitorEnabled;
+      await ipcRenderer.invoke('session-monitor:setEnabled', newValue);
+      setSessionMonitorEnabled(newValue);
+    } catch (err) {
+      console.error('[App] Failed to toggle session monitor:', err);
+    }
+  };
+
+  // Toggle command recall
+  const toggleCommandRecall = () => {
+    const newValue = !commandRecallEnabled;
+    // Save to localStorage (commandRecallStore handles this)
+    try {
+      const settings = localStorage.getItem('app_settings');
+      const parsed = settings ? JSON.parse(settings) : {};
+      parsed.enableCommandRecall = newValue;
+      localStorage.setItem('app_settings', JSON.stringify(parsed));
+      setCommandRecallEnabled(newValue);
+    } catch (err) {
+      console.error('[App] Failed to toggle command recall:', err);
+    }
+  };
+
+  // Change terminal font
+  const handleTerminalFontChange = async (fontFamily: string) => {
+    try {
+      await ipcRenderer.invoke('settings:setTerminalFont', fontFamily);
+      setTerminalFont(fontFamily);
+      applyFontToAll(fontFamily);
+    } catch (err) {
+      console.error('[App] Failed to change terminal font:', err);
+    }
+  };
+
+  // ==================== App Lock Functions ====================
+  
+  // Reset activity timer
+  const resetActivityTimer = useCallback(() => {
+    lastActivityRef.current = Date.now();
+  }, []);
+
+  // Activity tracking effect
+  useEffect(() => {
+    if (!appLockEnabled) {
+      // Clear interval if lock is disabled
+      if (lockCheckIntervalRef.current) {
+        clearInterval(lockCheckIntervalRef.current);
+        lockCheckIntervalRef.current = null;
+      }
+      return;
+    }
+
+    // Track user activity
+    const handleActivity = () => {
+      resetActivityTimer();
+    };
+
+    // Listen to various user activities
+    window.addEventListener('mousemove', handleActivity);
+    window.addEventListener('mousedown', handleActivity);
+    window.addEventListener('keydown', handleActivity);
+    window.addEventListener('scroll', handleActivity, true);
+    window.addEventListener('touchstart', handleActivity);
+
+    // Check for inactivity periodically
+    lockCheckIntervalRef.current = setInterval(() => {
+      const now = Date.now();
+      const elapsed = (now - lastActivityRef.current) / 1000 / 60; // minutes
+      
+      if (elapsed >= appLockTimeout && !isAppLocked) {
+        setIsAppLocked(true);
+      }
+    }, 10000); // Check every 10 seconds
+
+    return () => {
+      window.removeEventListener('mousemove', handleActivity);
+      window.removeEventListener('mousedown', handleActivity);
+      window.removeEventListener('keydown', handleActivity);
+      window.removeEventListener('scroll', handleActivity, true);
+      window.removeEventListener('touchstart', handleActivity);
+      
+      if (lockCheckIntervalRef.current) {
+        clearInterval(lockCheckIntervalRef.current);
+      }
+    };
+  }, [appLockEnabled, appLockTimeout, isAppLocked, resetActivityTimer]);
+
+  // Handle app lock toggle
+  const handleAppLockToggle = async () => {
+    const newEnabled = !appLockEnabled;
+    try {
+      await ipcRenderer.invoke('settings:setAppLockEnabled', newEnabled);
+      setAppLockEnabled(newEnabled);
+      if (!newEnabled) {
+        setIsAppLocked(false);
+      }
+    } catch (err) {
+      console.error('[App] Failed to toggle app lock:', err);
+    }
+  };
+
+  // Handle lock method change
+  const handleAppLockMethodChange = async (method: 'blur' | 'pin' | 'password') => {
+    // If switching to pin or password, need to set credential first
+    if ((method === 'pin' || method === 'password') && !appLockHasCredential) {
+      setPendingLockMethod(method);
+      setShowSetCredentialModal(true);
+      return;
+    }
+    
+    try {
+      await ipcRenderer.invoke('settings:setAppLockMethod', method);
+      setAppLockMethod(method);
+    } catch (err) {
+      console.error('[App] Failed to set lock method:', err);
+    }
+  };
+
+  // Handle lock timeout change
+  const handleAppLockTimeoutChange = async (timeout: number) => {
+    try {
+      await ipcRenderer.invoke('settings:setAppLockTimeout', timeout);
+      setAppLockTimeout(timeout);
+    } catch (err) {
+      console.error('[App] Failed to set lock timeout:', err);
+    }
+  };
+
+  // Handle unlock
+  const handleUnlock = () => {
+    setIsAppLocked(false);
+    resetActivityTimer();
+  };
+
+  // Handle set credential
+  const handleSetCredential = async (credential: string) => {
+    try {
+      await ipcRenderer.invoke('settings:setAppLockCredential', credential);
+      setAppLockHasCredential(true);
+      
+      if (pendingLockMethod) {
+        await ipcRenderer.invoke('settings:setAppLockMethod', pendingLockMethod);
+        setAppLockMethod(pendingLockMethod);
+        setPendingLockMethod(null);
+      }
+      
+      setShowSetCredentialModal(false);
+    } catch (err) {
+      console.error('[App] Failed to set credential:', err);
+    }
+  };
+
+  // Handle clear credential
+  const handleClearCredential = async () => {
+    try {
+      await ipcRenderer.invoke('settings:clearAppLockCredential');
+      setAppLockHasCredential(false);
+      // Switch to blur method when credential is cleared
+      await ipcRenderer.invoke('settings:setAppLockMethod', 'blur');
+      setAppLockMethod('blur');
+    } catch (err) {
+      console.error('[App] Failed to clear credential:', err);
     }
   };
 
@@ -2717,6 +3005,29 @@ const App: React.FC = () => {
 
   return (
     <div className="flex flex-col h-screen bg-navy-900 text-gray-100">
+      {/* Lock Screen */}
+      {isAppLocked && (
+        <LockScreen
+          method={appLockMethod}
+          onUnlock={handleUnlock}
+          appTheme={appTheme}
+        />
+      )}
+      
+      {/* Set Credential Modal */}
+      {showSetCredentialModal && (
+        <SetCredentialModal
+          method={pendingLockMethod || 'pin'}
+          onSave={handleSetCredential}
+          onCancel={() => {
+            setShowSetCredentialModal(false);
+            setPendingLockMethod(null);
+          }}
+          appTheme={appTheme}
+          t={t}
+        />
+      )}
+      
       {/* Custom Title Bar with Tabs */}
       <div className="bg-navy-800 border-b border-navy-700 flex items-center h-10 select-none" style={{ WebkitAppRegion: 'drag' } as any}>
         {/* macOS traffic light buttons spacing */}
@@ -3275,6 +3586,252 @@ const App: React.FC = () => {
                         direction="down"
                       />
                     </div>
+                  </div>
+                </div>
+                
+                {/* Session Monitor */}
+                <div className={`rounded-xl p-4 sm:p-5 ${appTheme === 'light' ? 'bg-white border border-gray-200 shadow-sm' : 'bg-navy-800 border border-navy-700'}`}>
+                  <h3 className={`text-sm font-medium mb-3 sm:mb-4 flex items-center gap-2 ${appTheme === 'light' ? 'text-gray-900' : 'text-white'}`}>
+                    <svg className="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                    </svg>
+                    {t('sessionMonitor') || 'Session Monitor'}
+                  </h3>
+                  
+                  <div className="space-y-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4">
+                      <div>
+                        <p className={`text-sm ${appTheme === 'light' ? 'text-gray-700' : 'text-gray-300'}`}>{t('sessionMonitorEnabled') || 'Enable Session Monitor'}</p>
+                        <p className={`text-xs ${appTheme === 'light' ? 'text-gray-500' : 'text-gray-500'}`}>{t('sessionMonitorDesc') || 'Monitor SSH connection latency and health in real-time'}</p>
+                      </div>
+                      <button
+                        onClick={toggleSessionMonitor}
+                        className={`relative w-12 h-6 rounded-full transition ${
+                          sessionMonitorEnabled ? 'bg-green-600' : appTheme === 'light' ? 'bg-gray-300' : 'bg-navy-600'
+                        }`}
+                      >
+                        <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${
+                          sessionMonitorEnabled ? 'translate-x-7' : 'translate-x-1'
+                        }`} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Command Recall */}
+                <div className={`rounded-xl p-4 sm:p-5 ${appTheme === 'light' ? 'bg-white border border-gray-200 shadow-sm' : 'bg-navy-800 border border-navy-700'}`}>
+                  <h3 className={`text-sm font-medium mb-3 sm:mb-4 flex items-center gap-2 ${appTheme === 'light' ? 'text-gray-900' : 'text-white'}`}>
+                    <svg className="w-4 h-4 text-cyan-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    {t('commandRecall')}
+                  </h3>
+                  
+                  <div className="space-y-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4">
+                      <div>
+                        <p className={`text-sm ${appTheme === 'light' ? 'text-gray-700' : 'text-gray-300'}`}>{t('commandRecallEnabled')}</p>
+                        <p className={`text-xs ${appTheme === 'light' ? 'text-gray-500' : 'text-gray-500'}`}>{t('commandRecallDesc')}</p>
+                      </div>
+                      <button
+                        onClick={toggleCommandRecall}
+                        className={`relative w-12 h-6 rounded-full transition ${
+                          commandRecallEnabled ? 'bg-cyan-600' : appTheme === 'light' ? 'bg-gray-300' : 'bg-navy-600'
+                        }`}
+                      >
+                        <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${
+                          commandRecallEnabled ? 'translate-x-7' : 'translate-x-1'
+                        }`} />
+                      </button>
+                    </div>
+                    
+                    {/* Security notice */}
+                    <div className={`p-3 rounded-lg text-xs ${appTheme === 'light' ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-amber-900/20 text-amber-400 border border-amber-800/50'}`}>
+                      <div className="flex items-start gap-2">
+                        <svg className="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                        <span>{t('commandRecallSecurityNote')}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Terminal Font */}
+                <div className={`rounded-xl p-4 sm:p-5 ${appTheme === 'light' ? 'bg-white border border-gray-200 shadow-sm' : 'bg-navy-800 border border-navy-700'}`}>
+                  <h3 className={`text-sm font-medium mb-3 sm:mb-4 flex items-center gap-2 ${appTheme === 'light' ? 'text-gray-900' : 'text-white'}`}>
+                    <svg className="w-4 h-4 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h8m-8 6h16" />
+                    </svg>
+                    {t('terminalFont') || 'Terminal Font'}
+                  </h3>
+                  
+                  <div className="space-y-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4">
+                      <div>
+                        <p className={`text-sm ${appTheme === 'light' ? 'text-gray-700' : 'text-gray-300'}`}>{t('terminalFontFamily') || 'Font Family'}</p>
+                        <p className={`text-xs ${appTheme === 'light' ? 'text-gray-500' : 'text-gray-500'}`}>{t('terminalFontDesc') || 'Monospace font for terminal (Unicode support)'}</p>
+                      </div>
+                      <select
+                        value={terminalFont}
+                        onChange={(e) => handleTerminalFontChange(e.target.value)}
+                        className={`px-3 py-2 rounded-lg text-sm min-w-[180px] ${
+                          appTheme === 'light' 
+                            ? 'bg-gray-100 border border-gray-200 text-gray-700' 
+                            : 'bg-navy-700 border border-navy-600 text-gray-200'
+                        }`}
+                        style={{ fontFamily: `"${terminalFont}", monospace` }}
+                      >
+                        {TERMINAL_FONTS.map(font => (
+                          <option key={font.value} value={font.value} style={{ fontFamily: `"${font.value}", monospace` }}>
+                            {font.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    
+                    {/* Font preview */}
+                    <div className={`rounded-lg p-3 font-mono text-sm ${
+                      appTheme === 'light' ? 'bg-gray-100 text-gray-800' : 'bg-navy-900 text-gray-200'
+                    }`} style={{ fontFamily: `"${terminalFont}", monospace` }}>
+                      <div>$ echo "Hello World! 你好世界 Xin chào 🚀"</div>
+                      <div className="text-green-500">ABCDEFGabcdefg 0123456789 !@#$%^&*()</div>
+                      <div className="text-yellow-500">→ ← ↑ ↓ ● ○ ■ □ ▶ ◀ ★ ☆ ✓ ✗</div>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* App Lock */}
+                <div className={`rounded-xl p-4 sm:p-5 ${appTheme === 'light' ? 'bg-white border border-gray-200 shadow-sm' : 'bg-navy-800 border border-navy-700'}`}>
+                  <h3 className={`text-sm font-medium mb-3 sm:mb-4 flex items-center gap-2 ${appTheme === 'light' ? 'text-gray-900' : 'text-white'}`}>
+                    <svg className="w-4 h-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                    </svg>
+                    {t('appLock') || 'App Lock'}
+                  </h3>
+                  <p className={`text-xs mb-4 ${appTheme === 'light' ? 'text-gray-500' : 'text-gray-500'}`}>
+                    {t('appLockDesc') || 'Lock app after inactivity to protect your connections'}
+                  </p>
+                  
+                  <div className="space-y-4">
+                    {/* Enable/Disable */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4">
+                      <div>
+                        <p className={`text-sm ${appTheme === 'light' ? 'text-gray-700' : 'text-gray-300'}`}>{t('appLockEnable') || 'Enable App Lock'}</p>
+                      </div>
+                      <button
+                        onClick={handleAppLockToggle}
+                        className={`relative w-12 h-6 rounded-full transition ${
+                          appLockEnabled ? 'bg-red-600' : appTheme === 'light' ? 'bg-gray-300' : 'bg-navy-600'
+                        }`}
+                      >
+                        <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${
+                          appLockEnabled ? 'translate-x-7' : 'translate-x-1'
+                        }`} />
+                      </button>
+                    </div>
+                    
+                    {appLockEnabled && (
+                      <>
+                        {/* Lock Method */}
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4">
+                          <div>
+                            <p className={`text-sm ${appTheme === 'light' ? 'text-gray-700' : 'text-gray-300'}`}>{t('appLockMethod') || 'Lock Method'}</p>
+                          </div>
+                          <select
+                            value={appLockMethod}
+                            onChange={(e) => handleAppLockMethodChange(e.target.value as 'blur' | 'pin' | 'password')}
+                            className={`px-3 py-2 rounded-lg text-sm min-w-[160px] ${
+                              appTheme === 'light' 
+                                ? 'bg-gray-100 border border-gray-200 text-gray-700' 
+                                : 'bg-navy-700 border border-navy-600 text-gray-200'
+                            }`}
+                          >
+                            <option value="blur">{t('appLockMethodBlur') || '🔳 Blur (Click to unlock)'}</option>
+                            <option value="pin">{t('appLockMethodPin') || '🔢 PIN Code'}</option>
+                            <option value="password">{t('appLockMethodPassword') || '🔑 Password'}</option>
+                          </select>
+                        </div>
+                        
+                        {/* Timeout */}
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4">
+                          <div>
+                            <p className={`text-sm ${appTheme === 'light' ? 'text-gray-700' : 'text-gray-300'}`}>{t('appLockTimeout') || 'Lock after'}</p>
+                          </div>
+                          <select
+                            value={appLockTimeout}
+                            onChange={(e) => handleAppLockTimeoutChange(parseInt(e.target.value))}
+                            className={`px-3 py-2 rounded-lg text-sm min-w-[120px] ${
+                              appTheme === 'light' 
+                                ? 'bg-gray-100 border border-gray-200 text-gray-700' 
+                                : 'bg-navy-700 border border-navy-600 text-gray-200'
+                            }`}
+                          >
+                            {LOCK_TIMEOUT_OPTIONS.map(opt => (
+                              <option key={opt.value} value={opt.value}>{opt.label}</option>
+                            ))}
+                          </select>
+                        </div>
+                        
+                        {/* Change/Set Credential */}
+                        {(appLockMethod === 'pin' || appLockMethod === 'password') && (
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4 pt-2 border-t border-navy-600">
+                            <div>
+                              <p className={`text-sm ${appTheme === 'light' ? 'text-gray-700' : 'text-gray-300'}`}>
+                                {appLockMethod === 'pin' ? (t('appLockPinCode') || 'PIN Code') : (t('password') || 'Password')}
+                              </p>
+                              <p className={`text-xs ${appTheme === 'light' ? 'text-gray-500' : 'text-gray-500'}`}>
+                                {appLockHasCredential 
+                                  ? (t('appLockCredentialSet') || 'Credential is set') 
+                                  : (t('appLockCredentialNotSet') || 'Not set')
+                                }
+                              </p>
+                            </div>
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => {
+                                  setPendingLockMethod(appLockMethod as 'pin' | 'password');
+                                  setShowSetCredentialModal(true);
+                                }}
+                                className={`px-3 py-1.5 rounded-lg text-sm transition ${
+                                  appTheme === 'light' 
+                                    ? 'bg-blue-100 hover:bg-blue-200 text-blue-700' 
+                                    : 'bg-blue-600/20 hover:bg-blue-600/30 text-blue-400'
+                                }`}
+                              >
+                                {appLockHasCredential ? (t('change') || 'Change') : (t('set') || 'Set')}
+                              </button>
+                              {appLockHasCredential && (
+                                <button
+                                  onClick={handleClearCredential}
+                                  className={`px-3 py-1.5 rounded-lg text-sm transition ${
+                                    appTheme === 'light' 
+                                      ? 'bg-red-100 hover:bg-red-200 text-red-700' 
+                                      : 'bg-red-600/20 hover:bg-red-600/30 text-red-400'
+                                  }`}
+                                >
+                                  {t('clear') || 'Clear'}
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                        
+                        {/* Test Lock */}
+                        <div className="pt-2">
+                          <button
+                            onClick={() => setIsAppLocked(true)}
+                            className={`w-full px-4 py-2 rounded-lg text-sm font-medium transition ${
+                              appTheme === 'light' 
+                                ? 'bg-gray-100 hover:bg-gray-200 text-gray-700' 
+                                : 'bg-navy-700 hover:bg-navy-600 text-gray-300'
+                            }`}
+                          >
+                            🔒 {t('appLockTestNow') || 'Test Lock Now'}
+                          </button>
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
                 
@@ -4714,6 +5271,95 @@ const App: React.FC = () => {
                   )}
                 </div>
 
+                {/* What's New in Current Version */}
+                <div className={`rounded-xl p-6 mb-6 ${appTheme === 'light' ? 'bg-white border border-gray-200' : 'bg-navy-800 border border-navy-700'}`}>
+                  <h2 className={`text-lg font-semibold mb-4 flex items-center gap-2 ${appTheme === 'light' ? 'text-gray-900' : 'text-white'}`}>
+                    <svg className="w-5 h-5 text-teal-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+                    </svg>
+                    {t('whatsNew') || "What's New"} - v{APP_VERSION}
+                  </h2>
+                  
+                  <div className="space-y-4">
+                    {/* SSH Session Monitor */}
+                    <div className={`p-4 rounded-lg ${appTheme === 'light' ? 'bg-blue-50 border border-blue-200' : 'bg-blue-500/10 border border-blue-500/30'}`}>
+                      <div className="flex items-start gap-3">
+                        <div className={`p-2 rounded-lg ${appTheme === 'light' ? 'bg-blue-100' : 'bg-blue-500/20'}`}>
+                          <svg className="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                          </svg>
+                        </div>
+                        <div>
+                          <h3 className={`font-semibold mb-1 ${appTheme === 'light' ? 'text-blue-700' : 'text-blue-400'}`}>
+                            {t('sessionMonitor') || 'SSH Session Monitor'}
+                          </h3>
+                          <p className={`text-sm ${appTheme === 'light' ? 'text-blue-600' : 'text-blue-300'}`}>
+                            {t('sessionMonitorDesc') || 'Real-time latency monitoring and download/upload speed tracking in footer. Toggle in Settings.'}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Terminal Font Selection */}
+                    <div className={`p-4 rounded-lg ${appTheme === 'light' ? 'bg-purple-50 border border-purple-200' : 'bg-purple-500/10 border border-purple-500/30'}`}>
+                      <div className="flex items-start gap-3">
+                        <div className={`p-2 rounded-lg ${appTheme === 'light' ? 'bg-purple-100' : 'bg-purple-500/20'}`}>
+                          <svg className="w-5 h-5 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h8m-8 6h16" />
+                          </svg>
+                        </div>
+                        <div>
+                          <h3 className={`font-semibold mb-1 ${appTheme === 'light' ? 'text-purple-700' : 'text-purple-400'}`}>
+                            {t('terminalFontSelection') || 'Terminal Font Selection'}
+                          </h3>
+                          <p className={`text-sm ${appTheme === 'light' ? 'text-purple-600' : 'text-purple-300'}`}>
+                            {t('terminalFontDesc') || 'Choose from 14 premium monospace fonts for your terminal. Customize in Settings > Terminal Font.'}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* App Lock */}
+                    <div className={`p-4 rounded-lg ${appTheme === 'light' ? 'bg-red-50 border border-red-200' : 'bg-red-500/10 border border-red-500/30'}`}>
+                      <div className="flex items-start gap-3">
+                        <div className={`p-2 rounded-lg ${appTheme === 'light' ? 'bg-red-100' : 'bg-red-500/20'}`}>
+                          <svg className="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                          </svg>
+                        </div>
+                        <div>
+                          <h3 className={`font-semibold mb-1 ${appTheme === 'light' ? 'text-red-700' : 'text-red-400'}`}>
+                            {t('appLock') || 'App Lock'}
+                          </h3>
+                          <p className={`text-sm ${appTheme === 'light' ? 'text-red-600' : 'text-red-300'}`}>
+                            {t('appLockDesc') || 'Lock app after inactivity with PIN (4 digits), password, or blur screen. Configure timeout in Settings.'}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Previous Features */}
+                    <div className={`mt-4 pt-4 border-t ${appTheme === 'light' ? 'border-gray-200' : 'border-navy-700'}`}>
+                      <h4 className={`text-sm font-semibold mb-3 ${appTheme === 'light' ? 'text-gray-700' : 'text-gray-300'}`}>
+                        {t('previousVersions') || 'Previous Versions'}
+                      </h4>
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        {[
+                          { ver: '1.0.13', feat: t('changelog1013') || 'Theme Editor, Custom Color Picker' },
+                          { ver: '1.0.12', feat: t('changelog1012') || '50+ Terminal Themes, Snippet Manager' },
+                          { ver: '1.0.11', feat: t('changelog1011') || 'File permissions editor, Symlink support' },
+                          { ver: '1.0.10', feat: t('changelog1010') || 'Cloudflare DNS Manager, Hotkey navigation' },
+                        ].map(item => (
+                          <div key={item.ver} className={`p-2 rounded ${appTheme === 'light' ? 'bg-gray-50' : 'bg-navy-900'}`}>
+                            <span className={`font-mono font-bold ${appTheme === 'light' ? 'text-teal-600' : 'text-teal-400'}`}>v{item.ver}</span>
+                            <span className={`ml-2 ${appTheme === 'light' ? 'text-gray-600' : 'text-gray-400'}`}>{item.feat}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
                 {/* Build Info */}
                 {buildInfo && (
                   <div className={`rounded-xl p-6 mb-6 ${appTheme === 'light' ? 'bg-white border border-gray-200' : 'bg-navy-800 border border-navy-700'}`}>
@@ -4809,20 +5455,24 @@ const App: React.FC = () => {
                   <h2 className={`text-lg font-semibold mb-4 ${appTheme === 'light' ? 'text-gray-900' : 'text-white'}`}>{t('features') || 'Features'}</h2>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                     {[
-                      { name: 'SSH', icon: 'M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z', color: 'teal' },
-                      { name: 'SFTP', icon: 'M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z', color: 'blue' },
-                      { name: 'FTP', icon: 'M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9a2 2 0 00-2 2v5a2 2 0 01-2 2z', color: 'yellow' },
-                      { name: 'RDP', icon: 'M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z', color: 'purple' },
-                      { name: '2FA/TOTP', icon: 'M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z', color: 'purple' },
-                      { name: t('portForwarding') || 'Port Forward', icon: 'M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4', color: 'cyan' },
-                      { name: 'Cloudflare DNS', icon: 'M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z', color: 'orange' },
-                      { name: t('lookup') || 'DNS/WHOIS', icon: 'M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z', color: 'green' },
+                      { key: 'featureSsh', name: 'SSH', icon: 'M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z', color: 'teal' },
+                      { key: 'featureSftp', name: 'SFTP', icon: 'M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z', color: 'blue' },
+                      { key: 'featureFtp', name: 'FTP', icon: 'M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9a2 2 0 00-2 2v5a2 2 0 01-2 2z', color: 'yellow' },
+                      { key: 'featureRdp', name: 'RDP', icon: 'M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z', color: 'purple' },
+                      { key: 'feature2fa', name: '2FA/TOTP', icon: 'M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z', color: 'pink' },
+                      { key: 'featurePortForward', name: 'Port Forward', icon: 'M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4', color: 'cyan' },
+                      { key: 'featureCloudflareDns', name: 'Cloudflare DNS', icon: 'M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z', color: 'orange' },
+                      { key: 'featureDnsWhois', name: 'DNS/WHOIS', icon: 'M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z', color: 'green' },
+                      { key: 'featureSessionMonitor', name: 'Session Monitor', icon: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z', color: 'blue' },
+                      { key: 'featureTerminalFont', name: 'Terminal Fonts', icon: 'M4 6h16M4 12h8m-8 6h16', color: 'purple' },
+                      { key: 'featureAppLock', name: 'App Lock', icon: 'M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z', color: 'red' },
+                      { key: 'featureThemes', name: '50+ Themes', icon: 'M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01', color: 'indigo' },
                     ].map(f => (
-                      <div key={f.name} className={`p-3 rounded-lg text-center ${appTheme === 'light' ? 'bg-gray-50' : 'bg-navy-900'}`}>
+                      <div key={f.key} className={`p-3 rounded-lg text-center ${appTheme === 'light' ? 'bg-gray-50' : 'bg-navy-900'}`}>
                         <svg className={`w-6 h-6 mx-auto mb-2 text-${f.color}-500`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={f.icon} />
                         </svg>
-                        <span className={`text-xs font-medium ${appTheme === 'light' ? 'text-gray-700' : 'text-gray-300'}`}>{f.name}</span>
+                        <span className={`text-xs font-medium ${appTheme === 'light' ? 'text-gray-700' : 'text-gray-300'}`}>{t(f.key as any) || f.name}</span>
                       </div>
                     ))}
                   </div>
@@ -4875,14 +5525,15 @@ const App: React.FC = () => {
                       </div>
                       <div>
                         <p className={`font-semibold ${appTheme === 'light' ? 'text-gray-900' : 'text-white'}`}>{APP_AUTHOR}</p>
+                        <p className={`text-xs mb-1 ${appTheme === 'light' ? 'text-gray-500' : 'text-gray-400'}`}>{t('authorRole') || 'Developer & Maintainer'}</p>
                         <button
                           onClick={() => ipcRenderer.invoke('app:openUrl', GITHUB_REPO)}
-                          className="flex items-center gap-1 text-teal-500 hover:text-teal-400 transition text-sm mt-1"
+                          className="flex items-center gap-1 text-teal-500 hover:text-teal-400 transition text-sm"
                         >
                           <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
                             <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
                           </svg>
-                          GitHub
+                          {t('viewOnGithub') || 'View on GitHub'}
                         </button>
                       </div>
                     </div>
@@ -5094,6 +5745,11 @@ const App: React.FC = () => {
 
           {/* Right side - Controls */}
           <div className="flex items-center gap-3 flex-shrink-0">
+            {/* Session monitor indicator - show for SSH sessions */}
+            {activeSession && activeSession.type === 'terminal' && activeSession.server.protocol === 'ssh' && (
+              <SessionMonitorIndicator connectionId={activeSession.connectionId} />
+            )}
+            
             {/* Note button - show when session is active (not local terminal) */}
             {activeSession && activeSession.server.id !== 'local' && (
               <button
@@ -5905,6 +6561,133 @@ const App: React.FC = () => {
           onClose={() => setCfRecordModal(null)}
         />
       )}
+    </div>
+  );
+};
+
+// Set Credential Modal (for PIN/Password)
+const SetCredentialModal: React.FC<{
+  method: 'pin' | 'password';
+  onSave: (credential: string) => void;
+  onCancel: () => void;
+  appTheme: 'dark' | 'light';
+  t: (key: any) => string;
+}> = ({ method, onSave, onCancel, appTheme, t }) => {
+  const [value, setValue] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [error, setError] = useState('');
+  const isDark = appTheme === 'dark';
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (method === 'pin') {
+      if (!/^\d{4}$/.test(value)) {
+        setError(t('appLockPinRequirement') || 'PIN must be 4 digits');
+        return;
+      }
+    } else {
+      if (value.length < 4) {
+        setError(t('appLockPasswordRequirement') || 'Password must be at least 4 characters');
+        return;
+      }
+    }
+    
+    if (value !== confirm) {
+      setError(t('appLockCredentialMismatch') || 'Credentials do not match');
+      return;
+    }
+    
+    onSave(value);
+  };
+
+  return (
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm">
+      <div className={`w-96 rounded-xl shadow-2xl p-6 ${isDark ? 'bg-navy-800 border border-navy-700' : 'bg-white border border-gray-200'}`}>
+        <h3 className={`text-lg font-semibold mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+          {method === 'pin' 
+            ? (t('appLockSetPin') || 'Set PIN Code')
+            : (t('appLockSetPassword') || 'Set Password')
+          }
+        </h3>
+        
+        <form onSubmit={handleSubmit}>
+          <div className="space-y-4">
+            <div>
+              <label className={`block text-sm mb-1 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                {method === 'pin' ? (t('appLockEnterPin') || 'Enter PIN') : (t('appLockEnterPassword') || 'Enter Password')}
+              </label>
+              <input
+                type={method === 'pin' ? 'tel' : 'password'}
+                value={value}
+                onChange={e => { 
+                  setValue(method === 'pin' ? e.target.value.replace(/\D/g, '').slice(0, 6) : e.target.value);
+                  setError('');
+                }}
+                maxLength={method === 'pin' ? 6 : undefined}
+                placeholder={method === 'pin' ? '••••••' : '••••••••'}
+                className={`w-full px-3 py-2 rounded-lg border ${
+                  isDark 
+                    ? 'bg-navy-700 border-navy-600 text-white placeholder-gray-500' 
+                    : 'bg-gray-50 border-gray-300 text-gray-900 placeholder-gray-400'
+                } focus:outline-none focus:ring-2 focus:ring-blue-500`}
+              />
+            </div>
+            
+            <div>
+              <label className={`block text-sm mb-1 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                {t('appLockConfirmCredential') || 'Confirm'}
+              </label>
+              <input
+                type={method === 'pin' ? 'tel' : 'password'}
+                value={confirm}
+                onChange={e => { 
+                  setConfirm(method === 'pin' ? e.target.value.replace(/\D/g, '').slice(0, 6) : e.target.value);
+                  setError('');
+                }}
+                maxLength={method === 'pin' ? 6 : undefined}
+                placeholder={method === 'pin' ? '••••••' : '••••••••'}
+                className={`w-full px-3 py-2 rounded-lg border ${
+                  isDark 
+                    ? 'bg-navy-700 border-navy-600 text-white placeholder-gray-500' 
+                    : 'bg-gray-50 border-gray-300 text-gray-900 placeholder-gray-400'
+                } focus:outline-none focus:ring-2 focus:ring-blue-500`}
+              />
+            </div>
+            
+            {error && (
+              <p className="text-red-500 text-sm">{error}</p>
+            )}
+            
+            <p className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
+              {method === 'pin' 
+                ? (t('appLockPinHint') || 'Enter 4 digit PIN')
+                : (t('appLockPasswordHint') || 'Minimum 4 characters')
+              }
+            </p>
+          </div>
+          
+          <div className="flex gap-3 mt-6">
+            <button
+              type="button"
+              onClick={onCancel}
+              className={`flex-1 px-4 py-2 rounded-lg font-medium transition ${
+                isDark 
+                  ? 'bg-navy-700 hover:bg-navy-600 text-gray-300' 
+                  : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+              }`}
+            >
+              {t('cancel') || 'Cancel'}
+            </button>
+            <button
+              type="submit"
+              className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition"
+            >
+              {t('save') || 'Save'}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 };

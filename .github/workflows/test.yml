@@ -1,0 +1,195 @@
+name: Test & CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # Unit & Component Tests
+  test-unit:
+    name: Unit & Component Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run unit tests
+        run: npm run test:unit -- --coverage
+
+      - name: Upload coverage report
+        uses: codecov/codecov-action@v4
+        if: always()
+        with:
+          file: ./coverage/lcov.info
+          flags: unittests
+          fail_ci_if_error: false
+
+      - name: Archive test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: unit-test-results
+          path: |
+            coverage/
+            test-results/
+          retention-days: 7
+
+  # E2E Tests
+  test-e2e:
+    name: E2E Tests
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright
+        run: npx playwright install --with-deps
+
+      - name: Build application
+        run: npm run build
+
+      - name: Run E2E tests
+        run: npm run test:e2e
+        env:
+          CI: true
+
+      - name: Upload E2E test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-results-${{ matrix.os }}
+          path: |
+            test-results/
+            playwright-report/
+          retention-days: 7
+
+  # Lint & Type Check
+  lint:
+    name: Lint & Type Check
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript type check
+        run: npx tsc --noEmit
+
+      - name: Run ESLint (if configured)
+        run: npm run lint || true
+        continue-on-error: true
+
+  # Build Check
+  build:
+    name: Build Check
+    needs: [test-unit, lint]
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Inject build info
+        run: npm run inject-build-info
+
+      - name: Build
+        run: npm run build
+
+      - name: Verify build output
+        run: |
+          test -d dist/main || (echo "Main build missing" && exit 1)
+          test -d dist/renderer || (echo "Renderer build missing" && exit 1)
+
+  # Security Audit
+  security:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Run npm audit
+        run: npm audit --audit-level=high || true
+        continue-on-error: true
+
+      - name: Check for known vulnerabilities
+        run: npx better-npm-audit audit || true
+        continue-on-error: true
+
+  # Summary job
+  ci-complete:
+    name: CI Complete
+    needs: [test-unit, test-e2e, lint, build]
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+      - name: Check results
+        run: |
+          if [ "${{ needs.test-unit.result }}" == "failure" ]; then
+            echo "Unit tests failed!"
+            exit 1
+          fi
+          if [ "${{ needs.lint.result }}" == "failure" ]; then
+            echo "Lint/Type check failed!"
+            exit 1
+          fi
+          if [ "${{ needs.build.result }}" == "failure" ]; then
+            echo "Build failed!"
+            exit 1
+          fi
+          echo "All CI checks passed!"

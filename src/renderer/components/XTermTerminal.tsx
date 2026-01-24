@@ -3,7 +3,9 @@ import { useTerminalContext } from '../contexts/TerminalContext';
 import { getThemeSync, getTheme } from '../themeService';
 import '@xterm/xterm/css/xterm.css';
 import { getCustomHotkeys } from '../services/snippetStore';
+import { commandRecallStore } from '../services/commandRecallStore';
 import SnippetPanel from './SnippetPanel';
+import CommandRecallPanel from './CommandRecallPanel';
 
 const { ipcRenderer } = window.electron;
 
@@ -29,6 +31,11 @@ const XTermTerminal: React.FC<Props> = ({ connectionId, theme = 'Dracula', serve
   const [bgColor, setBgColor] = useState('#282a36'); // Default Dracula background
   const [snippetPanelCollapsed, setSnippetPanelCollapsed] = useState(false);
   const [snippetPanelVisible, setSnippetPanelVisible] = useState(showSnippetPanel);
+  
+  // Command Recall Panel state
+  const [commandRecallPanelVisible, setCommandRecallPanelVisible] = useState(true);
+  const [commandRecallPanelCollapsed, setCommandRecallPanelCollapsed] = useState(true); // Start collapsed
+  const inputBufferRef = useRef<string>('');
 
   // Determine if theme is dark based on background color luminance
   const isDarkTheme = useMemo(() => {
@@ -46,11 +53,42 @@ const XTermTerminal: React.FC<Props> = ({ connectionId, theme = 'Dracula', serve
     if (instance && instance.isReady) {
       // Write command to terminal WITHOUT '\r' - user must press Enter to execute
       ipcRenderer.invoke('ssh:writeShell', connectionId, command);
+      // Update input buffer for command recall
+      inputBufferRef.current = command;
       console.log('[XTermTerminal] Snippet inserted:', command);
       // Focus back to terminal
       instance.xterm.focus();
     }
   }, [connectionId]);
+
+  // Handle command recall selection
+  const handleRecallCommand = useCallback((command: string) => {
+    const instance = instanceRef.current;
+    if (instance && instance.isReady) {
+      // Clear current input first (if any)
+      // Send Ctrl+U to clear line, then write command
+      ipcRenderer.invoke('ssh:writeShell', connectionId, '\x15' + command);
+      inputBufferRef.current = command;
+      console.log('[XTermTerminal] Command recalled:', command);
+      instance.xterm.focus();
+    }
+  }, [connectionId]);
+
+  // Handle save command as snippet - navigate to snippet page with pre-filled command
+  const handleSaveAsSnippet = useCallback((command: string) => {
+    // Dispatch custom event to navigate to snippets page and open editor with pre-filled data
+    window.dispatchEvent(new CustomEvent('navigateToSnippets'));
+    // Small delay to allow navigation, then open the editor
+    setTimeout(() => {
+      window.dispatchEvent(new CustomEvent('openSnippetEditor', {
+        detail: {
+          command,
+          category: 'Custom',
+        }
+      }));
+    }, 100);
+    console.log('[XTermTerminal] Save as snippet requested:', command);
+  }, []);
 
   // Get background color from theme
   useEffect(() => {
@@ -139,6 +177,24 @@ const XTermTerminal: React.FC<Props> = ({ connectionId, theme = 'Dracula', serve
       const activeElement = document.activeElement;
       const isTerminalFocused = wrapperRef.current.contains(activeElement);
       
+      // Tab key for Command Recall Panel toggle (when input is empty)
+      // Allow Tab to work even if terminal isn't focused (as long as it's visible)
+      if (e.key === 'Tab' && !e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey) {
+        // Only trigger if command recall is enabled and input buffer is empty
+        if (commandRecallStore.isEnabled() && inputBufferRef.current.trim() === '') {
+          e.preventDefault();
+          e.stopPropagation();
+          // Toggle panel expand/collapse
+          if (commandRecallPanelCollapsed) {
+            setCommandRecallPanelCollapsed(false);
+          }
+          // Re-focus terminal after toggle
+          instanceRef.current?.xterm.focus();
+          return;
+        }
+      }
+      
+      // For other hotkeys, require terminal to be focused
       if (!isTerminalFocused) return;
       
       // Check for Ctrl+Shift+[key] (Windows/Linux) or Cmd+Shift+[key] (Mac)
@@ -159,6 +215,8 @@ const XTermTerminal: React.FC<Props> = ({ connectionId, theme = 'Dracula', serve
           if (instance && instance.isReady) {
             // Send command to terminal (paste only, no Enter)
             ipcRenderer.invoke('ssh:writeShell', connectionId, hotkey.command);
+            // Track in input buffer
+            inputBufferRef.current += hotkey.command;
             console.log('[XTermTerminal] Hotkey pasted:', pressedKey, '->', hotkey.command);
           }
         }
@@ -174,8 +232,92 @@ const XTermTerminal: React.FC<Props> = ({ connectionId, theme = 'Dracula', serve
     };
   }, [connectionId]);
 
+  // Command capture for Command Recall feature
+  // Use xterm's onData event to capture actual terminal input
+  useEffect(() => {
+    const instance = instanceRef.current;
+    if (!instance || !server?.id) return;
+
+    const serverId = server.id;
+    const xterm = instance.xterm;
+    
+    // Track input buffer using xterm's onData event
+    // This captures what is actually sent to the terminal
+    const onDataDispose = xterm.onData((data: string) => {
+      // Enter key (carriage return)
+      if (data === '\r' || data === '\n') {
+        const command = inputBufferRef.current.trim();
+        if (command && commandRecallStore.isEnabled()) {
+          // Add command to recall history
+          commandRecallStore.addCommand(serverId, command);
+          console.log('[XTermTerminal] Command captured:', command);
+        }
+        // Clear buffer after command submission
+        inputBufferRef.current = '';
+      }
+      // Backspace (DEL character \x7f or BS \x08)
+      else if (data === '\x7f' || data === '\x08') {
+        inputBufferRef.current = inputBufferRef.current.slice(0, -1);
+      }
+      // Ctrl+U (clear line) - \x15
+      else if (data === '\x15') {
+        inputBufferRef.current = '';
+      }
+      // Ctrl+C (interrupt) - \x03
+      else if (data === '\x03') {
+        inputBufferRef.current = '';
+      }
+      // Ctrl+W (delete word) - \x17
+      else if (data === '\x17') {
+        // Remove last word
+        inputBufferRef.current = inputBufferRef.current.replace(/\S+\s*$/, '');
+      }
+      // Arrow keys and other control sequences (start with \x1b)
+      else if (data.startsWith('\x1b')) {
+        // Clear buffer on arrow up/down (history navigation breaks our tracking)
+        if (data === '\x1b[A' || data === '\x1b[B') {
+          inputBufferRef.current = '';
+        }
+        // Ignore other escape sequences (arrows, etc.)
+      }
+      // Tab (might trigger completion, don't add to buffer for now since we use Tab for recall)
+      else if (data === '\t') {
+        // Ignore tab
+      }
+      // Regular printable characters
+      else if (data.length === 1 && data.charCodeAt(0) >= 32) {
+        inputBufferRef.current += data;
+      }
+      // Pasted text (multiple characters at once)
+      else if (data.length > 1 && !data.startsWith('\x1b')) {
+        // Filter out control characters and add printable ones
+        for (const char of data) {
+          if (char.charCodeAt(0) >= 32) {
+            inputBufferRef.current += char;
+          }
+        }
+      }
+    });
+    
+    return () => {
+      onDataDispose.dispose();
+    };
+  }, [server?.id, instanceRef.current]);
+
   return (
     <div className="flex w-full h-full" style={{ backgroundColor: bgColor }}>
+      {/* Command Recall Panel - Left side */}
+      {server?.id && commandRecallPanelVisible && commandRecallStore.isEnabled() && (
+        <CommandRecallPanel
+          theme={isDarkTheme ? 'dark' : 'light'}
+          serverId={server.id}
+          onInsertCommand={handleRecallCommand}
+          onSaveAsSnippet={handleSaveAsSnippet}
+          isCollapsed={commandRecallPanelCollapsed}
+          onToggleCollapse={() => setCommandRecallPanelCollapsed(!commandRecallPanelCollapsed)}
+        />
+      )}
+      
       {/* Terminal Container */}
       <div 
         ref={wrapperRef}
@@ -187,7 +329,7 @@ const XTermTerminal: React.FC<Props> = ({ connectionId, theme = 'Dracula', serve
         />
       </div>
       
-      {/* Snippet Panel */}
+      {/* Snippet Panel - Right side */}
       {snippetPanelVisible && (
         <SnippetPanel
           theme={isDarkTheme ? 'dark' : 'light'}
