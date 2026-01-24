@@ -4,9 +4,9 @@
     "module": "commonjs",
     "lib": ["ES2020", "DOM"],
     "jsx": "react",
-    "outDir": "./dist",
-    "rootDir": "./src",
-    "strict": true,
+    "outDir": "../dist/tests",
+    "rootDir": ".",
+    "strict": false,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
@@ -14,8 +14,9 @@
     "moduleResolution": "node",
     "allowSyntheticDefaultImports": true,
     "sourceMap": true,
-    "types": []
+    "types": ["jest", "node", "@testing-library/jest-dom"],
+    "noEmit": true
   },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "tests"]
+  "include": ["./**/*"],
+  "exclude": ["node_modules"]
 }

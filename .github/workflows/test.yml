@@ -46,9 +46,9 @@ jobs:
             test-results/
           retention-days: 7
 
-  # E2E Tests
+  # E2E Tests with Electron
   test-e2e:
-    name: E2E Tests
+    name: E2E Tests (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -74,7 +74,16 @@ jobs:
       - name: Build application
         run: npm run build
 
-      - name: Run E2E tests
+      # Linux needs xvfb for Electron
+      - name: Run E2E tests (Linux)
+        if: runner.os == 'Linux'
+        run: xvfb-run --auto-servernum --server-args="-screen 0 1280x960x24" npm run test:e2e
+        env:
+          CI: true
+
+      # Windows and macOS don't need xvfb
+      - name: Run E2E tests (Windows/macOS)
+        if: runner.os != 'Linux'
         run: npm run test:e2e
         env:
           CI: true
@@ -182,6 +191,10 @@ jobs:
         run: |
           if [ "${{ needs.test-unit.result }}" == "failure" ]; then
             echo "Unit tests failed!"
+            exit 1
+          fi
+          if [ "${{ needs.test-e2e.result }}" == "failure" ]; then
+            echo "E2E tests failed!"
             exit 1
           fi
           if [ "${{ needs.lint.result }}" == "failure" ]; then

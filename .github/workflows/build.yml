@@ -169,6 +169,7 @@ jobs:
             artifacts/macos-builds/*
           draft: false
           prerelease: false
+          make_latest: true
           generate_release_notes: false
           body: |
             ## Marix SSH Client ${{ steps.package-version.outputs.version }}

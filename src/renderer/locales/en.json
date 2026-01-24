@@ -1,12 +1,10 @@
 {
   "appName": "Marix",
-  
   "hosts": "Hosts",
   "settings": "Settings",
   "cloudflareDns": "Cloudflare",
   "whoisLookup": "WHOIS",
   "lookup": "Lookup",
-  
   "addServer": "Add Server",
   "addNewHost": "Add New Host",
   "editServer": "Edit Server",
@@ -23,7 +21,6 @@
   "noMatchingServers": "No matching servers found",
   "clearSearch": "Clear search",
   "noActionsAvailable": "No actions available",
-  
   "serverName": "Server Name",
   "serverAlreadyExists": "Server Already Exists",
   "continueAddingDuplicate": "Do you want to continue adding this duplicate server?",
@@ -48,23 +45,19 @@
   "cancel": "Cancel",
   "create": "Create",
   "update": "Update",
-  
   "protocolSsh": "SSH",
   "protocolFtp": "FTP",
   "protocolFtps": "FTPS",
   "protocolRdp": "RDP",
   "protocolWss": "WebSocket",
-  
   "authPassword": "Password",
   "authKey": "SSH Key",
-  
   "terminal": "Terminal",
   "sftp": "SFTP",
   "rdp": "Remote Desktop",
   "closeTab": "Close Tab",
   "newTab": "New Tab",
   "localTerminal": "Local Terminal",
-  
   "localFiles": "Local Files",
   "remoteFiles": "Remote Files",
   "upload": "Upload",
@@ -81,7 +74,6 @@
   "home": "Home",
   "chmod": "Chmod",
   "closeMenu": "Close menu",
-  
   "appearance": "Appearance",
   "themeMode": "Theme Mode",
   "terminalTheme": "Terminal Theme",
@@ -99,7 +91,6 @@
   "exportToFile": "Export to file",
   "importFromFile": "Import from file",
   "backupDescription": "Create encrypted backups of your servers, tags, and settings. Backups are protected with AES-256 encryption.",
-  
   "backupPassword": "Backup Password",
   "confirmPassword": "Confirm Password",
   "passwordRequired": "Password is required",
@@ -108,7 +99,6 @@
   "restoreSuccess": "Backup restored successfully",
   "backupError": "Backup error",
   "remove": "Remove",
-  
   "cfApiToken": "Cloudflare API Token",
   "cfApiTokenDesc": "Enter your Cloudflare API Token with DNS:Edit permissions to manage DNS records.",
   "cfAddToken": "Add API Token",
@@ -122,12 +112,10 @@
   "cfRecordContent": "Content",
   "cfProxied": "Proxied",
   "cfTtl": "TTL",
-  
   "whoisEnterDomain": "Enter domain name",
   "whoisLookupBtn": "Lookup",
   "whoisLoading": "Looking up...",
   "whoisNoResult": "No results found",
-  
   "ntDnsLookup": "DNS Lookup",
   "ntPing": "Ping",
   "ntPortCheck": "Port Check",
@@ -138,7 +126,6 @@
   "ntLoading": "Loading...",
   "ntHistory": "History",
   "ntClearHistory": "Clear History",
-  
   "loading": "Loading...",
   "error": "Error",
   "success": "Success",
@@ -158,14 +145,11 @@
   "pasted": "Pasted",
   "moved": "Moved",
   "optional": "Optional",
-  
   "switchToLightMode": "Switch to Light Mode",
   "switchToDarkMode": "Switch to Dark Mode",
-  
   "about": "About",
   "version": "Version",
   "platform": "Platform",
-  
   "database": "Database",
   "databaseServer": "Database Server",
   "dbConnecting": "Connecting to database...",
@@ -237,7 +221,6 @@
   "dbAddFilter": "Add Filter",
   "dbApplyFilter": "Apply",
   "dbClearFilters": "Clear Filters",
-  
   "dbERD": "ERD Diagram",
   "erdLoading": "Loading diagram...",
   "erdZoomIn": "Zoom In",
@@ -251,7 +234,6 @@
   "erdHelp": "Drag tables to move • Scroll to zoom • Double-click to view structure",
   "erdNoTables": "No tables found",
   "erdSelectDatabase": "Select a database to view ERD",
-  
   "dbImportExport": "Import / Export",
   "dbImportExportDesc": "Import SQL files or export your database to SQL format",
   "dbImport": "Import",
@@ -281,38 +263,32 @@
   "dbSmartDropDesc": "Only drops tables found in import file, not all tables",
   "dbOperationLog": "Operation Log",
   "dbMoreColumns": "more columns...",
-  
   "addTag": "Add Tag",
   "editTag": "Edit Tag",
   "deleteTag": "Delete Tag",
   "tagColor": "Tag Color",
   "noTags": "No tags",
   "searchTags": "Search tags...",
-  
   "connecting": "Connecting...",
   "connected": "Connected",
   "disconnected": "Disconnected",
   "connectionFailed": "Connection failed",
   "reconnect": "Reconnect",
-  
   "fileSize": "Size",
   "fileDate": "Date",
   "fileName": "Name",
   "fileType": "Type",
   "permissions": "Permissions",
   "owner": "Owner",
-  
   "confirmDelete": "Are you sure you want to delete?",
   "confirmDisconnect": "Are you sure you want to disconnect?",
   "confirmCloseSession": "Close this connection?",
   "confirmOverwrite": "File exists. Overwrite?",
-  
   "errorConnection": "Connection error",
   "errorAuth": "Authentication failed",
   "errorTimeout": "Connection timeout",
   "errorNotFound": "Not found",
   "errorPermission": "Permission denied",
-  
   "hideSidebar": "Hide sidebar",
   "showSidebar": "Show sidebar",
   "importRdpFile": "Import .rdp File",
@@ -323,7 +299,6 @@
   "selectKeyFromKeychain": "-- Select key from Keychain --",
   "orSelectFile": "or select file",
   "orPasteManually": "Or paste key manually",
-  
   "githubBackup": "GitHub Backup",
   "githubBackupDesc": "Sync encrypted backup to a private GitHub repository for cloud storage with version history.",
   "connectWithGithub": "Connect with GitHub",
@@ -344,7 +319,6 @@
   "backupDownloadFailed": "Failed to download backup",
   "restoreSuccessWithCount": "Restored {count} servers from GitHub!",
   "confirmPasswordPlaceholder": "Re-enter password to confirm",
-  
   "selectDomain": "Select Domain:",
   "selectDomainPlaceholder": "Select a domain...",
   "refreshZones": "Refresh zones",
@@ -354,18 +328,15 @@
   "edit": "Edit",
   "proxied": "Proxied",
   "dnsOnly": "DNS only",
-  
   "configureApiToken": "Configure Cloudflare API Token",
   "apiTokenDesc": "To manage your DNS records, you need to set up a Cloudflare API Token with DNS:Edit permissions.",
   "goToSettings": "Go to Settings",
-  
   "type": "Type",
   "name": "Name",
   "content": "Content",
   "ttl": "TTL",
   "proxy": "Proxy",
   "actions": "Actions",
-  
   "whoisTitle": "WHOIS Lookup",
   "whoisPlaceholder": "Enter domain name (e.g., example.com)",
   "lookupBtn": "Lookup",
@@ -377,11 +348,9 @@
   "nameServers": "Name Servers",
   "status": "Status",
   "rawWhois": "Raw WHOIS Data",
-  
   "selectTool": "Select a tool:",
   "run": "Run",
   "running": "Running...",
-  
   "toolARecord": "A Record",
   "toolARecordDesc": "DNS A record IP address for hostname",
   "toolAAAARecord": "AAAA Record",
@@ -418,7 +387,6 @@
   "toolDNSCheckDesc": "Check DNS servers for problems",
   "toolIPInfo": "IP Info",
   "toolIPInfoDesc": "Get IP address block information",
-  
   "sftpLocal": "LOCAL",
   "sftpRemote": "REMOTE",
   "sftpName": "Name",
@@ -438,7 +406,6 @@
   "sftpInstallSource": "Install Source Code",
   "sftpCompressTo": "Compress to",
   "sftpExtractHere": "Extract Here",
-  
   "sourceInstallerTitle": "Install Source Code",
   "sourceInstallerDesc": "Install frameworks and CMS directly via SSH",
   "sourceSelectFramework": "Select Framework",
@@ -490,7 +457,6 @@
   "sourceSelectFrameworkHint": "Select a framework or CMS to install",
   "sourceSelectVersionHint": "Select the version to install",
   "sourceConfigureHint": "Configure your project settings",
-  "sourceSelectVersion": "Select Version",
   "sourceSelectNpmVersion": "Select {name} Version",
   "sourceFetchingVersions": "Fetching available versions...",
   "sourceLaravelDesc": "PHP Framework",
@@ -505,7 +471,6 @@
   "sourceReactDesc": "UI Library",
   "sourceNextJSDesc": "React Framework",
   "sourceTypeScriptDesc": "TypeScript Project",
-  
   "wssTypeMessage": "Type a message... (Enter to send, Shift+Enter for newline)",
   "wssAutoScroll": "Auto-scroll",
   "wssNoMessages": "No messages yet",
@@ -514,7 +479,6 @@
   "wssReceived": "Received",
   "wssMessages": "messages",
   "wssSend": "Send",
-  
   "rdpConnected": "Remote Desktop Connected",
   "rdpConnecting": "Connecting to Remote Desktop...",
   "rdpSessionActive": "Session Active",
@@ -550,10 +514,8 @@
   "rdpErrorCertificate": "TLS/Certificate error. Try connecting again or check server configuration.",
   "rdpErrorClosed": "Connection was closed by the server.",
   "rdpErrorGeneric": "Connection failed. Please verify server settings and try again.",
-
   "commonPorts": "Common Ports",
   "clickToSelectPort": "Click to quickly select a common port",
-  
   "knownHosts": "Known Hosts",
   "manageKnownHosts": "Manage trusted SSH hosts",
   "searchHostnameIpFingerprint": "Search by hostname, IP address, or fingerprint...",
@@ -569,7 +531,6 @@
   "hostRemoved": "Host removed from known hosts",
   "importHostPlaceholder": "hostname or IP:port",
   "importHostDesc": "Import SSH fingerprint from a host",
-  
   "verifyingHost": "Verifying Host",
   "verifyingFingerprint": "Verifying server fingerprint...",
   "newHostDetected": "New Host Detected",
@@ -587,7 +548,6 @@
   "fingerprintError": "Fingerprint Error",
   "couldNotVerify": "Could not verify the host fingerprint. The server may be unreachable or not running SSH.",
   "retryVerification": "Retry",
-  
   "sshKeyManager": "SSH Key",
   "selectKeyToUse": "Select an SSH key to use",
   "manageYourSSHKeys": "Manage your SSH keys",
@@ -627,18 +587,15 @@
   "publicKeyExportedSuccessfully": "Public key exported successfully to:\n{path}",
   "failedToExportKey": "Failed to export key",
   "browseFile": "Browse File",
-  
   "toolWebCheck": "Web Check",
   "toolWebCheckDesc": "Check HTTP and HTTPS connectivity",
   "toolWhois": "WHOIS Lookup",
   "toolWhoisDesc": "Get domain registration info",
-  
   "tools": "Tools",
   "toolProxyCheck": "Proxy Check",
   "proxyCheckDesc": "Test HTTP, SOCKS4, SOCKS5 proxy connectivity",
   "toolPortListener": "Port Listener",
   "portListenerDesc": "Scan and list all listening ports on this machine",
-  
   "smtpTestDesc": "Test SMTP server connectivity with authentication",
   "smtpServer": "SMTP Server",
   "encryption": "Encryption",
@@ -651,26 +608,20 @@
   "smtpTestSuccess": "SMTP Connection Successful",
   "responseTime": "Response Time",
   "testEmailSent": "Test email sent successfully",
-  
   "proxyType": "Proxy Type",
   "proxyServer": "Proxy Server",
-  "optional": "optional",
   "testUrl": "Test URL",
   "checkProxy": "Check Proxy",
   "checking": "Checking...",
   "proxyWorking": "Proxy is working",
   "externalIp": "External IP",
   "statusCode": "Status Code",
-  
   "scanPorts": "Scan Ports",
   "scanning": "Scanning...",
   "searchPortProcess": "Search port or process...",
   "lastScan": "Last scan",
-  "protocol": "Protocol",
-  "address": "Address",
   "process": "Process",
   "clickScanToStart": "Click 'Scan Ports' to list all listening ports",
-  
   "addDnsRecord": "Add DNS Record",
   "editDnsRecord": "Edit DNS Record",
   "recordType": "Type",
@@ -685,7 +636,6 @@
   "priority": "Priority",
   "weight": "Weight",
   "service": "Service",
-  "ttl": "TTL",
   "auto": "Auto",
   "minute": "minute",
   "minutes": "minutes",
@@ -700,7 +650,6 @@
   "saveChanges": "Save Changes",
   "lowerPriorityHigher": "Lower number = higher priority",
   "rootOrSubdomain": "@ for root, or subdomain",
-  
   "successStatus": "SUCCESS",
   "failedStatus": "FAILED",
   "recentLookups": "Recent Lookups",
@@ -723,14 +672,11 @@
   "banner": "Banner",
   "key": "Key",
   "keys": "keys",
-  
   "keychain": "SSH Key",
-  
   "noHostsMatchSearch": "No hosts match your search",
   "connectToServerToAddKnownHosts": "Connect to a server to add it to known hosts",
   "connectionTimedOut": "Connection timed out",
   "requestTimedOut": "Request timed out",
-  
   "tokenConfigured": "Token configured",
   "tokenSavedEncrypted": "API token is saved and encrypted",
   "confirmRemoveToken": "Remove Cloudflare API Token?",
@@ -738,26 +684,21 @@
   "verifying": "Verifying...",
   "saveToken": "Save Token",
   "getApiTokenFrom": "Get your API Token from",
-  
   "selectFromServerList": "Select from server list",
   "selectServer": "-- Select server --",
   "manualEntry": "Manual entry",
   "resolving": "Resolving...",
   "noIpFound": "No IP address found for this hostname",
-  
   "author": "Author",
   "appTagline": "Modern Zero-Knowledge SSH Client",
   "features": "Features",
   "checkForUpdates": "Check for Updates",
-  "checking": "Checking...",
   "updateAvailable": "Update available",
   "newVersionAvailable": "New version available!",
   "upToDate": "You are up to date!",
-  "download": "Download",
   "releaseNotes": "Release Notes",
   "later": "Later",
   "detectingSystemInfo": "Detecting system info...",
-  
   "twoFactorAuth": "2FA",
   "totpDescription": "Generate TOTP codes for two-factor authentication",
   "noTotpEntries": "No 2FA entries yet",
@@ -777,7 +718,6 @@
   "securityNote": "Security Note",
   "totpSecurityInfo": "Your TOTP secrets are stored locally in your browser and are never sent to any server. Codes refresh every 30 seconds.",
   "add": "Add",
-  
   "customHotkeys": "Hotkeys",
   "hotkeyDescription": "Create keyboard shortcuts to quickly execute commands in SSH terminal",
   "addHotkey": "Add Hotkey",
@@ -809,7 +749,6 @@
   "reservedSwitchTerminalSFTP": "Switch Terminal/SFTP",
   "reservedLocalTerminal": "Open Local Terminal",
   "reservedPaste": "Paste (in terminal)",
-  
   "snippets": "Snippets",
   "snippetsDescription": "Command snippets with optional keyboard shortcuts for SSH sessions",
   "addSnippet": "Add Snippet",
@@ -862,7 +801,6 @@
   "snippetTagsPlaceholder": "Comma separated: disk, storage",
   "snippetAddFirst": "Add your first snippet",
   "snippetReservedKeys": "Reserved keys:",
-  
   "portForwarding": "Port Forward",
   "portForwardingDescription": "SSH tunnel port forwarding (Local, Remote, Dynamic SOCKS)",
   "noPortForwards": "No port forwards configured",
@@ -890,13 +828,9 @@
   "stopBeforeEdit": "Please stop the forward before editing",
   "start": "Start",
   "stop": "Stop",
-  
   "changelog": "Changelog",
   "changelogDesc": "All notable changes to Marix SSH Client",
   "loadChangelog": "Load Changelog from GitHub",
-  
-  "about": "About",
-  "appTagline": "Modern SSH/SFTP/RDP Client",
   "security": "Security",
   "techStack": "Technology",
   "zeroKnowledge": "Zero-knowledge architecture",
@@ -904,7 +838,6 @@
   "argon2Encryption": "Argon2id encrypted backups",
   "openSource": "Open source on GitHub",
   "available": "available",
-  
   "buildInfo": "Build Info",
   "commitSha": "Commit SHA",
   "branch": "Branch",
@@ -916,7 +849,6 @@
   "chromeVersion": "Chrome",
   "nodeVersion": "Node.js",
   "v8Version": "V8 Engine",
-  
   "gitlabBackup": "GitLab Backup",
   "gitlabConnect": "Connect to GitLab",
   "gitlabConnected": "Connected to GitLab",
@@ -957,14 +889,12 @@
   "oauthSuccessMessage": "You can close this window and return to Marix.",
   "oauthFailed": "Authentication Failed",
   "oauthCanClose": "You can close this window.",
-  "localBackup": "Local Backup",
   "backupAndRestore": "Backup & Restore",
   "passwordRequirements": "Password Requirements",
   "localSecurityWarning": "Keep your backup file and password secure. We cannot recover them if lost.",
   "githubSecurityWarning": "GitHub only stores encrypted data. We cannot recover your password or your backup.",
   "backupLocation": "Backup Location",
   "selectBackupMethod": "Select backup method",
-  
   "portKnocking": "Port Knocking",
   "portKnockingDesc": "Hide SSH port until knock sequence is sent",
   "knockSequence": "Sequence",
@@ -975,7 +905,6 @@
   "random": "Random",
   "ports": "ports",
   "learnMore": "Learn more",
-  
   "knockGuideTitle": "Port Knocking Setup Guide",
   "knockSecurityBenefits": "Security Benefits",
   "knockStealth": "Stealth",
@@ -1033,7 +962,6 @@
   "knockMarixStep4": "Generate Random: Click 'Random' button for secure sequence",
   "knockMarixStep5": "Save and Connect",
   "knockMarixAutomatic": "Marix will automatically knock before establishing SSH connection!",
-  
   "lanShare": "Share on LAN",
   "thisDevice": "This Device",
   "serversToShare": "Servers to Share",
@@ -1045,7 +973,6 @@
   "noDevicesFound": "No devices found on network. Make sure both devices are on the same network.",
   "shareOnLAN": "Share on LAN",
   "selectServersToShare": "Select servers to share",
-
   "lanFileTransfer": "LAN File Transfer",
   "sendFiles": "Send Files",
   "receiveFiles": "Receive Files",
@@ -1071,30 +998,25 @@
   "transferCancelled": "Transfer Cancelled",
   "transferDirectly": "Transfer files directly to devices on your local network",
   "noSenderFound": "No sender found with this code. Make sure the sender is waiting and both devices are on the same network.",
-  
   "activeConnections": "Active Connections",
   "closeAllAndExit": "Close All & Exit",
   "youHaveActiveConnections": "You have {{count}} active connection(s).",
   "closeConnectionsConfirm": "Do you want to close all connections and exit?",
   "serverAlreadyConnected": "Already Connected",
   "serverAlreadyConnectedMessage": "This server is already connected. Switching to existing session.",
-  
   "notes": "Notes",
   "serverNotes": "Server Notes",
   "noNotesYet": "No notes yet. Click to add notes for this server.",
   "notePlaceholder": "Write your notes here... (e.g., tasks to complete, configuration reminders)",
   "noteSaved": "Note saved",
   "noteSaving": "Saving...",
-
   "selectDevice": "Select Device",
   "filesToSend": "Files to Send",
-  "pairingCode": "Pairing Code",
   "digitCode": "6-digit code",
   "shareCodeWithReceiver": "Share this code with the receiver to verify the transfer",
   "incomingTransferFrom": "Incoming Transfer from",
   "files": "files",
   "enterPairingCodeFromSender": "Enter Pairing Code from Sender",
-  "reject": "Reject",
   "acceptAndSave": "Accept & Save",
   "waitingForIncomingTransfers": "Waiting for incoming file transfers...",
   "makeSureLANEnabled": "Make sure LAN Discovery is enabled to receive files",
@@ -1103,7 +1025,6 @@
   "cancelTransfer": "Cancel Transfer",
   "yourDevice": "Your device",
   "pleaseSelectDeviceFilesCode": "Please select a device, files, and enter pairing code",
-  "connecting": "Connecting...",
   "waitingForReceiverAccept": "Waiting for receiver to accept...",
   "pleaseEnterPairingCode": "Please enter pairing code",
   "failedToSelectSaveLocation": "Failed to select save location",
@@ -1117,13 +1038,10 @@
   "andMore": "and more",
   "shareCodeWithReceiverDesc": "Share this code with the receiver. They will enter it to connect.",
   "prepareToSend": "Prepare to Send",
-  "waitingForReceiver": "Waiting for receiver...",
   "tellReceiverCode": "Tell the receiver to enter code",
   "enterSenderPairingCode": "Enter Sender's Pairing Code",
   "askSenderForCode": "Ask the sender for their 6-digit pairing code",
   "searchingForSender": "Searching for sender...",
-  "findSender": "Find Sender",
-  "senderFound": "Sender Found!",
   "howToReceiveFiles": "How to receive files:",
   "receiveStep1": "Ask the sender to prepare their files and click \"Prepare to Send\"",
   "receiveStep2": "Enter the 6-digit pairing code they give you",
@@ -1140,7 +1058,6 @@
   "noSenderFoundWithCode": "No sender found with this code. Make sure the sender is waiting and both devices are on the same network.",
   "pleaseSearchFindSenderFirst": "Please search and find a sender first",
   "connectingToSender": "Connecting to sender...",
-  
   "sessionLatency": "Latency",
   "sessionLatencyAvg": "Average",
   "sessionStatus": "Status",
@@ -1154,7 +1071,6 @@
   "sessionMonitorDesc": "Monitor SSH connection latency and health in real-time",
   "sessionDownload": "Download",
   "sessionUpload": "Upload",
-  
   "commandRecall": "Command Recall",
   "commandRecallEnabled": "Enable Command Recall",
   "commandRecallDesc": "Remember commands per server (Tab to recall). Stored locally, never synced.",
@@ -1172,11 +1088,9 @@
   "commandRecallUsed": "Used",
   "commandRecallTimes": "times",
   "rightClickForOptions": "Right-click for options",
-  
   "terminalFont": "Terminal Font",
   "terminalFontFamily": "Font Family",
   "terminalFontDesc": "Monospace font for terminal (Unicode support)",
-  
   "appLock": "App Lock",
   "appLockDesc": "Lock app after inactivity to protect your connections",
   "appLockEnable": "Enable App Lock",
@@ -1203,22 +1117,16 @@
   "appLockPinRequirement": "PIN must be 4 digits",
   "appLockPasswordRequirement": "Password must be at least 4 characters",
   "appLockCredentialMismatch": "Credentials do not match",
-  "minutes": "min",
   "change": "Change",
   "set": "Set",
-  "clear": "Clear",
-
   "whatsNew": "What's New",
-  "sessionMonitorDesc": "Real-time latency monitoring and download/upload speed tracking in footer. Toggle in Settings.",
   "terminalFontSelection": "Terminal Font Selection",
-  "terminalFontDesc": "Choose from 14 premium monospace fonts for your terminal. Customize in Settings > Terminal Font.",
   "appLockInfoDesc": "Lock app after inactivity with PIN (4 digits), password, or blur screen. Configure timeout in Settings.",
   "previousVersions": "Previous Versions",
   "changelog1013": "Theme Editor, Custom Color Picker",
   "changelog1012": "50+ Terminal Themes, Snippet Manager",
   "changelog1011": "File permissions editor, Symlink support",
   "changelog1010": "Cloudflare DNS Manager, Hotkey navigation",
-
   "featureSsh": "SSH Terminal",
   "featureSftp": "SFTP Browser",
   "featureFtp": "FTP Client",

@@ -1,12 +1,10 @@
 {
   "appName": "Marix",
-  
   "hosts": "Máy chủ",
   "settings": "Cài đặt",
   "cloudflareDns": "Cloudflare",
   "whoisLookup": "WHOIS",
   "lookup": "Tra cứu",
-  
   "addServer": "Thêm máy chủ",
   "addNewHost": "Thêm máy chủ mới",
   "editServer": "Sửa máy chủ",
@@ -23,7 +21,6 @@
   "noMatchingServers": "Không tìm thấy máy chủ phù hợp",
   "clearSearch": "Xóa tìm kiếm",
   "noActionsAvailable": "Không có hành động nào",
-  
   "serverName": "Tên máy chủ",
   "serverAlreadyExists": "Máy Chủ Đã Tồn Tại",
   "continueAddingDuplicate": "Bạn có muốn tiếp tục thêm máy chủ trùng lặp này không?",
@@ -48,23 +45,19 @@
   "cancel": "Hủy",
   "create": "Tạo mới",
   "update": "Cập nhật",
-  
   "protocolSsh": "SSH",
   "protocolFtp": "FTP",
   "protocolFtps": "FTPS",
   "protocolRdp": "RDP",
   "protocolWss": "WebSocket",
-  
   "authPassword": "Mật khẩu",
   "authKey": "Khóa SSH",
-  
   "terminal": "Terminal",
   "sftp": "SFTP",
   "rdp": "Remote Desktop",
   "closeTab": "Đóng tab",
   "newTab": "Tab mới",
   "localTerminal": "Terminal cục bộ",
-  
   "localFiles": "Tệp cục bộ",
   "remoteFiles": "Tệp từ xa",
   "upload": "Tải lên",
@@ -81,7 +74,6 @@
   "home": "Trang chủ",
   "chmod": "Phân quyền",
   "closeMenu": "Đóng menu",
-  
   "appearance": "Giao diện",
   "themeMode": "Chế độ giao diện",
   "terminalTheme": "Chủ đề Terminal",
@@ -99,7 +91,6 @@
   "exportToFile": "Xuất ra tệp",
   "importFromFile": "Nhập từ tệp",
   "backupDescription": "Tạo bản sao lưu được mã hóa cho máy chủ, nhãn và cài đặt. Sao lưu được bảo vệ bằng mã hóa AES-256.",
-  
   "backupPassword": "Mật khẩu sao lưu",
   "confirmPassword": "Xác nhận mật khẩu",
   "passwordRequired": "Vui lòng nhập mật khẩu",
@@ -108,7 +99,6 @@
   "restoreSuccess": "Khôi phục thành công",
   "backupError": "Lỗi sao lưu",
   "remove": "Xóa",
-  
   "cfApiToken": "Mã thông báo API Cloudflare",
   "cfApiTokenDesc": "Nhập API Token Cloudflare có quyền DNS:Edit để quản lý bản ghi DNS.",
   "cfAddToken": "Thêm API Token",
@@ -122,12 +112,10 @@
   "cfRecordContent": "Nội dung",
   "cfProxied": "Proxy",
   "cfTtl": "TTL",
-  
   "whoisEnterDomain": "Nhập tên miền",
   "whoisLookupBtn": "Tra cứu",
   "whoisLoading": "Đang tra cứu...",
   "whoisNoResult": "Không tìm thấy kết quả",
-  
   "ntDnsLookup": "Tra cứu DNS",
   "ntPing": "Ping",
   "ntPortCheck": "Kiểm tra cổng",
@@ -138,7 +126,6 @@
   "ntLoading": "Đang tải...",
   "ntHistory": "Lịch sử",
   "ntClearHistory": "Xóa lịch sử",
-  
   "loading": "Đang tải...",
   "error": "Lỗi",
   "success": "Thành công",
@@ -158,14 +145,11 @@
   "pasted": "Đã dán",
   "moved": "Đã di chuyển",
   "optional": "Tùy chọn",
-  
   "switchToLightMode": "Chuyển sang chế độ sáng",
   "switchToDarkMode": "Chuyển sang chế độ tối",
-  
   "about": "Giới thiệu",
   "version": "Phiên bản",
   "platform": "Nền tảng",
-  
   "buildInfo": "Thông tin bản dựng",
   "commitSha": "Mã commit",
   "branch": "Nhánh",
@@ -177,7 +161,6 @@
   "chromeVersion": "Chrome",
   "nodeVersion": "Node.js",
   "v8Version": "V8 Engine",
-  
   "database": "Cơ sở dữ liệu",
   "databaseServer": "Máy chủ cơ sở dữ liệu",
   "dbConnecting": "Đang kết nối đến cơ sở dữ liệu...",
@@ -249,7 +232,6 @@
   "dbAddFilter": "Thêm bộ lọc",
   "dbApplyFilter": "Áp dụng",
   "dbClearFilters": "Xóa bộ lọc",
-  
   "dbImportExport": "Nhập / Xuất",
   "dbImportExportDesc": "Nhập file SQL hoặc xuất cơ sở dữ liệu sang định dạng SQL",
   "dbImport": "Nhập",
@@ -279,7 +261,6 @@
   "dbSmartDropDesc": "Chỉ xóa các bảng có trong file import, không xóa tất cả",
   "dbOperationLog": "Nhật ký thao tác",
   "dbMoreColumns": "cột khác...",
-  
   "dbERD": "Sơ đồ ERD",
   "erdLoading": "Đang tải sơ đồ...",
   "erdZoomIn": "Phóng to",
@@ -293,38 +274,32 @@
   "erdHelp": "Kéo bảng để di chuyển • Cuộn để zoom • Nhấp đúp để xem cấu trúc",
   "erdNoTables": "Không tìm thấy bảng",
   "erdSelectDatabase": "Chọn database để xem ERD",
-  
   "addTag": "Thêm nhãn",
   "editTag": "Sửa nhãn",
   "deleteTag": "Xóa nhãn",
   "tagColor": "Màu nhãn",
   "noTags": "Không có nhãn",
   "searchTags": "Tìm nhãn...",
-  
   "connecting": "Đang kết nối...",
   "connected": "Đã kết nối",
   "disconnected": "Đã ngắt kết nối",
   "connectionFailed": "Kết nối thất bại",
   "reconnect": "Kết nối lại",
-  
   "fileSize": "Kích thước",
   "fileDate": "Ngày",
   "fileName": "Tên",
   "fileType": "Loại",
   "permissions": "Quyền",
   "owner": "Chủ sở hữu",
-  
   "confirmDelete": "Bạn có chắc muốn xóa?",
   "confirmDisconnect": "Bạn có chắc muốn ngắt kết nối?",
   "confirmCloseSession": "Đóng kết nối này?",
   "confirmOverwrite": "Tệp đã tồn tại. Ghi đè?",
-  
   "errorConnection": "Lỗi kết nối",
   "errorAuth": "Xác thực thất bại",
   "errorTimeout": "Hết thời gian kết nối",
   "errorNotFound": "Không tìm thấy",
   "errorPermission": "Không có quyền truy cập",
-  
   "hideSidebar": "Ẩn thanh bên",
   "showSidebar": "Hiện thanh bên",
   "importRdpFile": "Nhập tệp .rdp",
@@ -335,7 +310,6 @@
   "selectKeyFromKeychain": "-- Chọn khóa từ Keychain --",
   "orSelectFile": "hoặc chọn tệp",
   "orPasteManually": "Hoặc dán khóa thủ công",
-  
   "githubBackup": "Sao lưu GitHub",
   "githubBackupDesc": "Đồng bộ bản sao lưu mã hóa lên kho GitHub riêng tư để lưu trữ đám mây với lịch sử phiên bản.",
   "connectWithGithub": "Kết nối với GitHub",
@@ -356,7 +330,6 @@
   "backupDownloadFailed": "Không thể tải xuống bản sao lưu",
   "restoreSuccessWithCount": "Đã khôi phục {count} máy chủ từ GitHub!",
   "confirmPasswordPlaceholder": "Nhập lại mật khẩu để xác nhận",
-  
   "selectDomain": "Chọn tên miền:",
   "selectDomainPlaceholder": "Chọn một tên miền...",
   "refreshZones": "Làm mới zones",
@@ -366,18 +339,15 @@
   "edit": "Sửa",
   "proxied": "Qua proxy",
   "dnsOnly": "Chỉ DNS",
-  
   "configureApiToken": "Cấu hình Cloudflare API Token",
   "apiTokenDesc": "Để quản lý bản ghi DNS, bạn cần thiết lập Cloudflare API Token với quyền DNS:Edit.",
   "goToSettings": "Đi đến Cài đặt",
-  
   "type": "Loại",
   "name": "Tên",
   "content": "Nội dung",
   "ttl": "TTL",
   "proxy": "Proxy",
   "actions": "Thao tác",
-  
   "whoisTitle": "Tra cứu WHOIS",
   "whoisPlaceholder": "Nhập tên miền (ví dụ: example.com)",
   "lookupBtn": "Tra cứu",
@@ -389,11 +359,9 @@
   "nameServers": "Name Servers",
   "status": "Trạng thái",
   "rawWhois": "Dữ liệu WHOIS gốc",
-  
   "selectTool": "Chọn công cụ:",
   "run": "Chạy",
   "running": "Đang chạy...",
-  
   "toolARecord": "Bản ghi A",
   "toolARecordDesc": "Tra cứu địa chỉ IP của tên miền",
   "toolAAAARecord": "Bản ghi AAAA",
@@ -430,7 +398,6 @@
   "toolDNSCheckDesc": "Kiểm tra vấn đề máy chủ DNS",
   "toolIPInfo": "Thông tin IP",
   "toolIPInfoDesc": "Lấy thông tin khối địa chỉ IP",
-  
   "sftpLocal": "NỘI BỘ",
   "sftpRemote": "TỪ XA",
   "sftpName": "Tên",
@@ -450,7 +417,6 @@
   "sftpInstallSource": "Cài đặt mã nguồn",
   "sftpCompressTo": "Nén thành",
   "sftpExtractHere": "Giải nén tại đây",
-  
   "sourceInstallerTitle": "Trình cài đặt mã nguồn",
   "sourceInstallerDesc": "Cài đặt các framework và CMS phổ biến trên server của bạn",
   "sourceSelectFramework": "Chọn Framework/CMS",
@@ -520,7 +486,6 @@
   "sourceNextJSDesc": "React Framework",
   "sourceTypeScriptDesc": "Dự án TypeScript",
   "sourceLoadingVersions": "Đang tải phiên bản...",
-  
   "wssTypeMessage": "Nhập tin nhắn... (Enter để gửi, Shift+Enter xuống dòng)",
   "wssAutoScroll": "Tự động cuộn",
   "wssNoMessages": "Chưa có tin nhắn",
@@ -529,7 +494,6 @@
   "wssReceived": "Đã nhận",
   "wssMessages": "tin nhắn",
   "wssSend": "Gửi",
-  
   "rdpConnected": "Đã kết nối Desktop từ xa",
   "rdpConnecting": "Đang kết nối Desktop từ xa...",
   "rdpSessionActive": "Phiên đang hoạt động",
@@ -565,7 +529,6 @@
   "rdpErrorCertificate": "Lỗi TLS/Chứng chỉ. Thử kết nối lại hoặc kiểm tra cấu hình máy chủ.",
   "rdpErrorClosed": "Kết nối đã bị đóng bởi máy chủ.",
   "rdpErrorGeneric": "Kết nối thất bại. Vui lòng kiểm tra cài đặt máy chủ và thử lại.",
-
   "verifyingHost": "Xác minh máy chủ",
   "verifyingFingerprint": "Đang xác minh fingerprint...",
   "newHostDetected": "Phát hiện máy chủ mới",
@@ -583,7 +546,6 @@
   "fingerprintError": "Lỗi Fingerprint",
   "couldNotVerify": "Không thể xác minh fingerprint của máy chủ. Server có thể không thể truy cập hoặc không chạy SSH.",
   "retryVerification": "Thử lại",
-  
   "sshKeyManager": "SSH Key",
   "selectKeyToUse": "Chọn khóa SSH để sử dụng",
   "manageYourSSHKeys": "Quản lý các khóa SSH của bạn",
@@ -623,10 +585,8 @@
   "publicKeyExportedSuccessfully": "Đã xuất khóa công khai thành công tại:\n{path}",
   "failedToExportKey": "Không thể xuất khóa",
   "browseFile": "Chọn tệp",
-  
   "commonPorts": "Cổng phổ biến",
   "clickToSelectPort": "Nhấp để chọn nhanh cổng phổ biến",
-  
   "knownHosts": "Máy chủ đã biết",
   "manageKnownHosts": "Quản lý các máy chủ SSH đáng tin cậy",
   "searchHostnameIpFingerprint": "Tìm theo hostname, địa chỉ IP, hoặc fingerprint...",
@@ -642,18 +602,15 @@
   "hostRemoved": "Đã xóa máy chủ khỏi danh sách",
   "importHostPlaceholder": "hostname hoặc IP:port",
   "importHostDesc": "Nhập fingerprint SSH từ máy chủ",
-  
   "toolWebCheck": "Kiểm tra Web",
   "toolWebCheckDesc": "Kiểm tra kết nối HTTP và HTTPS",
   "toolWhois": "Tra cứu WHOIS",
   "toolWhoisDesc": "Lấy thông tin đăng ký tên miền",
-  
   "tools": "Công cụ",
   "toolProxyCheck": "Kiểm tra Proxy",
   "proxyCheckDesc": "Kiểm tra kết nối proxy HTTP, SOCKS4, SOCKS5",
   "toolPortListener": "Cổng đang lắng nghe",
   "portListenerDesc": "Quét và liệt kê tất cả cổng đang lắng nghe trên máy này",
-  
   "smtpTestDesc": "Kiểm tra kết nối SMTP với xác thực",
   "smtpServer": "Máy chủ SMTP",
   "encryption": "Mã hóa",
@@ -666,7 +623,6 @@
   "smtpTestSuccess": "Kết nối SMTP thành công",
   "responseTime": "Thời gian phản hồi",
   "testEmailSent": "Email test đã được gửi thành công",
-  
   "proxyType": "Loại Proxy",
   "proxyServer": "Máy chủ Proxy",
   "testUrl": "URL kiểm tra",
@@ -675,14 +631,12 @@
   "proxyWorking": "Proxy hoạt động tốt",
   "externalIp": "IP công khai",
   "statusCode": "Mã trạng thái",
-  
   "scanPorts": "Quét cổng",
   "scanning": "Đang quét...",
   "searchPortProcess": "Tìm cổng hoặc tiến trình...",
   "lastScan": "Lần quét cuối",
   "process": "Tiến trình",
   "clickScanToStart": "Nhấn 'Quét cổng' để xem danh sách cổng đang lắng nghe",
-  
   "addDnsRecord": "Thêm bản ghi DNS",
   "editDnsRecord": "Sửa bản ghi DNS",
   "recordType": "Loại",
@@ -711,7 +665,6 @@
   "saveChanges": "Lưu thay đổi",
   "lowerPriorityHigher": "Số nhỏ hơn = ưu tiên cao hơn",
   "rootOrSubdomain": "@ cho gốc, hoặc tên miền phụ",
-  
   "successStatus": "THÀNH CÔNG",
   "failedStatus": "THẤT BẠI",
   "recentLookups": "Tra cứu gần đây",
@@ -734,14 +687,11 @@
   "banner": "Banner",
   "key": "Khóa",
   "keys": "khóa",
-  
   "keychain": "SSH Key",
-  
   "noHostsMatchSearch": "Không có host phù hợp với tìm kiếm",
   "connectToServerToAddKnownHosts": "Kết nối với máy chủ để thêm vào danh sách host đã biết",
   "connectionTimedOut": "Kết nối đã hết thời gian chờ",
   "requestTimedOut": "Yêu cầu đã hết thời gian chờ",
-  
   "tokenConfigured": "Token đã được cấu hình",
   "tokenSavedEncrypted": "API token đã được lưu và mã hóa",
   "confirmRemoveToken": "Xóa Cloudflare API Token?",
@@ -749,13 +699,11 @@
   "verifying": "Đang xác minh...",
   "saveToken": "Lưu Token",
   "getApiTokenFrom": "Lấy API Token từ",
-  
   "selectFromServerList": "Chọn từ danh sách máy chủ",
   "selectServer": "-- Chọn máy chủ --",
   "manualEntry": "Nhập thủ công",
   "resolving": "Đang phân giải...",
   "noIpFound": "Không tìm thấy địa chỉ IP cho hostname này",
-  
   "twoFactorAuth": "2FA",
   "totpDescription": "Tạo mã TOTP cho xác thực 2 lớp",
   "noTotpEntries": "Chưa có mục 2FA nào",
@@ -775,7 +723,6 @@
   "securityNote": "Lưu ý bảo mật",
   "totpSecurityInfo": "Secret TOTP được lưu trữ cục bộ trong trình duyệt và không bao giờ được gửi đến máy chủ. Mã làm mới mỗi 30 giây.",
   "add": "Thêm",
-  
   "customHotkeys": "Phím tắt",
   "hotkeyDescription": "Tạo phím tắt để thực hiện nhanh các câu lệnh trong SSH terminal",
   "addHotkey": "Thêm phím tắt",
@@ -807,7 +754,6 @@
   "reservedSwitchTerminalSFTP": "Chuyển Terminal/SFTP",
   "reservedLocalTerminal": "Mở Local Terminal",
   "reservedPaste": "Dán (trong terminal)",
-  
   "portForwarding": "Port Forward",
   "portForwardingDescription": "SSH tunnel port forwarding (Local, Remote, Dynamic SOCKS)",
   "noPortForwards": "Chưa cấu hình port forward",
@@ -835,11 +781,9 @@
   "stopBeforeEdit": "Vui lòng dừng forward trước khi sửa",
   "start": "Bắt đầu",
   "stop": "Dừng",
-  
   "changelog": "Nhật ký thay đổi",
   "changelogDesc": "Tất cả thay đổi đáng chú ý của Marix SSH Client",
   "loadChangelog": "Tải nhật ký từ GitHub",
-  
   "releaseNotes": "Ghi chú phát hành",
   "later": "Để sau",
   "detectingSystemInfo": "Đang phát hiện thông tin hệ thống...",
@@ -850,7 +794,6 @@
   "argon2Encryption": "Backup mã hóa Argon2id",
   "openSource": "Mã nguồn mở trên GitHub",
   "available": "có sẵn",
-  
   "boxBackup": "Backup trên Box.net",
   "boxConnect": "Kết nối Box.net",
   "boxConnected": "Đã kết nối Box.net",
@@ -884,7 +827,6 @@
   "githubSecurityWarning": "GitHub chỉ lưu dữ liệu đã mã hóa. Chúng tôi không thể khôi phục mật khẩu hoặc backup của bạn.",
   "backupLocation": "Vị trí backup",
   "selectBackupMethod": "Chọn phương thức sao lưu",
-  
   "portKnocking": "Port Knocking",
   "portKnockingDesc": "Ẩn cổng SSH cho đến khi gửi chuỗi mã xác thực",
   "knockSequence": "Chuỗi mã",
@@ -895,7 +837,6 @@
   "random": "Ngẫu nhiên",
   "ports": "cổng",
   "learnMore": "Tìm hiểu thêm",
-  
   "knockGuideTitle": "Hướng Dẫn Cài Đặt Port Knocking",
   "knockSecurityBenefits": "Lợi Ích Bảo Mật",
   "knockStealth": "Che giấu",
@@ -953,7 +894,6 @@
   "knockMarixStep4": "Tạo Ngẫu Nhiên: Nhấn nút 'Ngẫu nhiên' để tạo chuỗi bảo mật",
   "knockMarixStep5": "Lưu và Kết Nối",
   "knockMarixAutomatic": "Marix sẽ tự động knock trước khi thiết lập kết nối SSH!",
-  
   "lanShare": "Chia sẻ qua LAN",
   "thisDevice": "Thiết bị này",
   "serversToShare": "Máy chủ để chia sẻ",
@@ -965,7 +905,6 @@
   "noDevicesFound": "Không tìm thấy thiết bị nào trên mạng. Hãy chắc chắn cả hai thiết bị đang cùng mạng.",
   "shareOnLAN": "Chia sẻ qua LAN",
   "selectServersToShare": "Chọn máy chủ để chia sẻ",
-
   "lanFileTransfer": "Truyền file qua LAN",
   "sendFiles": "Gửi file",
   "receiveFiles": "Nhận file",
@@ -1043,30 +982,25 @@
   "snippetTagsPlaceholder": "Phân cách bằng dấu phẩy: disk, storage",
   "snippetAddFirst": "Thêm snippet đầu tiên",
   "snippetReservedKeys": "Phím đã đặt trước:",
-  
   "activeConnections": "Kết nối đang hoạt động",
   "closeAllAndExit": "Đóng tất cả & Thoát",
   "youHaveActiveConnections": "Bạn có {{count}} kết nối đang hoạt động.",
   "closeConnectionsConfirm": "Bạn có muốn đóng tất cả kết nối và thoát?",
   "serverAlreadyConnected": "Đã kết nối",
   "serverAlreadyConnectedMessage": "Máy chủ này đã được kết nối. Đang chuyển đến phiên hiện có.",
-  
   "notes": "Ghi chú",
   "serverNotes": "Ghi chú Server",
   "noNotesYet": "Chưa có ghi chú. Nhấn để thêm ghi chú cho server này.",
   "notePlaceholder": "Viết ghi chú ở đây... (ví dụ: công việc cần làm, nhắc nhở cấu hình)",
   "noteSaved": "Đã lưu ghi chú",
   "noteSaving": "Đang lưu...",
-
   "selectDevice": "Chọn thiết bị",
   "filesToSend": "Tệp cần gửi",
-  "pairingCode": "Mã ghép nối",
   "digitCode": "Mã 6 số",
   "shareCodeWithReceiver": "Chia sẻ mã này với người nhận để xác minh truyền tệp",
   "incomingTransferFrom": "Yêu cầu nhận tệp từ",
   "files": "tệp",
   "enterPairingCodeFromSender": "Nhập mã ghép nối từ người gửi",
-  "reject": "Từ chối",
   "acceptAndSave": "Chấp nhận & Lưu",
   "waitingForIncomingTransfers": "Đang chờ yêu cầu truyền tệp...",
   "makeSureLANEnabled": "Đảm bảo đã bật LAN Discovery để nhận tệp",
@@ -1075,7 +1009,6 @@
   "cancelTransfer": "Hủy truyền",
   "yourDevice": "Thiết bị của bạn",
   "pleaseSelectDeviceFilesCode": "Vui lòng chọn thiết bị, tệp và nhập mã ghép nối",
-  "connecting": "Đang kết nối...",
   "waitingForReceiverAccept": "Đang chờ người nhận chấp nhận...",
   "pleaseEnterPairingCode": "Vui lòng nhập mã ghép nối",
   "failedToSelectSaveLocation": "Không thể chọn vị trí lưu",
@@ -1089,13 +1022,10 @@
   "andMore": "và thêm",
   "shareCodeWithReceiverDesc": "Chia sẻ mã này cho người nhận. Họ sẽ nhập mã để kết nối.",
   "prepareToSend": "Chuẩn bị gửi",
-  "waitingForReceiver": "Đang chờ người nhận...",
   "tellReceiverCode": "Yêu cầu người nhận nhập mã",
   "enterSenderPairingCode": "Nhập mã ghép nối từ người gửi",
   "askSenderForCode": "Hỏi người gửi lấy mã ghép nối 6 chữ số",
   "searchingForSender": "Đang tìm người gửi...",
-  "findSender": "Tìm người gửi",
-  "senderFound": "Đã tìm thấy người gửi!",
   "howToReceiveFiles": "Cách nhận tệp:",
   "receiveStep1": "Yêu cầu người gửi chuẩn bị tệp và nhấn \"Chuẩn bị gửi\"",
   "receiveStep2": "Nhập mã ghép nối 6 chữ số họ cung cấp",
@@ -1112,7 +1042,6 @@
   "noSenderFoundWithCode": "Không tìm thấy người gửi với mã này. Đảm bảo người gửi đang chờ và cả hai thiết bị cùng mạng.",
   "pleaseSearchFindSenderFirst": "Vui lòng tìm và chọn người gửi trước",
   "connectingToSender": "Đang kết nối đến người gửi...",
-  
   "sessionLatency": "Độ trễ",
   "sessionLatencyAvg": "Trung bình",
   "sessionStatus": "Trạng thái",
@@ -1126,7 +1055,6 @@
   "sessionMonitorDesc": "Theo dõi độ trễ và tình trạng kết nối SSH theo thời gian thực",
   "sessionDownload": "Tải xuống",
   "sessionUpload": "Tải lên",
-  
   "commandRecall": "Lịch sử lệnh",
   "commandRecallEnabled": "Bật lịch sử lệnh",
   "commandRecallDesc": "Nhớ lệnh theo server (Tab để gọi lại). Lưu cục bộ, không đồng bộ.",
@@ -1144,11 +1072,9 @@
   "commandRecallUsed": "Sử dụng",
   "commandRecallTimes": "lần",
   "rightClickForOptions": "Nhấp chuột phải để xem tùy chọn",
-  
   "terminalFont": "Font Terminal",
   "terminalFontFamily": "Kiểu chữ",
   "terminalFontDesc": "Font monospace cho terminal (hỗ trợ Unicode)",
-  
   "appLock": "Khóa Ứng dụng",
   "appLockDesc": "Khóa ứng dụng sau khi không thao tác để bảo vệ kết nối",
   "appLockEnable": "Bật khóa ứng dụng",
@@ -1175,22 +1101,16 @@
   "appLockPinRequirement": "Mã PIN phải có 4 chữ số",
   "appLockPasswordRequirement": "Mật khẩu phải có ít nhất 4 ký tự",
   "appLockCredentialMismatch": "Không khớp. Vui lòng thử lại.",
-  "minutes": "phút",
   "change": "Thay đổi",
   "set": "Thiết lập",
-  "clear": "Xóa",
-
   "whatsNew": "Tính năng mới",
-  "sessionMonitorDesc": "Theo dõi độ trễ và tốc độ tải xuống/tải lên theo thời gian thực ở footer. Bật/tắt trong Cài đặt.",
   "terminalFontSelection": "Chọn Font Terminal",
-  "terminalFontDesc": "Lựa chọn từ 14 font monospace cao cấp cho terminal. Tùy chỉnh trong Cài đặt > Font Terminal.",
   "appLockInfoDesc": "Khóa ứng dụng sau thời gian không hoạt động bằng PIN (4 số), mật khẩu hoặc làm mờ màn hình. Cấu hình trong Cài đặt.",
   "previousVersions": "Phiên bản trước",
   "changelog1013": "Trình chỉnh sửa Theme, Bộ chọn màu tùy chỉnh",
   "changelog1012": "50+ Theme Terminal, Quản lý Snippet",
   "changelog1011": "Chỉnh sửa quyền file, Hỗ trợ Symlink",
   "changelog1010": "Quản lý Cloudflare DNS, Điều hướng phím tắt",
-
   "featureSsh": "SSH Terminal",
   "featureSftp": "Trình duyệt SFTP",
   "featureFtp": "FTP Client",
