@@ -91,6 +91,28 @@ class SFTPManager {
             });
         });
     }
+    async stat(connectionId, remotePath) {
+        const sftp = this.sftpConnections.get(connectionId);
+        if (!sftp) {
+            throw new Error('SFTP connection not found');
+        }
+        return new Promise((resolve, reject) => {
+            sftp.stat(remotePath, (err, stats) => {
+                if (err) {
+                    reject(err);
+                    return;
+                }
+                resolve({
+                    size: stats.size,
+                    mode: stats.mode,
+                    uid: stats.uid,
+                    gid: stats.gid,
+                    atime: stats.atime,
+                    mtime: stats.mtime,
+                });
+            });
+        });
+    }
     async downloadFile(connectionId, remotePath, localPath) {
         const sftp = this.sftpConnections.get(connectionId);
         if (!sftp) {

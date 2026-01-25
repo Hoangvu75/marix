@@ -1125,5 +1125,6 @@
   "symbolicLink": "Enlace Simbólico",
   "file": "Archivo",
   "copy": "Copiar",
+  "copyPath": "Copiar ruta",
   "paste": "Pegar"
 }

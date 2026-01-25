@@ -68,6 +68,8 @@ const DualPaneSFTP: React.FC<Props> = ({ connectionId, server, initialLocalPath,
   const [selectedLocal, setSelectedLocal] = useState<string | null>(null);
   const [selectedRemote, setSelectedRemote] = useState<string | null>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; type: 'local' | 'remote'; file: FileInfo | null } | null>(null);
+  const [contextMenuPosition, setContextMenuPosition] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
+  const contextMenuRef = useRef<HTMLDivElement>(null);
   
   // Drag & drop state
   const [localDragOver, setLocalDragOver] = useState(false);
@@ -142,6 +144,32 @@ const DualPaneSFTP: React.FC<Props> = ({ connectionId, server, initialLocalPath,
   const [localPaneWidth, setLocalPaneWidth] = useState(50); // percentage
   const [isResizing, setIsResizing] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // Auto-adjust context menu position after it renders
+  useEffect(() => {
+    if (contextMenu && contextMenuRef.current) {
+      const menu = contextMenuRef.current;
+      const menuRect = menu.getBoundingClientRect();
+      const viewportHeight = window.innerHeight;
+      const viewportWidth = window.innerWidth;
+      const padding = 10;
+      
+      let top = contextMenu.y;
+      let left = contextMenu.x;
+      
+      // Adjust vertical position
+      if (contextMenu.y + menuRect.height > viewportHeight - padding) {
+        top = Math.max(padding, viewportHeight - menuRect.height - padding);
+      }
+      
+      // Adjust horizontal position
+      if (contextMenu.x + menuRect.width > viewportWidth - padding) {
+        left = Math.max(padding, viewportWidth - menuRect.width - padding);
+      }
+      
+      setContextMenuPosition({ top, left });
+    }
+  }, [contextMenu]);
 
   // Initialize homedir
   useEffect(() => {
@@ -1203,6 +1231,8 @@ const DualPaneSFTP: React.FC<Props> = ({ connectionId, server, initialLocalPath,
       x = windowWidth - menuWidth - 10;
     }
     
+    // Set initial position (will be refined by useEffect after menu renders)
+    setContextMenuPosition({ top: y, left: x });
     setContextMenu({ x, y, type, file });
   };
 
@@ -1883,8 +1913,9 @@ const DualPaneSFTP: React.FC<Props> = ({ connectionId, server, initialLocalPath,
       {/* Context Menu */}
       {contextMenu && (
         <div
+          ref={contextMenuRef}
           className="fixed bg-navy-800 border border-navy-600 rounded-lg shadow-2xl py-1 z-50 min-w-[180px]"
-          style={{ left: contextMenu.x, top: contextMenu.y }}
+          style={{ left: contextMenuPosition.left, top: contextMenuPosition.top }}
           onClick={(e) => e.stopPropagation()}
         >
           {contextMenu.type === 'local' ? (
@@ -1902,14 +1933,16 @@ const DualPaneSFTP: React.FC<Props> = ({ connectionId, server, initialLocalPath,
                   )}
                   <div className="border-t border-navy-600 my-1"></div>
                   <MenuItem icon="copy" onClick={() => { copyFile(contextMenu.file!, 'local'); setContextMenu(null); }}>{t('copy')}</MenuItem>
+                  <MenuItem icon="copy-path" onClick={async () => { const fullPath = await ipcRenderer.invoke('local:pathJoin', localPath, contextMenu.file!.name); navigator.clipboard.writeText(fullPath); setContextMenu(null); }}>{t('copyPath')}</MenuItem>
                   <MenuItem icon="cut" onClick={() => { cutFile(contextMenu.file!, 'local'); setContextMenu(null); }}>{t('cut')}</MenuItem>
                   <MenuItem icon="paste" disabled={!clipboard} onClick={() => { pasteFiles('local'); setContextMenu(null); }}>{t('paste')}</MenuItem>
                   <div className="border-t border-navy-600 my-1"></div>
                   <MenuItem icon="chmod" onClick={() => { chmodLocal(contextMenu.file!.name); setContextMenu(null); }}>{t('sftpChangePermissions')}</MenuItem>
                   <MenuItem icon="rename" onClick={() => { renameLocal(contextMenu.file!.name); setContextMenu(null); }}>{t('rename')}</MenuItem>
-                  <MenuItem icon="properties" onClick={() => { showProperties(contextMenu.file!, 'local'); setContextMenu(null); }}>{t('properties')}</MenuItem>
                   <div className="border-t border-navy-600 my-1"></div>
                   <MenuItem icon="delete" danger onClick={() => { deleteLocal(contextMenu.file!.name); setContextMenu(null); }}>{t('delete')}</MenuItem>
+                  <div className="border-t border-navy-600 my-1"></div>
+                  <MenuItem icon="properties" onClick={() => { showProperties(contextMenu.file!, 'local'); setContextMenu(null); }}>{t('properties')}</MenuItem>
                 </>
               ) : (
                 <>
@@ -1951,6 +1984,7 @@ const DualPaneSFTP: React.FC<Props> = ({ connectionId, server, initialLocalPath,
                   )}
                   <div className="border-t border-navy-600 my-1"></div>
                   <MenuItem icon="copy" onClick={() => { copyFile(contextMenu.file!, 'remote'); setContextMenu(null); }}>{t('copy')}</MenuItem>
+                  <MenuItem icon="copy-path" onClick={() => { const fullPath = remotePath === '/' ? '/' + contextMenu.file!.name : remotePath + '/' + contextMenu.file!.name; navigator.clipboard.writeText(fullPath); setContextMenu(null); }}>{t('copyPath')}</MenuItem>
                   <MenuItem icon="cut" onClick={() => { cutFile(contextMenu.file!, 'remote'); setContextMenu(null); }}>{t('cut')}</MenuItem>
                   <MenuItem icon="paste" disabled={!clipboard} onClick={() => { pasteFiles('remote'); setContextMenu(null); }}>{t('paste')}</MenuItem>
                   <div className="border-t border-navy-600 my-1"></div>
@@ -1963,9 +1997,10 @@ const DualPaneSFTP: React.FC<Props> = ({ connectionId, server, initialLocalPath,
                   <div className="border-t border-navy-600 my-1"></div>
                   <MenuItem icon="chmod" onClick={() => { chmodRemote(contextMenu.file!.name); setContextMenu(null); }}>{t('sftpChangePermissions')}</MenuItem>
                   <MenuItem icon="rename" onClick={() => { renameRemote(contextMenu.file!.name); setContextMenu(null); }}>{t('rename')}</MenuItem>
-                  <MenuItem icon="properties" onClick={() => { showProperties(contextMenu.file!, 'remote'); setContextMenu(null); }}>{t('properties')}</MenuItem>
                   <div className="border-t border-navy-600 my-1"></div>
                   <MenuItem icon="delete" danger onClick={() => { deleteRemote(contextMenu.file!.name); setContextMenu(null); }}>{t('delete')}</MenuItem>
+                  <div className="border-t border-navy-600 my-1"></div>
+                  <MenuItem icon="properties" onClick={() => { showProperties(contextMenu.file!, 'remote'); setContextMenu(null); }}>{t('properties')}</MenuItem>
                 </>
               ) : (
                 <>
@@ -2189,6 +2224,7 @@ const iconMap: Record<string, React.ReactNode> = {
   'compress': <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12M8 12h.01M12 12h.01M16 12h.01" /></svg>,
   'extract': <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>,
   'copy': <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>,
+  'copy-path': <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" /></svg>,
   'cut': <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.121 14.121L19 19m-7-7l7-7m-7 7l-2.879 2.879M12 12L9.121 9.121m0 5.758a3 3 0 10-4.243 4.243 3 3 0 004.243-4.243zm0-5.758a3 3 0 10-4.243-4.243 3 3 0 004.243 4.243z" /></svg>,
   'paste': <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>,
   'chevron-right': <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>,

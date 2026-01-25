@@ -1125,5 +1125,6 @@
   "symbolicLink": "Symbolic Link",
   "file": "File",
   "copy": "Kopyahin",
+  "copyPath": "Kopyahin ang path",
   "paste": "I-paste"
 }

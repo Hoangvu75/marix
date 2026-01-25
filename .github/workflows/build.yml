@@ -254,11 +254,8 @@ jobs:
             else if (line.match(/^###\s+Changed/i)) currentSection = 'changed';
             else if (line.match(/^###\s+Security/i)) currentSection = 'security';
             else if (currentSection && line.trim().startsWith('-')) {
-              // Clean up the line - remove markdown bold and file references
-              let cleaned = line.trim()
-                .replace(/\*\*([^*]+)\*\*/g, '$1')  // Remove bold
-                .substring(0, 100);  // Limit length
-              sections[currentSection].push(cleaned);
+              // Keep the line as-is with markdown formatting
+              sections[currentSection].push(line.trim());
             }
           }
           
@@ -322,46 +319,35 @@ jobs:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_CHANGELOG }}
           VERSION: ${{ needs.release.outputs.version }}
         run: |
-          ADDED=$(echo '${{ steps.changelog.outputs.added }}' | sed 's/"/\\"/g' | sed ':a;N;$!ba;s/\n/\\n/g')
-          FIXED=$(echo '${{ steps.changelog.outputs.fixed }}' | sed 's/"/\\"/g' | sed ':a;N;$!ba;s/\n/\\n/g')
-          CHANGED=$(echo '${{ steps.changelog.outputs.changed }}' | sed 's/"/\\"/g' | sed ':a;N;$!ba;s/\n/\\n/g')
-          SECURITY=$(echo '${{ steps.changelog.outputs.security }}' | sed 's/"/\\"/g' | sed ':a;N;$!ba;s/\n/\\n/g')
+          # Format message like bot.js (plain text with markdown)
+          ADDED=$(echo '${{ steps.changelog.outputs.added }}' | sed 's/"/\\"/g')
+          FIXED=$(echo '${{ steps.changelog.outputs.fixed }}' | sed 's/"/\\"/g')
+          CHANGED=$(echo '${{ steps.changelog.outputs.changed }}' | sed 's/"/\\"/g')
+          SECURITY=$(echo '${{ steps.changelog.outputs.security }}' | sed 's/"/\\"/g')
           
+          # Build message parts
+          MESSAGE="\\n📦 **Version ${VERSION}**\\n*Released: $(date -u '+%Y-%m-%d')*\\n"
+          
+          if [ "${ADDED}" != "No new features" ]; then
+            MESSAGE="${MESSAGE}\\n✨ **Added**\\n${ADDED}\\n"
+          fi
+          
+          if [ "${FIXED}" != "No bug fixes" ]; then
+            MESSAGE="${MESSAGE}\\n🐛 **Fixed**\\n${FIXED}\\n"
+          fi
+          
+          if [ "${CHANGED}" != "No changes" ]; then
+            MESSAGE="${MESSAGE}\\n🔄 **Changed**\\n${CHANGED}\\n"
+          fi
+          
+          if [ "${SECURITY}" != "No security updates" ]; then
+            MESSAGE="${MESSAGE}\\n🔒 **Security**\\n${SECURITY}\\n"
+          fi
+          
+          # Post as plain text content (like bot.js)
           curl -H "Content-Type: application/json" \
             -X POST \
-            -d "{
-              \"embeds\": [{
-                \"title\": \"📦 Version ${VERSION}\",
-                \"description\": \"*Released: $(date -u '+%Y-%m-%d %H:%M UTC')*\",
-                \"color\": 3447003,
-                \"fields\": [
-                  {
-                    \"name\": \"✨ Added\",
-                    \"value\": \"${ADDED}\",
-                    \"inline\": false
-                  },
-                  {
-                    \"name\": \"🐛 Fixed\",
-                    \"value\": \"${FIXED}\",
-                    \"inline\": false
-                  },
-                  {
-                    \"name\": \"🔄 Changed\",
-                    \"value\": \"${CHANGED}\",
-                    \"inline\": false
-                  },
-                  {
-                    \"name\": \"🔒 Security\",
-                    \"value\": \"${SECURITY}\",
-                    \"inline\": false
-                  }
-                ],
-                \"footer\": {
-                  \"text\": \"View full changelog on GitHub\"
-                },
-                \"url\": \"https://github.com/${{ github.repository }}/releases/tag/${VERSION}\"
-              }]
-            }" \
+            -d "{\"content\": \"${MESSAGE}\"}" \
             $DISCORD_WEBHOOK
 
       - name: Discord Notification Status

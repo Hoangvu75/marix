@@ -1125,5 +1125,6 @@
   "symbolicLink": "Tautan Simbolik",
   "file": "File",
   "copy": "Salin",
+  "copyPath": "Salin path",
   "paste": "Tempel"
 }

@@ -1132,5 +1132,6 @@
   "symbolicLink": "シンボリックリンク",
   "file": "ファイル",
   "copy": "コピー",
+  "copyPath": "パスをコピー",
   "paste": "貼り付け"
 }

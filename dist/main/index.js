@@ -1312,6 +1312,17 @@ electron_1.ipcMain.handle('sftp:list', async (event, connectionId, remotePath) =
         return { success: false, error: error.message };
     }
 });
+electron_1.ipcMain.handle('sftp:stat', async (event, connectionId, remotePath) => {
+    try {
+        console.log('[Main] sftp:stat', connectionId, remotePath);
+        const stats = await sftpManager.stat(connectionId, remotePath);
+        return { success: true, stats };
+    }
+    catch (error) {
+        console.error('[Main] sftp:stat error:', error.message);
+        return { success: false, error: error.message };
+    }
+});
 electron_1.ipcMain.handle('sftp:download', async (event, connectionId, remotePath, localPath) => {
     try {
         console.log('[Main] sftp:download', connectionId, remotePath, '->', localPath);

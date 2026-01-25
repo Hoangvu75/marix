@@ -198,6 +198,7 @@ export interface Translations {
   all: string;
   none: string;
   copy: string;
+  copyPath: string;
   cut: string;
   paste: string;
   copied: string;

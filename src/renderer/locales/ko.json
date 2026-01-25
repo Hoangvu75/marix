@@ -1125,5 +1125,6 @@
   "symbolicLink": "심볼릭 링크",
   "file": "파일",
   "copy": "복사",
+  "copyPath": "경로 복사",
   "paste": "붙여넣기"
 }

@@ -1140,5 +1140,6 @@
   "symbolicLink": "Liên kết tượng trưng",
   "file": "Tệp",
   "copy": "Sao chép",
+  "copyPath": "Sao chép đường dẫn",
   "paste": "Dán"
 }

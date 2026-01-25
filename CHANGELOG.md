@@ -17,6 +17,17 @@ All notable changes to Marix SSH Client will be documented in this file.
   - No context menu needed - instant paste on right-click
   - Works with any text in clipboard
 
+- **Copy Path**: Copy full path of file/folder to clipboard
+  - Right-click context menu → Copy Path option
+  - Works for both local and remote files/folders
+  - Full i18n support (all 14 languages)
+
+### Fixed
+- **Context Menu Overflow**: Smart positioning prevents menu from going off-screen
+  - Uses ref to measure actual menu dimensions after render
+  - Automatically repositions to fit within viewport
+  - Works for any menu size at any click position
+
 ## [1.0.14] - 2026-01-24
 
 ### Added

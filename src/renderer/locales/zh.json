@@ -1107,5 +1107,6 @@
   "symbolicLink": "符号链接",
   "file": "文件",
   "copy": "复制",
+  "copyPath": "复制路径",
   "paste": "粘贴"
 }

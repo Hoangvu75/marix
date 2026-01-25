@@ -64,6 +64,30 @@ export class SFTPManager {
     });
   }
 
+  async stat(connectionId: string, remotePath: string): Promise<any> {
+    const sftp = this.sftpConnections.get(connectionId);
+    if (!sftp) {
+      throw new Error('SFTP connection not found');
+    }
+
+    return new Promise((resolve, reject) => {
+      sftp.stat(remotePath, (err, stats) => {
+        if (err) {
+          reject(err);
+          return;
+        }
+        resolve({
+          size: stats.size,
+          mode: stats.mode,
+          uid: stats.uid,
+          gid: stats.gid,
+          atime: stats.atime,
+          mtime: stats.mtime,
+        });
+      });
+    });
+  }
+
   async downloadFile(connectionId: string, remotePath: string, localPath: string): Promise<void> {
     const sftp = this.sftpConnections.get(connectionId);
     if (!sftp) {
