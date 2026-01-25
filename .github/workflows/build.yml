@@ -200,6 +200,7 @@ jobs:
             
             📋 **[View Full Changelog](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md)**
             🔒 **[Security Documentation](https://github.com/${{ github.repository }}/blob/main/SECURITY.md)**
+            💬 **[Join Our Discord](https://discord.gg/KSenHkCtN6)**
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
