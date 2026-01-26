@@ -48,9 +48,14 @@ class BoxOAuthService {
         if (this.credentials)
             return this.credentials;
         const possiblePaths = [
+            // When running from dist (packaged app - inside asar)
             path.join(__dirname, 'box-credentials.json'),
+            // When running from app.asar - dist structure
+            path.join(electron_1.app.getAppPath(), 'dist', 'main', 'services', 'box-credentials.json'),
+            // Development - from src
             path.join(__dirname, '..', '..', '..', 'src', 'main', 'services', 'box-credentials.json'),
             path.join(electron_1.app.getAppPath(), 'src', 'main', 'services', 'box-credentials.json'),
+            // User data directory (for manual override)
             path.join(electron_1.app.getPath('userData'), 'box-credentials.json'),
         ];
         for (const credPath of possiblePaths) {

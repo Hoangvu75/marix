@@ -57,13 +57,15 @@ export class GoogleDriveService {
     try {
       // Try multiple paths for credentials file
       const possiblePaths = [
-        // Production: same directory as compiled code
+        // Production: same directory as compiled code (inside asar)
         path.join(__dirname, 'google-credentials.json'),
+        // Packaged app: dist structure from app.asar
+        path.join(app.getAppPath(), 'dist', 'main', 'services', 'google-credentials.json'),
         // Development: source directory
         path.join(__dirname, '..', '..', '..', 'src', 'main', 'services', 'google-credentials.json'),
-        // App root
+        // App root - src structure
         path.join(app.getAppPath(), 'src', 'main', 'services', 'google-credentials.json'),
-        // User data directory (most portable)
+        // User data directory (most portable, for manual override)
         path.join(app.getPath('userData'), 'google-credentials.json'),
       ];
 
