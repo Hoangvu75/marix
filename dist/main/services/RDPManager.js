@@ -614,7 +614,21 @@ class RDPManager {
         if (conn) {
             try {
                 if (!conn.process.killed) {
-                    conn.process.kill('SIGTERM');
+                    if (this.isWindows) {
+                        // On Windows, use taskkill to ensure process tree is killed
+                        const pid = conn.process.pid;
+                        if (pid) {
+                            try {
+                                (0, child_process_1.execSync)(`taskkill /PID ${pid} /T /F`, { stdio: 'ignore' });
+                            }
+                            catch {
+                                conn.process.kill();
+                            }
+                        }
+                    }
+                    else {
+                        conn.process.kill('SIGTERM');
+                    }
                 }
                 if (this.isWindows) {
                     const credTarget = `TERMSRV/${conn.config.host}`;
@@ -665,7 +679,21 @@ class RDPManager {
         for (const [id, conn] of this.connections) {
             try {
                 if (!conn.process.killed) {
-                    conn.process.kill('SIGTERM');
+                    if (this.isWindows) {
+                        // On Windows, use taskkill to ensure process tree is killed
+                        const pid = conn.process.pid;
+                        if (pid) {
+                            try {
+                                (0, child_process_1.execSync)(`taskkill /PID ${pid} /T /F`, { stdio: 'ignore' });
+                            }
+                            catch {
+                                conn.process.kill();
+                            }
+                        }
+                    }
+                    else {
+                        conn.process.kill('SIGTERM');
+                    }
                 }
                 if (this.isWindows) {
                     const credTarget = `TERMSRV/${conn.config.host}`;

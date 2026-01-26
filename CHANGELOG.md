@@ -24,6 +24,11 @@ All notable changes to Marix SSH Client will be documented in this file.
   - Separated `startServer()` and `start()` methods
   - Server port is now correctly assigned before building auth URL
 
+- **Windows Process Cleanup**: Fixed sub-processes not closing on app exit (Windows)
+  - Uses `taskkill /T /F` to kill entire process tree on Windows
+  - SSH, RDP, and local terminal processes now properly terminated
+  - Added `will-quit` event handler for final cleanup
+
 ### Security
 - **PKCE Implementation**: All OAuth services now use PKCE (S256)
   - Google Drive: PKCE + client_secret (required for Desktop apps)

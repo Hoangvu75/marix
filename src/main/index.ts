@@ -398,9 +398,21 @@ app.on('window-all-closed', () => {
 });
 
 // Cleanup before quit
-app.on('before-quit', () => {
+app.on('before-quit', (event) => {
   console.log('[App] Cleaning up before quit...');
   sessionMonitor.cleanup();
+  rdpManager.closeAll();
+  nativeSSH.closeAll();
+  sshManager.closeAll();
+  wssManager.closeAll();
+  ftpManager.closeAll();
+  closeAllDatabaseConnections();
+});
+
+// Additional cleanup on will-quit (ensures processes are killed)
+app.on('will-quit', (event) => {
+  console.log('[App] Will quit - final cleanup...');
+  // Force kill any remaining processes
   rdpManager.closeAll();
   nativeSSH.closeAll();
   sshManager.closeAll();

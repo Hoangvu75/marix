@@ -306,8 +306,23 @@ export class NativeSSHManager {
     if (session) {
       console.log('[NativeSSH] Disconnecting:', connectionId);
       try {
-        // Force kill with SIGKILL for faster termination
-        session.pty.kill('SIGKILL');
+        // On Windows, use taskkill to ensure process tree is killed
+        if (process.platform === 'win32') {
+          const pid = session.pty.pid;
+          if (pid) {
+            try {
+              // /T = kill entire process tree, /F = force
+              execSync(`taskkill /PID ${pid} /T /F`, { stdio: 'ignore' });
+              console.log('[NativeSSH] Killed process tree via taskkill:', pid);
+            } catch {
+              // Fallback to pty.kill
+              session.pty.kill();
+            }
+          }
+        } else {
+          // Unix: Force kill with SIGKILL for faster termination
+          session.pty.kill('SIGKILL');
+        }
       } catch {
         // Ignore errors during kill
       }
