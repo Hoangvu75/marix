@@ -59,20 +59,24 @@
 4. Đặt tên: `Marix Desktop Client`
 5. Click **"Create"**
 
-6. **Sao chép Client ID**: Nhấp vào biểu tượng sao chép để lấy Client ID
-   - Bạn chỉ cần `client_id` - không cần client secret (sử dụng PKCE)
-   - Tạo file `google-credentials.json` trong `src/main/services/`
+6. **Download file JSON**: Click biểu tượng download để tải credentials
+   - Hoặc copy cả `Client ID` và `Client Secret`
 
-7. **Lưu Client ID** (client_secret KHÔNG cần thiết với PKCE):
+7. **Cho development local**: Tạo file `google-credentials.json` trong `src/main/services/`:
 ```json
 {
   "installed": {
-    "client_id": "YOUR_CLIENT_ID.apps.googleusercontent.com"
+    "client_id": "YOUR_CLIENT_ID.apps.googleusercontent.com",
+    "client_secret": "YOUR_CLIENT_SECRET"
   }
 }
 ```
 
+8. **Cho CI/CD builds**: Sử dụng GitHub Secrets (xem bên dưới)
+
 ## Bước 4: Cấu hình trong Marix
+
+### Lựa chọn A: Development Local
 
 1. Copy file `google-credentials.json` vào thư mục `src/main/services/`
 2. **QUAN TRỌNG**: Thêm vào `.gitignore`:
@@ -80,7 +84,13 @@
 src/main/services/google-credentials.json
 ```
 
-3. App sẽ tự động load credentials khi khởi động
+### Lựa chọn B: CI/CD với GitHub Secrets (Khuyến nghị)
+
+1. Vào GitHub repository → **Settings** → **Secrets and variables** → **Actions**
+2. Thêm các secrets sau:
+   - `GOOGLE_CLIENT_ID`: OAuth Client ID của bạn
+   - `GOOGLE_CLIENT_SECRET`: OAuth Client Secret của bạn
+3. Build workflow sẽ tự động inject credentials khi build
 
 ## Bước 5: Test OAuth Flow
 
@@ -95,9 +105,10 @@ src/main/services/google-credentials.json
 ## Lưu Ý Bảo Mật
 
 - **KHÔNG** commit file `google-credentials.json` lên Git
+- Sử dụng **GitHub Secrets** cho CI/CD builds để bảo vệ client_secret
 - Refresh token được lưu trong Electron store (đã mã hóa)
 - Chỉ yêu cầu quyền tối thiểu cần thiết
-- PKCE được sử dụng cho OAuth flow an toàn (không cần client secret)
+- PKCE được sử dụng để tăng bảo mật OAuth flow
 
 ## Công Khai Ứng Dụng (Bắt buộc)
 

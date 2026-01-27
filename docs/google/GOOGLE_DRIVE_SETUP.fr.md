@@ -28,10 +28,8 @@
 **Informations sur l'application :**
 - Nom de l'application : `Marix SSH Client`
 - E-mail d'assistance utilisateur : `your-email@gmail.com`
-- Logo de l'application : (facultatif) téléchargez votre logo
+- Logo de l'application : (facultatif)
 - Page d'accueil de l'application : `https://github.com/marixdev/marix`
-- Lien vers la politique de confidentialité : (facultatif)
-- Lien vers les conditions d'utilisation : (facultatif)
 
 **Coordonnées du développeur :**
 - Adresses e-mail : `your-email@gmail.com`
@@ -40,39 +38,34 @@
 
 **Portées :**
 5. Cliquez sur **"Ajouter ou supprimer des portées"**
-6. Recherchez et sélectionnez la portée suivante :
-   - `https://www.googleapis.com/auth/drive.file` (uniquement les fichiers créés par cette application)
+6. Recherchez et sélectionnez :
+   - `https://www.googleapis.com/auth/drive.file`
 7. Cliquez sur **"Mettre à jour"** et **"Enregistrer et continuer"**
-
-**Utilisateurs de test :** (nécessaire uniquement lorsque le statut de publication = Test)
-8. Cliquez sur **"Ajouter des utilisateurs"**
-9. Entrez les e-mails de compte Google pour les tests
-10. Cliquez sur **"Enregistrer et continuer"**
-
-11. Passez en revue et cliquez sur **"Retour au tableau de bord"**
 
 ### 3.2. Créer un ID client OAuth
 
 1. Allez dans **"API et services"** > **"Identifiants"**
 2. Cliquez sur **"Créer des identifiants"** > **"ID client OAuth"**
-3. Sélectionnez **"Application de bureau"** (pour l'application Electron)
+3. Sélectionnez **"Application de bureau"**
 4. Nommez-le : `Marix Desktop Client`
 5. Cliquez sur **"Créer"**
 
-6. **Copier l'ID client** : Cliquez sur l'icône de copie pour copier votre Client ID
-   - Vous n'avez besoin que du `client_id` - pas de client secret requis (utilisant PKCE)
-   - Créez le fichier `google-credentials.json` dans `src/main/services/`
-
-7. **Enregistrer l'ID client** (client_secret N'EST PAS requis avec PKCE) :
+6. **Télécharger le fichier JSON** : Cliquez sur l'icône de téléchargement
+7. **Pour le développement local** : Créez `google-credentials.json` dans `src/main/services/` :
 ```json
 {
   "installed": {
-    "client_id": "YOUR_CLIENT_ID.apps.googleusercontent.com"
+    "client_id": "YOUR_CLIENT_ID.apps.googleusercontent.com",
+    "client_secret": "YOUR_CLIENT_SECRET"
   }
 }
 ```
 
+8. **Pour les builds CI/CD** : Utilisez GitHub Secrets (voir ci-dessous)
+
 ## Étape 4 : Configurer dans Marix
+
+### Option A : Développement local
 
 1. Copiez le fichier `google-credentials.json` dans le dossier `src/main/services/`
 2. **IMPORTANT** : Ajoutez à `.gitignore` :
@@ -80,12 +73,18 @@
 src/main/services/google-credentials.json
 ```
 
-3. L'application chargera automatiquement les identifiants au démarrage
+### Option B : CI/CD avec GitHub Secrets (Recommandé)
+
+1. Allez dans votre dépôt GitHub → **Settings** → **Secrets and variables** → **Actions**
+2. Ajoutez ces secrets :
+   - `GOOGLE_CLIENT_ID` : Votre OAuth Client ID
+   - `GOOGLE_CLIENT_SECRET` : Votre OAuth Client Secret
+3. Le workflow de build injectera automatiquement les identifiants lors du build
 
 ## Étape 5 : Tester le flux OAuth
 
 1. Ouvrez l'application Marix
-2. Allez dans **Paramètres** > **Sauvegarde et restauration** > **Créer/Restaurer une sauvegarde**
+2. Allez dans **Paramètres** > **Sauvegarde et restauration**
 3. Sélectionnez l'onglet **"Google Drive"**
 4. Cliquez sur **"Se connecter à Google Drive"**
 5. Le navigateur s'ouvrira avec l'écran OAuth de Google
@@ -95,13 +94,11 @@ src/main/services/google-credentials.json
 ## Notes de sécurité
 
 - **NE PAS** valider `google-credentials.json` dans Git
+- Utilisez **GitHub Secrets** pour les builds CI/CD pour protéger le client_secret
 - Les jetons de rafraîchissement sont stockés dans Electron store (chiffrés)
-- Demandez uniquement les autorisations minimales nécessaires
-- PKCE est utilisé pour un flux OAuth sécurisé (pas besoin de secret client)
+- PKCE est utilisé pour une sécurité OAuth supplémentaire
 
 ## Publication de l'application (Obligatoire)
-
-Pour permettre à tous les utilisateurs d'utiliser l'application :
 
 1. Allez dans **Écran de consentement OAuth**
 2. Cliquez sur **"Publier l'application"**
@@ -112,7 +109,6 @@ Pour permettre à tous les utilisateurs d'utiliser l'application :
 
 ### Erreur : "Access blocked: This app's request is invalid"
 - Vérifiez que l'écran de consentement OAuth est entièrement configuré
-- Assurez-vous que redirect_uri correspond à vos paramètres
 
 ### Erreur : "The OAuth client was not found"
 - Vérifiez l'ID client dans le fichier d'identifiants
@@ -120,4 +116,3 @@ Pour permettre à tous les utilisateurs d'utiliser l'application :
 
 ### Erreur : "Access denied"
 - L'utilisateur a refusé l'octroi de l'autorisation
-- Ajoutez les portées appropriées dans l'écran de consentement OAuth

@@ -104,15 +104,22 @@ export class GoogleDriveService {
    * Check if credentials are configured
    */
   hasCredentials(): boolean {
-    if (!this.credentials) return false;
+    if (!this.credentials) {
+      console.log('[GoogleDrive] hasCredentials: No credentials loaded');
+      return false;
+    }
     
     const creds = this.credentials.installed || this.credentials.web;
-    if (!creds) return false;
+    if (!creds) {
+      console.log('[GoogleDrive] hasCredentials: No installed/web credentials found');
+      return false;
+    }
     
     // Check if credentials are valid (not placeholders)
     if (creds.client_id.startsWith('PLACEHOLDER') || 
         !creds.client_secret || 
         creds.client_secret.startsWith('PLACEHOLDER')) {
+      console.log('[GoogleDrive] hasCredentials: Credentials are placeholders');
       return false;
     }
     

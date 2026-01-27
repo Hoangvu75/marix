@@ -36,6 +36,8 @@ import { GitLabOAuthService } from './services/GitLabOAuthService';
 import { GitLabApiService } from './services/GitLabApiService';
 import { BoxOAuthService } from './services/BoxOAuthService';
 import { BoxApiService } from './services/BoxApiService';
+import { OneDriveOAuthService } from './services/OneDriveOAuthService';
+import { OneDriveApiService } from './services/OneDriveApiService';
 import { PortKnockService } from './services/PortKnockService';
 import { LANSharingService } from './services/LANSharingService';
 import { lanFileTransferService } from './services/LANFileTransferService';
@@ -2098,12 +2100,17 @@ ipcMain.handle('backup:selectSaveLocation', async (event) => {
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const defaultName = `marix-backup-${timestamp}.marix`;
     
+    // Use home directory as default, not desktop
+    const homePath = app.getPath('home');
+    const defaultPath = path.join(homePath, defaultName);
+    
     const result = await dialog.showSaveDialog(mainWindow!, {
       title: 'Save Backup File',
-      defaultPath: defaultName,
+      defaultPath: defaultPath,
       filters: [
         { name: 'Marix Backup', extensions: ['marix'] },
       ],
+      properties: ['showOverwriteConfirmation', 'createDirectory'],
     });
     
     if (result.canceled || !result.filePath) {
@@ -2702,6 +2709,158 @@ ipcMain.handle('box:checkBackup', async () => {
     return { exists: true, metadata };
   } catch (error: any) {
     console.error('[Box] Check backup error:', error);
+    return { exists: false };
+  }
+});
+
+// ==================== OneDrive OAuth Handlers ====================
+
+ipcMain.handle('onedrive:startOAuth', async () => {
+  try {
+    const tokens = await OneDriveOAuthService.startOAuthFlow(mainWindow || undefined);
+    OneDriveOAuthService.saveTokens(tokens);
+    return { success: true };
+  } catch (error: any) {
+    console.error('[OneDrive OAuth] Error:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('onedrive:hasToken', async () => {
+  const accessToken = await OneDriveOAuthService.getValidAccessToken();
+  return { hasToken: !!accessToken };
+});
+
+ipcMain.handle('onedrive:logout', async () => {
+  try {
+    OneDriveOAuthService.deleteTokens();
+    return { success: true };
+  } catch (error: any) {
+    console.error('[OneDrive] Logout error:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('onedrive:getUser', async () => {
+  try {
+    const accessToken = await OneDriveOAuthService.getValidAccessToken();
+    if (!accessToken) {
+      return { success: false, error: 'Not authenticated' };
+    }
+    const user = await OneDriveApiService.getCurrentUser(accessToken);
+    return { success: true, user };
+  } catch (error: any) {
+    console.error('[OneDrive] Get user error:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('onedrive:uploadBackup', async (event, password: string, totpEntries?: any[], portForwards?: any[], snippets?: any[]) => {
+  try {
+    // Validate password
+    const validation = backupService.validatePassword(password);
+    if (!validation.valid) {
+      return { success: false, error: validation.errors.join('\n') };
+    }
+    
+    // Get access token
+    const accessToken = await OneDriveOAuthService.getValidAccessToken();
+    if (!accessToken) {
+      return { success: false, error: 'Not authenticated with OneDrive. Please connect first.' };
+    }
+    
+    const servers = serverStore.getAllServers();
+    const tagColors = serverStore.getTagColors();
+    const cloudflareToken = cloudflareService.getToken() || undefined;
+    const sshKeys = sshKeyService.exportAllKeysForBackup();
+    
+    // Create encrypted backup content
+    const backupResult = await backupService.createBackupContent(
+      password, 
+      servers, 
+      tagColors, 
+      cloudflareToken, 
+      sshKeys, 
+      totpEntries, 
+      portForwards,
+      snippets
+    );
+    
+    if (!backupResult.success || !backupResult.content) {
+      return { success: false, error: backupResult.error };
+    }
+    
+    // Upload to OneDrive
+    await OneDriveApiService.uploadBackup(accessToken, backupResult.content);
+    
+    return { success: true };
+  } catch (error: any) {
+    console.error('[OneDrive] Upload backup error:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('onedrive:downloadBackup', async (event, password: string) => {
+  try {
+    // Get access token
+    const accessToken = await OneDriveOAuthService.getValidAccessToken();
+    if (!accessToken) {
+      return { success: false, error: 'Not authenticated with OneDrive. Please connect first.' };
+    }
+    
+    // Download from OneDrive
+    const encryptedContent = await OneDriveApiService.downloadBackup(accessToken);
+    
+    // Decrypt backup
+    const restoreResult = await backupService.restoreBackupContent(encryptedContent, password);
+    if (!restoreResult.success || !restoreResult.data) {
+      return { success: false, error: restoreResult.error };
+    }
+    
+    // Restore data
+    serverStore.setServers(restoreResult.data.servers);
+    serverStore.setTagColors(restoreResult.data.tagColors);
+    if (restoreResult.data.cloudflareToken) {
+      cloudflareService.setToken(restoreResult.data.cloudflareToken);
+    }
+    
+    // Restore SSH keys
+    let sshKeyCount = 0;
+    if (restoreResult.data.sshKeys && restoreResult.data.sshKeys.length > 0) {
+      const importResult = await sshKeyService.importKeysFromBackup(restoreResult.data.sshKeys);
+      sshKeyCount = importResult.imported;
+    }
+    
+    return { 
+      success: true, 
+      serverCount: restoreResult.data.servers.length,
+      sshKeyCount,
+      totpEntries: restoreResult.data.totpEntries,
+      portForwards: restoreResult.data.portForwards,
+      snippets: restoreResult.data.snippets
+    };
+  } catch (error: any) {
+    console.error('[OneDrive] Download backup error:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('onedrive:checkBackup', async () => {
+  try {
+    const accessToken = await OneDriveOAuthService.getValidAccessToken();
+    if (!accessToken) {
+      return { exists: false };
+    }
+    
+    const exists = await OneDriveApiService.backupExists(accessToken);
+    if (!exists) {
+      return { exists: false };
+    }
+    
+    const metadata = await OneDriveApiService.getBackupMetadata(accessToken);
+    return { exists: true, metadata };
+  } catch (error: any) {
+    console.error('[OneDrive] Check backup error:', error);
     return { exists: false };
   }
 });

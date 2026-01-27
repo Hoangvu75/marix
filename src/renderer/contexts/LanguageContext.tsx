@@ -1030,6 +1030,21 @@ export interface Translations {
   boxSecurityWarning: string;
   boxPasswordWarning: string;
   
+  // OneDrive Backup
+  onedriveBackup: string;
+  onedriveConnect: string;
+  onedriveConnected: string;
+  onedriveDisconnect: string;
+  onedriveConnecting: string;
+  onedriveAuthPrompt: string;
+  onedriveBackupTo: string;
+  onedriveRestoreFrom: string;
+  onedriveNoBackup: string;
+  onedriveBackupExists: string;
+  onedriveLastBackup: string;
+  onedriveSecurityWarning: string;
+  onedrivePasswordWarning: string;
+  
   // Google Drive Backup
   gdriveBackup: string;
   gdriveConnect: string;

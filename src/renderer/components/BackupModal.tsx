@@ -2,11 +2,47 @@ import React, { useState, useEffect } from 'react';
 
 const { ipcRenderer } = window.electron;
 
+// Password input component with eye icon - defined OUTSIDE component to prevent re-creation on each render
+const PasswordInput: React.FC<{
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+  show: boolean;
+  onToggle: () => void;
+}> = ({ value, onChange, placeholder, show, onToggle }) => (
+  <div className="relative">
+    <input
+      type={show ? 'text' : 'password'}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={placeholder}
+      className="w-full p-3 pr-10 bg-navy-700 border border-navy-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500"
+    />
+    <button
+      type="button"
+      onClick={onToggle}
+      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition"
+      tabIndex={-1}
+    >
+      {show ? (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+        </svg>
+      ) : (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+        </svg>
+      )}
+    </button>
+  </div>
+);
+
 interface BackupModalProps {
   mode: 'create' | 'restore';
   onClose: () => void;
-  backupMethod: 'local' | 'gdrive' | 'github' | 'gitlab' | 'box';
-  onMethodChange: (method: 'local' | 'gdrive' | 'github' | 'gitlab' | 'box') => void;
+  backupMethod: 'local' | 'gdrive' | 'github' | 'gitlab' | 'box' | 'onedrive';
+  onMethodChange: (method: 'local' | 'gdrive' | 'github' | 'gitlab' | 'box' | 'onedrive') => void;
   password: string;
   onPasswordChange: (password: string) => void;
   confirmPassword: string;
@@ -46,6 +82,14 @@ interface BackupModalProps {
   onBoxDisconnect: () => void;
   onBoxBackup: () => void;
   onBoxRestore: () => void;
+  onedriveConnected: boolean;
+  onedriveConnecting: boolean;
+  onedriveBackupInfo: { exists: boolean; metadata?: any } | null;
+  onedriveUser: { displayName: string; mail?: string; userPrincipalName: string } | null;
+  onOneDriveConnect: () => void;
+  onOneDriveDisconnect: () => void;
+  onOneDriveBackup: () => void;
+  onOneDriveRestore: () => void;
   t: (key: any) => string;
 }
 
@@ -93,9 +137,19 @@ export const BackupModal: React.FC<BackupModalProps> = ({
   onBoxDisconnect,
   onBoxBackup,
   onBoxRestore,
+  onedriveConnected,
+  onedriveConnecting,
+  onedriveBackupInfo,
+  onedriveUser,
+  onOneDriveConnect,
+  onOneDriveDisconnect,
+  onOneDriveBackup,
+  onOneDriveRestore,
   t
 }) => {
   const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   // Listen for file selection events to update UI
   useEffect(() => {
@@ -142,6 +196,12 @@ export const BackupModal: React.FC<BackupModalProps> = ({
         onBoxBackup();
       } else {
         onBoxRestore();
+      }
+    } else if (backupMethod === 'onedrive') {
+      if (mode === 'create') {
+        onOneDriveBackup();
+      } else {
+        onOneDriveRestore();
       }
     } else if (backupMethod === 'local') {
       if (mode === 'create') {
@@ -269,7 +329,22 @@ export const BackupModal: React.FC<BackupModalProps> = ({
               <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M2 5.5C2 4.67 2.67 4 3.5 4h17c.83 0 1.5.67 1.5 1.5v13c0 .83-.67 1.5-1.5 1.5h-17c-.83 0-1.5-.67-1.5-1.5v-13zm2 1.5v11h16V7H4z"/>
               </svg>
-              Box.net
+              Box
+            </div>
+          </button>
+          <button
+            onClick={() => onMethodChange('onedrive')}
+            className={`flex-1 px-6 py-3 text-sm font-medium transition ${
+              backupMethod === 'onedrive'
+                ? 'text-teal-400 border-b-2 border-teal-400 bg-navy-800'
+                : 'text-gray-400 hover:text-white hover:bg-navy-800/50'
+            }`}
+          >
+            <div className="flex items-center justify-center gap-2">
+              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M10.084 9.357l4.392-2.537A5.502 5.502 0 0121.5 12.5c0 .556-.083 1.093-.237 1.598l-4.392 2.537a5.502 5.502 0 01-6.787-7.278zm-.616 1.067A5.48 5.48 0 009 12.5c0 .952.242 1.848.669 2.629L5.277 17.67a4.5 4.5 0 014.192-7.246zm.501 6.406A5.482 5.482 0 0014 18c2.071 0 3.89-1.146 4.831-2.837l4.392-2.537A4.5 4.5 0 0115.5 19.5H9a4.487 4.487 0 01-.031-3.67z"/>
+              </svg>
+              OneDrive
             </div>
           </button>
         </div>
@@ -338,12 +413,12 @@ export const BackupModal: React.FC<BackupModalProps> = ({
                 <label className="block text-sm font-medium text-gray-300 mb-2">
                   {t('backupPassword')}
                 </label>
-                <input
-                  type="password"
+                <PasswordInput
                   value={password}
-                  onChange={(e) => onPasswordChange(e.target.value)}
+                  onChange={onPasswordChange}
                   placeholder={mode === 'create' ? 'Strong password (10+ chars)...' : 'Enter password...'}
-                  className="w-full p-3 bg-navy-700 border border-navy-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  show={showPassword}
+                  onToggle={() => setShowPassword(!showPassword)}
                 />
               </div>
 
@@ -353,12 +428,12 @@ export const BackupModal: React.FC<BackupModalProps> = ({
                   <label className="block text-sm font-medium text-gray-300 mb-2">
                     {t('confirmPassword')}
                   </label>
-                  <input
-                    type="password"
+                  <PasswordInput
                     value={confirmPassword}
-                    onChange={(e) => onConfirmPasswordChange(e.target.value)}
+                    onChange={onConfirmPasswordChange}
                     placeholder="Confirm password..."
-                    className="w-full p-3 bg-navy-700 border border-navy-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                    show={showConfirmPassword}
+                    onToggle={() => setShowConfirmPassword(!showConfirmPassword)}
                   />
                 </div>
               )}
@@ -451,12 +526,12 @@ export const BackupModal: React.FC<BackupModalProps> = ({
                     <label className="block text-sm font-medium text-gray-300 mb-2">
                       {t('backupPassword')}
                     </label>
-                    <input
-                      type="password"
+                    <PasswordInput
                       value={password}
-                      onChange={(e) => onPasswordChange(e.target.value)}
+                      onChange={onPasswordChange}
                       placeholder={mode === 'create' ? 'Strong password (10+ chars)...' : 'Enter password...'}
-                      className="w-full p-3 bg-navy-700 border border-navy-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                      show={showPassword}
+                      onToggle={() => setShowPassword(!showPassword)}
                     />
                   </div>
 
@@ -466,12 +541,12 @@ export const BackupModal: React.FC<BackupModalProps> = ({
                       <label className="block text-sm font-medium text-gray-300 mb-2">
                         {t('confirmPassword')}
                       </label>
-                      <input
-                        type="password"
+                      <PasswordInput
                         value={confirmPassword}
-                        onChange={(e) => onConfirmPasswordChange(e.target.value)}
+                        onChange={onConfirmPasswordChange}
                         placeholder="Confirm password..."
-                        className="w-full p-3 bg-navy-700 border border-navy-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                        show={showConfirmPassword}
+                        onToggle={() => setShowConfirmPassword(!showConfirmPassword)}
                       />
                     </div>
                   )}
@@ -574,12 +649,12 @@ export const BackupModal: React.FC<BackupModalProps> = ({
                     <label className="block text-sm font-medium text-gray-300 mb-2">
                       {t('backupPassword')}
                     </label>
-                    <input
-                      type="password"
+                    <PasswordInput
                       value={password}
-                      onChange={(e) => onPasswordChange(e.target.value)}
+                      onChange={onPasswordChange}
                       placeholder={mode === 'create' ? 'Strong password (10+ chars)...' : 'Enter password...'}
-                      className="w-full p-3 bg-navy-700 border border-navy-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                      show={showPassword}
+                      onToggle={() => setShowPassword(!showPassword)}
                     />
                   </div>
 
@@ -589,12 +664,12 @@ export const BackupModal: React.FC<BackupModalProps> = ({
                       <label className="block text-sm font-medium text-gray-300 mb-2">
                         {t('confirmPassword')}
                       </label>
-                      <input
-                        type="password"
+                      <PasswordInput
                         value={confirmPassword}
-                        onChange={(e) => onConfirmPasswordChange(e.target.value)}
+                        onChange={onConfirmPasswordChange}
                         placeholder="Confirm password..."
-                        className="w-full p-3 bg-navy-700 border border-navy-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                        show={showConfirmPassword}
+                        onToggle={() => setShowConfirmPassword(!showConfirmPassword)}
                       />
                     </div>
                   )}
@@ -728,12 +803,12 @@ export const BackupModal: React.FC<BackupModalProps> = ({
                     <label className="block text-sm font-medium text-gray-300 mb-2">
                       {t('backupPassword')}
                     </label>
-                    <input
-                      type="password"
+                    <PasswordInput
                       value={password}
-                      onChange={(e) => onPasswordChange(e.target.value)}
+                      onChange={onPasswordChange}
                       placeholder={mode === 'create' ? 'Strong password (10+ chars)...' : 'Enter password...'}
-                      className="w-full p-3 bg-navy-700 border border-navy-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                      show={showPassword}
+                      onToggle={() => setShowPassword(!showPassword)}
                     />
                   </div>
 
@@ -743,12 +818,12 @@ export const BackupModal: React.FC<BackupModalProps> = ({
                       <label className="block text-sm font-medium text-gray-300 mb-2">
                         {t('confirmPassword')}
                       </label>
-                      <input
-                        type="password"
+                      <PasswordInput
                         value={confirmPassword}
-                        onChange={(e) => onConfirmPasswordChange(e.target.value)}
+                        onChange={onConfirmPasswordChange}
                         placeholder="Confirm password..."
-                        className="w-full p-3 bg-navy-700 border border-navy-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                        show={showConfirmPassword}
+                        onToggle={() => setShowConfirmPassword(!showConfirmPassword)}
                       />
                     </div>
                   )}
@@ -851,12 +926,12 @@ export const BackupModal: React.FC<BackupModalProps> = ({
                     <label className="block text-sm font-medium text-gray-300 mb-2">
                       {t('backupPassword')}
                     </label>
-                    <input
-                      type="password"
+                    <PasswordInput
                       value={password}
-                      onChange={(e) => onPasswordChange(e.target.value)}
+                      onChange={onPasswordChange}
                       placeholder={mode === 'create' ? 'Strong password (10+ chars)...' : 'Enter password...'}
-                      className="w-full p-3 bg-navy-700 border border-navy-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                      show={showPassword}
+                      onToggle={() => setShowPassword(!showPassword)}
                     />
                   </div>
 
@@ -866,12 +941,12 @@ export const BackupModal: React.FC<BackupModalProps> = ({
                       <label className="block text-sm font-medium text-gray-300 mb-2">
                         {t('confirmPassword')}
                       </label>
-                      <input
-                        type="password"
+                      <PasswordInput
                         value={confirmPassword}
-                        onChange={(e) => onConfirmPasswordChange(e.target.value)}
+                        onChange={onConfirmPasswordChange}
                         placeholder="Confirm password..."
-                        className="w-full p-3 bg-navy-700 border border-navy-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                        show={showConfirmPassword}
+                        onToggle={() => setShowConfirmPassword(!showConfirmPassword)}
                       />
                     </div>
                   )}
@@ -900,6 +975,131 @@ export const BackupModal: React.FC<BackupModalProps> = ({
                     <div className="p-3 bg-orange-500/10 border border-orange-500/30 rounded-lg">
                       <p className="text-xs text-orange-400">
                         🔐 {t('boxPasswordWarning') || 'Use the same password you used when creating the backup'}
+                      </p>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
+          {/* OneDrive Backup Tab */}
+          {backupMethod === 'onedrive' && (
+            <div className="space-y-4">
+              {/* Connection Status */}
+              <div className={`p-4 rounded-lg border ${
+                onedriveConnected 
+                  ? 'bg-green-500/10 border-green-500/30' 
+                  : 'bg-gray-500/10 border-gray-500/30'
+              }`}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <svg className={`w-5 h-5 ${onedriveConnected ? 'text-green-400' : 'text-gray-400'}`} fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M10.084 9.357l4.392-2.537A5.502 5.502 0 0121.5 12.5c0 .556-.083 1.093-.237 1.598l-4.392 2.537a5.502 5.502 0 01-6.787-7.278zm-.616 1.067A5.48 5.48 0 009 12.5c0 .952.242 1.848.669 2.629L5.277 17.67a4.5 4.5 0 014.192-7.246zm.501 6.406A5.482 5.482 0 0014 18c2.071 0 3.89-1.146 4.831-2.837l4.392-2.537A4.5 4.5 0 0115.5 19.5H9a4.487 4.487 0 01-.031-3.67z"/>
+                    </svg>
+                    <div>
+                      <p className="text-sm font-medium text-white">
+                        {onedriveConnected 
+                          ? (onedriveUser ? `${onedriveUser.displayName} (${onedriveUser.mail || onedriveUser.userPrincipalName})` : t('onedriveConnected') || 'Connected to OneDrive')
+                          : 'Not Connected'}
+                      </p>
+                      {onedriveBackupInfo?.exists && (
+                        <p className="text-xs text-gray-400 mt-0.5">
+                          {t('onedriveLastBackup') || 'Last backup'}: {onedriveBackupInfo.metadata?.modified_at ? new Date(onedriveBackupInfo.metadata.modified_at).toLocaleString() : 'Unknown'}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  {onedriveConnected ? (
+                    <button
+                      onClick={onOneDriveDisconnect}
+                      className="px-3 py-1.5 text-xs bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg transition"
+                    >
+                      {t('onedriveDisconnect') || 'Disconnect'}
+                    </button>
+                  ) : (
+                    <button
+                      onClick={onOneDriveConnect}
+                      disabled={onedriveConnecting}
+                      className="px-3 py-1.5 text-xs bg-teal-600 hover:bg-teal-700 text-white rounded-lg transition flex items-center gap-1"
+                    >
+                      {onedriveConnecting ? (
+                        <>
+                          <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                          {t('onedriveConnecting') || 'Connecting...'}
+                        </>
+                      ) : (
+                        t('onedriveConnect') || 'Connect to OneDrive'
+                      )}
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {!onedriveConnected && (
+                <div className="p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+                  <p className="text-xs text-blue-400">
+                    💡 {t('onedriveAuthPrompt') || 'Click "Connect to OneDrive" to authenticate with your Microsoft account using OAuth.'}
+                  </p>
+                </div>
+              )}
+
+              {onedriveConnected && (
+                <>
+                  {/* Password Input */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      {t('backupPassword')}
+                    </label>
+                    <PasswordInput
+                      value={password}
+                      onChange={onPasswordChange}
+                      placeholder={mode === 'create' ? 'Strong password (10+ chars)...' : 'Enter password...'}
+                      show={showPassword}
+                      onToggle={() => setShowPassword(!showPassword)}
+                    />
+                  </div>
+
+                  {/* Confirm Password */}
+                  {mode === 'create' && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-2">
+                        {t('confirmPassword')}
+                      </label>
+                      <PasswordInput
+                        value={confirmPassword}
+                        onChange={onConfirmPasswordChange}
+                        placeholder="Confirm password..."
+                        show={showConfirmPassword}
+                        onToggle={() => setShowConfirmPassword(!showConfirmPassword)}
+                      />
+                    </div>
+                  )}
+
+                  {/* Security Warning */}
+                  <div className="p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
+                    <p className="text-xs text-yellow-400">
+                      ⚠️ {t('onedriveSecurityWarning') || 'OneDrive only stores encrypted data. We cannot recover your password or your backup.'}
+                    </p>
+                  </div>
+
+                  {/* Password Requirements */}
+                  {mode === 'create' && (
+                    <div className="p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+                      <p className="text-xs font-semibold text-blue-400 mb-1">{t('passwordRequirements') || 'Password Requirements'}:</p>
+                      <ul className="text-xs text-blue-400 space-y-0.5 list-disc list-inside">
+                        <li>At least 10 characters</li>
+                        <li>Mix of uppercase and lowercase</li>
+                        <li>Include numbers</li>
+                        <li>Include special characters</li>
+                      </ul>
+                    </div>
+                  )}
+
+                  {mode === 'restore' && (
+                    <div className="p-3 bg-orange-500/10 border border-orange-500/30 rounded-lg">
+                      <p className="text-xs text-orange-400">
+                        🔐 {t('onedrivePasswordWarning') || 'Use the same password you used when creating the backup'}
                       </p>
                     </div>
                   )}
@@ -946,7 +1146,8 @@ export const BackupModal: React.FC<BackupModalProps> = ({
               !password ||
               (backupMethod === 'gitlab' && !gitlabConnected) ||
               (backupMethod === 'github' && !githubUser) ||
-              (backupMethod === 'box' && !boxConnected)
+              (backupMethod === 'box' && !boxConnected) ||
+              (backupMethod === 'onedrive' && !onedriveConnected)
             }
             className={`px-5 py-2.5 font-medium rounded-lg transition flex items-center gap-2 ${
               mode === 'create'
@@ -964,14 +1165,14 @@ export const BackupModal: React.FC<BackupModalProps> = ({
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
                 </svg>
-                {backupMethod === 'box' ? (t('boxBackupTo') || 'Backup to Box') : backupMethod === 'gitlab' ? t('gitlabBackupTo') : backupMethod === 'github' ? t('pushBackup') : t('createBackup')}
+                {backupMethod === 'onedrive' ? (t('onedriveBackupTo') || 'Backup to OneDrive') : backupMethod === 'box' ? (t('boxBackupTo') || 'Backup to Box') : backupMethod === 'gitlab' ? t('gitlabBackupTo') : backupMethod === 'github' ? t('pushBackup') : t('createBackup')}
               </>
             ) : (
               <>
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                 </svg>
-                {backupMethod === 'box' ? (t('boxRestoreFrom') || 'Restore from Box') : backupMethod === 'gitlab' ? t('gitlabRestoreFrom') : backupMethod === 'github' ? t('pullBackup') : t('restoreBackup')}
+                {backupMethod === 'onedrive' ? (t('onedriveRestoreFrom') || 'Restore from OneDrive') : backupMethod === 'box' ? (t('boxRestoreFrom') || 'Restore from Box') : backupMethod === 'gitlab' ? t('gitlabRestoreFrom') : backupMethod === 'github' ? t('pullBackup') : t('restoreBackup')}
               </>
             )}
           </button>

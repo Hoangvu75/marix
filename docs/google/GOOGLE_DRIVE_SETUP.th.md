@@ -1,123 +1,118 @@
-# คู่มือตั้งค่าการสำรองข้อมูล Google Drive
+# คู่มือการตั้งค่าการสำรองข้อมูล Google Drive
 
-> **ภาษา**: [🇺🇸 English](GOOGLE_DRIVE_SETUP.en.md) | [🇻🇳 Tiếng Việt](GOOGLE_DRIVE_SETUP.vi.md) | [🇮🇩 Bahasa Indonesia](GOOGLE_DRIVE_SETUP.id.md) | [🇨🇳 中文](GOOGLE_DRIVE_SETUP.zh.md) | [🇰🇷 한국어](GOOGLE_DRIVE_SETUP.ko.md) | [🇯🇵 日本語](GOOGLE_DRIVE_SETUP.ja.md) | [🇫🇷 Français](GOOGLE_DRIVE_SETUP.fr.md) | [🇩🇪 Deutsch](GOOGLE_DRIVE_SETUP.de.md) | [🇪🇸 Español](GOOGLE_DRIVE_SETUP.es.md) | [🇹🇭 ภาษาไทย](GOOGLE_DRIVE_SETUP.th.md) | [🇲🇾 Bahasa Melayu](GOOGLE_DRIVE_SETUP.ms.md) | [🇷🇺 Русский](GOOGLE_DRIVE_SETUP.ru.md) | [🇵🇭 Filipino](GOOGLE_DRIVE_SETUP.fil.md) | [🇧🇷 Português](GOOGLE_DRIVE_SETUP.pt.md) [🇺🇸 English](GOOGLE_DRIVE_SETUP.en.md) | [🇻🇳 Tiếng Việt](GOOGLE_DRIVE_SETUP.vi.md) | [🇮🇩 Bahasa Indonesia](GOOGLE_DRIVE_SETUP.id.md) | [🇨🇳 中文](GOOGLE_DRIVE_SETUP.zh.md) | [🇰🇷 한국어](GOOGLE_DRIVE_SETUP.ko.md) | [🇯🇵 日本語](GOOGLE_DRIVE_SETUP.ja.md) | [🇫🇷 Français](GOOGLE_DRIVE_SETUP.fr.md) | [🇩🇪 Deutsch](GOOGLE_DRIVE_SETUP.de.md) | [🇪🇸 Español](GOOGLE_DRIVE_SETUP.es.md) | [🇹🇭 ภาษาไทย](GOOGLE_DRIVE_SETUP.th.md) | [🇲🇾 Bahasa Melayu](GOOGLE_DRIVE_SETUP.ms.md) | [🇷🇺 Русский](GOOGLE_DRIVE_SETUP.ru.md) | [🇵🇭 Filipino](GOOGLE_DRIVE_SETUP.fil.md) | [🇧🇷 Português](GOOGLE_DRIVE_SETUP.pt.md)
+> **ภาษา**: [🇺🇸 English](GOOGLE_DRIVE_SETUP.en.md) | [🇻🇳 Tiếng Việt](GOOGLE_DRIVE_SETUP.vi.md) | [🇮🇩 Bahasa Indonesia](GOOGLE_DRIVE_SETUP.id.md) | [🇨🇳 中文](GOOGLE_DRIVE_SETUP.zh.md) | [🇰🇷 한국어](GOOGLE_DRIVE_SETUP.ko.md) | [🇯🇵 日本語](GOOGLE_DRIVE_SETUP.ja.md) | [🇫🇷 Français](GOOGLE_DRIVE_SETUP.fr.md) | [🇩🇪 Deutsch](GOOGLE_DRIVE_SETUP.de.md) | [🇪🇸 Español](GOOGLE_DRIVE_SETUP.es.md) | [🇹🇭 ภาษาไทย](GOOGLE_DRIVE_SETUP.th.md) | [🇲🇾 Bahasa Melayu](GOOGLE_DRIVE_SETUP.ms.md) | [🇷🇺 Русский](GOOGLE_DRIVE_SETUP.ru.md) | [🇵🇭 Filipino](GOOGLE_DRIVE_SETUP.fil.md) | [🇧🇷 Português](GOOGLE_DRIVE_SETUP.pt.md)
 
 ---
 
-## ขั้นตอนที่ 1: สร้างโปรเจกต์ Google Cloud
+## ขั้นตอนที่ 1: สร้างโครงการ Google Cloud
 
-1. Go to [Google Cloud Console](https://console.cloud.google.com/)
-2. Click **"New Project"** in the top right corner
-3. Name your project: `Marix SSH Client` or any name you prefer
-4. Click **"Create"**
+1. ไปที่ [Google Cloud Console](https://console.cloud.google.com/)
+2. คลิก **"โครงการใหม่"** ที่มุมขวาบน
+3. ตั้งชื่อโครงการ: `Marix SSH Client` หรือชื่อที่คุณต้องการ
+4. คลิก **"สร้าง"**
 
 ## ขั้นตอนที่ 2: เปิดใช้งาน Google Drive API
 
-1. In your newly created project, go to **"APIs & Services"** > **"Library"**
-2. Search for **"Google Drive API"**
-3. Click on the result and press **"Enable"**
+1. ในโครงการที่เพิ่งสร้าง ไปที่ **"API และบริการ"** > **"ไลบรารี"**
+2. ค้นหา **"Google Drive API"**
+3. คลิกที่ผลลัพธ์และกด **"เปิดใช้งาน"**
 
-## ขั้นตอนที่ 3: สร้างข้อมูลรับรอง OAuth 2.0
+## ขั้นตอนที่ 3: สร้างข้อมูลประจำตัว OAuth 2.0
 
-### 3.1. ตั้งค่าหน้าจอความยินยอม OAuth
+### 3.1. กำหนดค่าหน้าจอความยินยอม OAuth
 
-1. Go to **"APIs & Services"** > **"OAuth consent screen"**
-2. Select **"External"** (allows any Google account user)
-3. Click **"Create"**
+1. ไปที่ **"API และบริการ"** > **"หน้าจอความยินยอม OAuth"**
+2. เลือก **"ภายนอก"** (อนุญาตผู้ใช้บัญชี Google ทุกคน)
+3. คลิก **"สร้าง"**
 
-**App information:**
-- App name: `Marix SSH Client`
-- User support email: `your-email@gmail.com`
-- App logo: (optional) upload your logo
-- Application home page: `https://github.com/marixdev/marix`
-- Application privacy policy link: (optional)
-- Application terms of service link: (optional)
+**ข้อมูลแอป:**
+- ชื่อแอป: `Marix SSH Client`
+- อีเมลสนับสนุนผู้ใช้: `your-email@gmail.com`
+- โลโก้แอป: (ไม่บังคับ)
+- หน้าแรกของแอปพลิเคชัน: `https://github.com/marixdev/marix`
 
-**Developer contact information:**
-- Email addresses: `your-email@gmail.com`
+**ข้อมูลติดต่อนักพัฒนา:**
+- ที่อยู่อีเมล: `your-email@gmail.com`
 
-4. Click **"Save and Continue"**
+4. คลิก **"บันทึกและดำเนินการต่อ"**
 
-**Scopes:**
-5. Click **"Add or Remove Scopes"**
-6. Find and select the following scope:
-   - `https://www.googleapis.com/auth/drive.file` (only files created by this app)
-7. Click **"Update"** and **"Save and Continue"**
-
-**Test users:** (only needed when Publishing status = Testing)
-8. Click **"Add Users"**
-9. Enter Google account emails for testing
-10. Click **"Save and Continue"**
-
-11. Review and click **"Back to Dashboard"**
+**ขอบเขต:**
+5. คลิก **"เพิ่มหรือลบขอบเขต"**
+6. ค้นหาและเลือก:
+   - `https://www.googleapis.com/auth/drive.file`
+7. คลิก **"อัปเดต"** และ **"บันทึกและดำเนินการต่อ"**
 
 ### 3.2. สร้าง OAuth Client ID
 
-1. Go to **"APIs & Services"** > **"Credentials"**
-2. Click **"Create Credentials"** > **"OAuth client ID"**
-3. Select **"Desktop app"** (for Electron app)
-4. Name it: `Marix Desktop Client`
-5. Click **"Create"**
+1. ไปที่ **"API และบริการ"** > **"ข้อมูลประจำตัว"**
+2. คลิก **"สร้างข้อมูลประจำตัว"** > **"OAuth client ID"**
+3. เลือก **"แอปเดสก์ท็อป"**
+4. ตั้งชื่อ: `Marix Desktop Client`
+5. คลิก **"สร้าง"**
 
-6. **Copy Client ID**: Click the copy icon to copy your Client ID
-   - You only need the `client_id` - no client secret required (using PKCE)
-   - Create file `google-credentials.json` in `src/main/services/`
-
-7. **Save Client ID** (client_secret is NOT required with PKCE):
+6. **ดาวน์โหลดไฟล์ JSON**: คลิกไอคอนดาวน์โหลด
+7. **สำหรับการพัฒนาในเครื่อง**: สร้าง `google-credentials.json` ใน `src/main/services/`:
 ```json
 {
   "installed": {
-    "client_id": "YOUR_CLIENT_ID.apps.googleusercontent.com"
+    "client_id": "YOUR_CLIENT_ID.apps.googleusercontent.com",
+    "client_secret": "YOUR_CLIENT_SECRET"
   }
 }
 ```
 
-## ขั้นตอนที่ 4: ตั้งค่าใน Marix
+8. **สำหรับ CI/CD builds**: ใช้ GitHub Secrets (ดูด้านล่าง)
 
-1. Copy the `google-credentials.json` file into `src/main/services/` folder
-2. **IMPORTANT**: Add to `.gitignore`:
+## ขั้นตอนที่ 4: กำหนดค่าใน Marix
+
+### ตัวเลือก A: การพัฒนาในเครื่อง
+
+1. คัดลอกไฟล์ `google-credentials.json` ไปยังโฟลเดอร์ `src/main/services/`
+2. **สำคัญ**: เพิ่มใน `.gitignore`:
 ```
 src/main/services/google-credentials.json
 ```
 
-3. The app will automatically load credentials on startup
+### ตัวเลือก B: CI/CD ด้วย GitHub Secrets (แนะนำ)
+
+1. ไปที่ GitHub repository → **Settings** → **Secrets and variables** → **Actions**
+2. เพิ่ม secrets เหล่านี้:
+   - `GOOGLE_CLIENT_ID`: OAuth Client ID ของคุณ
+   - `GOOGLE_CLIENT_SECRET`: OAuth Client Secret ของคุณ
+3. workflow จะ inject credentials โดยอัตโนมัติระหว่าง build
 
 ## ขั้นตอนที่ 5: ทดสอบ OAuth Flow
 
-1. Open Marix app
-2. Go to **Settings** > **Backup & Restore** > **Create/Restore Backup**
-3. Select the **"Google Drive"** tab
-4. Click **"Connect to Google Drive"**
-5. Browser will open with Google OAuth screen
-6. Select your Google account and grant permissions
-7. App will receive the token and display "Connected"
+1. เปิดแอป Marix
+2. ไปที่ **การตั้งค่า** > **สำรองและกู้คืน**
+3. เลือกแท็บ **"Google Drive"**
+4. คลิก **"เชื่อมต่อกับ Google Drive"**
+5. เบราว์เซอร์จะเปิดพร้อมหน้าจอ OAuth ของ Google
+6. เลือกบัญชี Google ของคุณและให้สิทธิ์
+7. แอปจะได้รับ token และแสดง "เชื่อมต่อแล้ว"
 
 ## หมายเหตุด้านความปลอดภัย
 
-- **DO NOT** commit `google-credentials.json` to Git
-- Refresh tokens are stored in Electron store (encrypted)
-- Only request minimal necessary permissions
-- PKCE is used for secure OAuth flow (no client secret needed)
+- **อย่า** commit `google-credentials.json` ไปยัง Git
+- ใช้ **GitHub Secrets** สำหรับ CI/CD builds เพื่อปกป้อง client_secret
+- Refresh tokens ถูกเก็บใน Electron store (เข้ารหัส)
+- PKCE ใช้สำหรับความปลอดภัย OAuth เพิ่มเติม
 
 ## เผยแพร่แอป (จำเป็น)
 
-เพื่ออนุญาตให้ผู้ใช้ทั้งหมดใช้งานแอป:
-
-1. Go to **OAuth consent screen**
-2. Click **"Publish App"**
+1. ไปที่ **หน้าจอความยินยอม OAuth**
+2. คลิก **"เผยแพร่แอป"**
 3. แอปของคุณจะได้รับการอนุมัติทันที
-4. ใครก็สามารถใช้งานได้โดยไม่มีคำเตือน "unverified app"
+4. ทุกคนสามารถใช้ได้โดยไม่มีคำเตือน "แอปที่ไม่ได้รับการยืนยัน"
 
 ## การแก้ไขปัญหา
 
-### Error: "Access blocked: This app's request is invalid"
-- Check that OAuth consent screen is fully configured
-- Ensure redirect_uri matches your settings
+### ข้อผิดพลาด: "Access blocked: This app's request is invalid"
+- ตรวจสอบว่าหน้าจอความยินยอม OAuth ได้รับการกำหนดค่าอย่างสมบูรณ์
 
-### Error: "The OAuth client was not found"
-- Verify Client ID in credentials file
-- Re-download JSON file from Google Cloud Console
+### ข้อผิดพลาด: "The OAuth client was not found"
+- ตรวจสอบ Client ID ในไฟล์ข้อมูลประจำตัว
+- ดาวน์โหลดไฟล์ JSON อีกครั้งจาก Google Cloud Console
 
-### Error: "Access denied"
-- User denied permission grant
-- Add appropriate scopes in OAuth consent screen
+### ข้อผิดพลาด: "Access denied"
+- ผู้ใช้ปฏิเสธการให้สิทธิ์

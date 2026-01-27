@@ -1,123 +1,118 @@
-# Guia de configuração de backup do Google Drive
+# Guia de Configuração de Backup do Google Drive
 
-> **Idiomas**: [🇺🇸 English](GOOGLE_DRIVE_SETUP.en.md) | [🇻🇳 Tiếng Việt](GOOGLE_DRIVE_SETUP.vi.md) | [🇮🇩 Bahasa Indonesia](GOOGLE_DRIVE_SETUP.id.md) | [🇨🇳 中文](GOOGLE_DRIVE_SETUP.zh.md) | [🇰🇷 한국어](GOOGLE_DRIVE_SETUP.ko.md) | [🇯🇵 日本語](GOOGLE_DRIVE_SETUP.ja.md) | [🇫🇷 Français](GOOGLE_DRIVE_SETUP.fr.md) | [🇩🇪 Deutsch](GOOGLE_DRIVE_SETUP.de.md) | [🇪🇸 Español](GOOGLE_DRIVE_SETUP.es.md) | [🇹🇭 ภาษาไทย](GOOGLE_DRIVE_SETUP.th.md) | [🇲🇾 Bahasa Melayu](GOOGLE_DRIVE_SETUP.ms.md) | [🇷🇺 Русский](GOOGLE_DRIVE_SETUP.ru.md) | [🇵🇭 Filipino](GOOGLE_DRIVE_SETUP.fil.md) | [🇧🇷 Português](GOOGLE_DRIVE_SETUP.pt.md) [🇺🇸 English](GOOGLE_DRIVE_SETUP.en.md) | [🇻🇳 Tiếng Việt](GOOGLE_DRIVE_SETUP.vi.md) | [🇮🇩 Bahasa Indonesia](GOOGLE_DRIVE_SETUP.id.md) | [🇨🇳 中文](GOOGLE_DRIVE_SETUP.zh.md) | [🇰🇷 한국어](GOOGLE_DRIVE_SETUP.ko.md) | [🇯🇵 日本語](GOOGLE_DRIVE_SETUP.ja.md) | [🇫🇷 Français](GOOGLE_DRIVE_SETUP.fr.md) | [🇩🇪 Deutsch](GOOGLE_DRIVE_SETUP.de.md) | [🇪🇸 Español](GOOGLE_DRIVE_SETUP.es.md) | [🇹🇭 ภาษาไทย](GOOGLE_DRIVE_SETUP.th.md) | [🇲🇾 Bahasa Melayu](GOOGLE_DRIVE_SETUP.ms.md) | [🇷🇺 Русский](GOOGLE_DRIVE_SETUP.ru.md) | [🇵🇭 Filipino](GOOGLE_DRIVE_SETUP.fil.md) | [🇧🇷 Português](GOOGLE_DRIVE_SETUP.pt.md)
+> **Idiomas**: [🇺🇸 English](GOOGLE_DRIVE_SETUP.en.md) | [🇻🇳 Tiếng Việt](GOOGLE_DRIVE_SETUP.vi.md) | [🇮🇩 Bahasa Indonesia](GOOGLE_DRIVE_SETUP.id.md) | [🇨🇳 中文](GOOGLE_DRIVE_SETUP.zh.md) | [🇰🇷 한국어](GOOGLE_DRIVE_SETUP.ko.md) | [🇯🇵 日本語](GOOGLE_DRIVE_SETUP.ja.md) | [🇫🇷 Français](GOOGLE_DRIVE_SETUP.fr.md) | [🇩🇪 Deutsch](GOOGLE_DRIVE_SETUP.de.md) | [🇪🇸 Español](GOOGLE_DRIVE_SETUP.es.md) | [🇹🇭 ภาษาไทย](GOOGLE_DRIVE_SETUP.th.md) | [🇲🇾 Bahasa Melayu](GOOGLE_DRIVE_SETUP.ms.md) | [🇷🇺 Русский](GOOGLE_DRIVE_SETUP.ru.md) | [🇵🇭 Filipino](GOOGLE_DRIVE_SETUP.fil.md) | [🇧🇷 Português](GOOGLE_DRIVE_SETUP.pt.md)
 
 ---
 
-## Passo 1: Criar projeto do Google Cloud
+## Passo 1: Criar Projeto do Google Cloud
 
-1. Go to [Google Cloud Console](https://console.cloud.google.com/)
-2. Click **"New Project"** in the top right corner
-3. Name your project: `Marix SSH Client` or any name you prefer
-4. Click **"Create"**
+1. Acesse [Google Cloud Console](https://console.cloud.google.com/)
+2. Clique em **"Novo Projeto"** no canto superior direito
+3. Nomeie seu projeto: `Marix SSH Client` ou qualquer nome que preferir
+4. Clique em **"Criar"**
 
 ## Passo 2: Ativar API do Google Drive
 
-1. In your newly created project, go to **"APIs & Services"** > **"Library"**
-2. Search for **"Google Drive API"**
-3. Click on the result and press **"Enable"**
+1. No seu projeto recém-criado, vá para **"APIs e Serviços"** > **"Biblioteca"**
+2. Pesquise **"Google Drive API"**
+3. Clique no resultado e pressione **"Ativar"**
 
-## Passo 3: Criar credenciais OAuth 2.0
+## Passo 3: Criar Credenciais OAuth 2.0
 
-### 3.1. Configurar tela de consentimento OAuth
+### 3.1. Configurar Tela de Consentimento OAuth
 
-1. Go to **"APIs & Services"** > **"OAuth consent screen"**
-2. Select **"External"** (allows any Google account user)
-3. Click **"Create"**
+1. Vá para **"APIs e Serviços"** > **"Tela de consentimento OAuth"**
+2. Selecione **"Externo"** (permite qualquer usuário de conta Google)
+3. Clique em **"Criar"**
 
-**App information:**
-- App name: `Marix SSH Client`
-- User support email: `your-email@gmail.com`
-- App logo: (optional) upload your logo
-- Application home page: `https://github.com/marixdev/marix`
-- Application privacy policy link: (optional)
-- Application terms of service link: (optional)
+**Informações do aplicativo:**
+- Nome do aplicativo: `Marix SSH Client`
+- E-mail de suporte ao usuário: `your-email@gmail.com`
+- Logo do aplicativo: (opcional)
+- Página inicial do aplicativo: `https://github.com/marixdev/marix`
 
-**Developer contact information:**
-- Email addresses: `your-email@gmail.com`
+**Informações de contato do desenvolvedor:**
+- Endereços de e-mail: `your-email@gmail.com`
 
-4. Click **"Save and Continue"**
+4. Clique em **"Salvar e continuar"**
 
-**Scopes:**
-5. Click **"Add or Remove Scopes"**
-6. Find and select the following scope:
-   - `https://www.googleapis.com/auth/drive.file` (only files created by this app)
-7. Click **"Update"** and **"Save and Continue"**
+**Escopos:**
+5. Clique em **"Adicionar ou remover escopos"**
+6. Encontre e selecione:
+   - `https://www.googleapis.com/auth/drive.file`
+7. Clique em **"Atualizar"** e **"Salvar e continuar"**
 
-**Test users:** (only needed when Publishing status = Testing)
-8. Click **"Add Users"**
-9. Enter Google account emails for testing
-10. Click **"Save and Continue"**
+### 3.2. Criar ID do Cliente OAuth
 
-11. Review and click **"Back to Dashboard"**
+1. Vá para **"APIs e Serviços"** > **"Credenciais"**
+2. Clique em **"Criar credenciais"** > **"ID do cliente OAuth"**
+3. Selecione **"Aplicativo para computador"**
+4. Nomeie: `Marix Desktop Client`
+5. Clique em **"Criar"**
 
-### 3.2. Criar ID do cliente OAuth
-
-1. Go to **"APIs & Services"** > **"Credentials"**
-2. Click **"Create Credentials"** > **"OAuth client ID"**
-3. Select **"Desktop app"** (for Electron app)
-4. Name it: `Marix Desktop Client`
-5. Click **"Create"**
-
-6. **Copy Client ID**: Click the copy icon to copy your Client ID
-   - You only need the `client_id` - no client secret required (using PKCE)
-   - Create file `google-credentials.json` in `src/main/services/`
-
-7. **Save Client ID** (client_secret is NOT required with PKCE):
+6. **Baixar arquivo JSON**: Clique no ícone de download
+7. **Para desenvolvimento local**: Crie `google-credentials.json` em `src/main/services/`:
 ```json
 {
   "installed": {
-    "client_id": "YOUR_CLIENT_ID.apps.googleusercontent.com"
+    "client_id": "YOUR_CLIENT_ID.apps.googleusercontent.com",
+    "client_secret": "YOUR_CLIENT_SECRET"
   }
 }
 ```
 
+8. **Para builds CI/CD**: Use GitHub Secrets (veja abaixo)
+
 ## Passo 4: Configurar no Marix
 
-1. Copy the `google-credentials.json` file into `src/main/services/` folder
-2. **IMPORTANT**: Add to `.gitignore`:
+### Opção A: Desenvolvimento Local
+
+1. Copie o arquivo `google-credentials.json` para a pasta `src/main/services/`
+2. **IMPORTANTE**: Adicione ao `.gitignore`:
 ```
 src/main/services/google-credentials.json
 ```
 
-3. The app will automatically load credentials on startup
+### Opção B: CI/CD com GitHub Secrets (Recomendado)
 
-## Passo 5: Testar fluxo OAuth
+1. Vá para seu repositório GitHub → **Settings** → **Secrets and variables** → **Actions**
+2. Adicione esses secrets:
+   - `GOOGLE_CLIENT_ID`: Seu OAuth Client ID
+   - `GOOGLE_CLIENT_SECRET`: Seu OAuth Client Secret
+3. O workflow de build injetará automaticamente as credenciais durante o build
 
-1. Open Marix app
-2. Go to **Settings** > **Backup & Restore** > **Create/Restore Backup**
-3. Select the **"Google Drive"** tab
-4. Click **"Connect to Google Drive"**
-5. Browser will open with Google OAuth screen
-6. Select your Google account and grant permissions
-7. App will receive the token and display "Connected"
+## Passo 5: Testar Fluxo OAuth
 
-## Notas de segurança
+1. Abra o aplicativo Marix
+2. Vá para **Configurações** > **Backup e Restauração**
+3. Selecione a aba **"Google Drive"**
+4. Clique em **"Conectar ao Google Drive"**
+5. O navegador abrirá com a tela OAuth do Google
+6. Selecione sua conta Google e conceda permissões
+7. O aplicativo receberá o token e exibirá "Conectado"
 
-- **DO NOT** commit `google-credentials.json` to Git
-- Refresh tokens are stored in Electron store (encrypted)
-- Only request minimal necessary permissions
-- PKCE is used for secure OAuth flow (no client secret needed)
+## Notas de Segurança
 
-## Publicar aplicativo (Obrigatório)
+- **NÃO** faça commit de `google-credentials.json` no Git
+- Use **GitHub Secrets** para builds CI/CD para proteger o client_secret
+- Tokens de atualização são armazenados no Electron store (criptografados)
+- PKCE é usado para segurança adicional do fluxo OAuth
 
-Para permitir que todos os usuários usem o aplicativo:
+## Publicar Aplicativo (Obrigatório)
 
-1. Go to **OAuth consent screen**
-2. Click **"Publish App"**
+1. Vá para **Tela de consentimento OAuth**
+2. Clique em **"Publicar aplicativo"**
 3. Seu aplicativo será aprovado imediatamente
-4. Qualquer pessoa pode usá-lo sem avisos de "unverified app"
+4. Qualquer pessoa pode usá-lo sem avisos de "aplicativo não verificado"
 
-## Solução de problemas
+## Solução de Problemas
 
-### Error: "Access blocked: This app's request is invalid"
-- Check that OAuth consent screen is fully configured
-- Ensure redirect_uri matches your settings
+### Erro: "Access blocked: This app's request is invalid"
+- Verifique se a tela de consentimento OAuth está totalmente configurada
 
-### Error: "The OAuth client was not found"
-- Verify Client ID in credentials file
-- Re-download JSON file from Google Cloud Console
+### Erro: "The OAuth client was not found"
+- Verifique o Client ID no arquivo de credenciais
+- Baixe novamente o arquivo JSON do Google Cloud Console
 
-### Error: "Access denied"
-- User denied permission grant
-- Add appropriate scopes in OAuth consent screen
+### Erro: "Access denied"
+- O usuário negou a concessão de permissão

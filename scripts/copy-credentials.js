@@ -16,6 +16,7 @@ const DIST_DIR = path.join(__dirname, '..', 'dist', 'main', 'services');
 const CREDENTIAL_FILES = [
   'google-credentials.json',
   'box-credentials.json',
+  'onedrive-credentials.json',
 ];
 
 // Ensure dist directory exists

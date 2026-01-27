@@ -2,6 +2,26 @@
 
 All notable changes to Marix SSH Client will be documented in this file.
 
+## [1.0.17] - 2026-01-27
+
+### Added
+- **Microsoft OneDrive Backup/Restore**: Full OneDrive integration for cloud backup
+  - OAuth2 with PKCE (RFC 7636) - no client_secret required
+  - Random port callback (RFC 8252) - same as Google Drive & GitLab
+  - Microsoft Graph API v1.0 for file operations
+  - Backup stored at `/Marix/backup.marix` in user's OneDrive
+  - Encrypted with Argon2id + AES-256-GCM before upload
+  - Setup guides in 14 languages (docs/onedrive/)
+
+- **Shortened Backup Tab Labels**: Prevent text wrapping in Backup & Restore modal
+  - "Local Backup" → "Local" / "Cục bộ" / "Lokal" etc.
+  - "Google Drive" unchanged
+  - Updated all 14 language files
+
+### Changed
+- **OneDrive OAuth**: Uses `consumers` tenant for personal Microsoft accounts
+- **Credentials**: OneDrive only needs `client_id` (no redirect_uri needed)
+
 ## [1.0.16] - 2026-01-26
 
 ### Added

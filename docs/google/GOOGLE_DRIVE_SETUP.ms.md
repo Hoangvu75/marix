@@ -1,123 +1,118 @@
 # Panduan Persediaan Sandaran Google Drive
 
-> **Bahasa**: [🇺🇸 English](GOOGLE_DRIVE_SETUP.en.md) | [🇻🇳 Tiếng Việt](GOOGLE_DRIVE_SETUP.vi.md) | [🇮🇩 Bahasa Indonesia](GOOGLE_DRIVE_SETUP.id.md) | [🇨🇳 中文](GOOGLE_DRIVE_SETUP.zh.md) | [🇰🇷 한국어](GOOGLE_DRIVE_SETUP.ko.md) | [🇯🇵 日本語](GOOGLE_DRIVE_SETUP.ja.md) | [🇫🇷 Français](GOOGLE_DRIVE_SETUP.fr.md) | [🇩🇪 Deutsch](GOOGLE_DRIVE_SETUP.de.md) | [🇪🇸 Español](GOOGLE_DRIVE_SETUP.es.md) | [🇹🇭 ภาษาไทย](GOOGLE_DRIVE_SETUP.th.md) | [🇲🇾 Bahasa Melayu](GOOGLE_DRIVE_SETUP.ms.md) | [🇷🇺 Русский](GOOGLE_DRIVE_SETUP.ru.md) | [🇵🇭 Filipino](GOOGLE_DRIVE_SETUP.fil.md) | [🇧🇷 Português](GOOGLE_DRIVE_SETUP.pt.md) [🇺🇸 English](GOOGLE_DRIVE_SETUP.en.md) | [🇻🇳 Tiếng Việt](GOOGLE_DRIVE_SETUP.vi.md) | [🇮🇩 Bahasa Indonesia](GOOGLE_DRIVE_SETUP.id.md) | [🇨🇳 中文](GOOGLE_DRIVE_SETUP.zh.md) | [🇰🇷 한국어](GOOGLE_DRIVE_SETUP.ko.md) | [🇯🇵 日本語](GOOGLE_DRIVE_SETUP.ja.md) | [🇫🇷 Français](GOOGLE_DRIVE_SETUP.fr.md) | [🇩🇪 Deutsch](GOOGLE_DRIVE_SETUP.de.md) | [🇪🇸 Español](GOOGLE_DRIVE_SETUP.es.md) | [🇹🇭 ภาษาไทย](GOOGLE_DRIVE_SETUP.th.md) | [🇲🇾 Bahasa Melayu](GOOGLE_DRIVE_SETUP.ms.md) | [🇷🇺 Русский](GOOGLE_DRIVE_SETUP.ru.md) | [🇵🇭 Filipino](GOOGLE_DRIVE_SETUP.fil.md) | [🇧🇷 Português](GOOGLE_DRIVE_SETUP.pt.md)
+> **Bahasa**: [🇺🇸 English](GOOGLE_DRIVE_SETUP.en.md) | [🇻🇳 Tiếng Việt](GOOGLE_DRIVE_SETUP.vi.md) | [🇮🇩 Bahasa Indonesia](GOOGLE_DRIVE_SETUP.id.md) | [🇨🇳 中文](GOOGLE_DRIVE_SETUP.zh.md) | [🇰🇷 한국어](GOOGLE_DRIVE_SETUP.ko.md) | [🇯🇵 日本語](GOOGLE_DRIVE_SETUP.ja.md) | [🇫🇷 Français](GOOGLE_DRIVE_SETUP.fr.md) | [🇩🇪 Deutsch](GOOGLE_DRIVE_SETUP.de.md) | [🇪🇸 Español](GOOGLE_DRIVE_SETUP.es.md) | [🇹🇭 ภาษาไทย](GOOGLE_DRIVE_SETUP.th.md) | [🇲🇾 Bahasa Melayu](GOOGLE_DRIVE_SETUP.ms.md) | [🇷🇺 Русский](GOOGLE_DRIVE_SETUP.ru.md) | [🇵🇭 Filipino](GOOGLE_DRIVE_SETUP.fil.md) | [🇧🇷 Português](GOOGLE_DRIVE_SETUP.pt.md)
 
 ---
 
-## Langkah 1: Cipta projek Google Cloud
+## Langkah 1: Cipta Projek Google Cloud
 
-1. Go to [Google Cloud Console](https://console.cloud.google.com/)
-2. Click **"New Project"** in the top right corner
-3. Name your project: `Marix SSH Client` or any name you prefer
-4. Click **"Create"**
+1. Pergi ke [Google Cloud Console](https://console.cloud.google.com/)
+2. Klik **"Projek Baharu"** di sudut kanan atas
+3. Namakan projek anda: `Marix SSH Client` atau mana-mana nama pilihan anda
+4. Klik **"Cipta"**
 
 ## Langkah 2: Aktifkan Google Drive API
 
-1. In your newly created project, go to **"APIs & Services"** > **"Library"**
-2. Search for **"Google Drive API"**
-3. Click on the result and press **"Enable"**
+1. Dalam projek baharu anda, pergi ke **"API & Perkhidmatan"** > **"Pustaka"**
+2. Cari **"Google Drive API"**
+3. Klik hasil dan tekan **"Aktifkan"**
 
-## Langkah 3: Cipta kelayakan OAuth 2.0
+## Langkah 3: Cipta Kredensial OAuth 2.0
 
-### 3.1. Konfigurasikan skrin persetujuan OAuth
+### 3.1. Konfigurasikan Skrin Persetujuan OAuth
 
-1. Go to **"APIs & Services"** > **"OAuth consent screen"**
-2. Select **"External"** (allows any Google account user)
-3. Click **"Create"**
+1. Pergi ke **"API & Perkhidmatan"** > **"Skrin persetujuan OAuth"**
+2. Pilih **"Luaran"** (membenarkan semua pengguna akaun Google)
+3. Klik **"Cipta"**
 
-**App information:**
-- App name: `Marix SSH Client`
-- User support email: `your-email@gmail.com`
-- App logo: (optional) upload your logo
-- Application home page: `https://github.com/marixdev/marix`
-- Application privacy policy link: (optional)
-- Application terms of service link: (optional)
+**Maklumat aplikasi:**
+- Nama aplikasi: `Marix SSH Client`
+- E-mel sokongan pengguna: `your-email@gmail.com`
+- Logo aplikasi: (pilihan)
+- Laman utama aplikasi: `https://github.com/marixdev/marix`
 
-**Developer contact information:**
-- Email addresses: `your-email@gmail.com`
+**Maklumat hubungan pembangun:**
+- Alamat e-mel: `your-email@gmail.com`
 
-4. Click **"Save and Continue"**
+4. Klik **"Simpan dan teruskan"**
 
-**Scopes:**
-5. Click **"Add or Remove Scopes"**
-6. Find and select the following scope:
-   - `https://www.googleapis.com/auth/drive.file` (only files created by this app)
-7. Click **"Update"** and **"Save and Continue"**
-
-**Test users:** (only needed when Publishing status = Testing)
-8. Click **"Add Users"**
-9. Enter Google account emails for testing
-10. Click **"Save and Continue"**
-
-11. Review and click **"Back to Dashboard"**
+**Skop:**
+5. Klik **"Tambah atau alih keluar skop"**
+6. Cari dan pilih:
+   - `https://www.googleapis.com/auth/drive.file`
+7. Klik **"Kemas kini"** dan **"Simpan dan teruskan"**
 
 ### 3.2. Cipta ID Klien OAuth
 
-1. Go to **"APIs & Services"** > **"Credentials"**
-2. Click **"Create Credentials"** > **"OAuth client ID"**
-3. Select **"Desktop app"** (for Electron app)
-4. Name it: `Marix Desktop Client`
-5. Click **"Create"**
+1. Pergi ke **"API & Perkhidmatan"** > **"Kredensial"**
+2. Klik **"Cipta kredensial"** > **"ID klien OAuth"**
+3. Pilih **"Aplikasi desktop"**
+4. Namakannya: `Marix Desktop Client`
+5. Klik **"Cipta"**
 
-6. **Copy Client ID**: Click the copy icon to copy your Client ID
-   - You only need the `client_id` - no client secret required (using PKCE)
-   - Create file `google-credentials.json` in `src/main/services/`
-
-7. **Save Client ID** (client_secret is NOT required with PKCE):
+6. **Muat turun fail JSON**: Klik ikon muat turun
+7. **Untuk pembangunan tempatan**: Cipta `google-credentials.json` dalam `src/main/services/`:
 ```json
 {
   "installed": {
-    "client_id": "YOUR_CLIENT_ID.apps.googleusercontent.com"
+    "client_id": "YOUR_CLIENT_ID.apps.googleusercontent.com",
+    "client_secret": "YOUR_CLIENT_SECRET"
   }
 }
 ```
 
+8. **Untuk CI/CD builds**: Gunakan GitHub Secrets (lihat di bawah)
+
 ## Langkah 4: Konfigurasikan dalam Marix
 
-1. Copy the `google-credentials.json` file into `src/main/services/` folder
-2. **IMPORTANT**: Add to `.gitignore`:
+### Pilihan A: Pembangunan Tempatan
+
+1. Salin fail `google-credentials.json` ke folder `src/main/services/`
+2. **PENTING**: Tambah ke `.gitignore`:
 ```
 src/main/services/google-credentials.json
 ```
 
-3. The app will automatically load credentials on startup
+### Pilihan B: CI/CD dengan GitHub Secrets (Disyorkan)
 
-## Langkah 5: Uji aliran OAuth
+1. Pergi ke repositori GitHub anda → **Settings** → **Secrets and variables** → **Actions**
+2. Tambah secrets ini:
+   - `GOOGLE_CLIENT_ID`: OAuth Client ID anda
+   - `GOOGLE_CLIENT_SECRET`: OAuth Client Secret anda
+3. Workflow build akan secara automatik menyuntik kredensial semasa build
 
-1. Open Marix app
-2. Go to **Settings** > **Backup & Restore** > **Create/Restore Backup**
-3. Select the **"Google Drive"** tab
-4. Click **"Connect to Google Drive"**
-5. Browser will open with Google OAuth screen
-6. Select your Google account and grant permissions
-7. App will receive the token and display "Connected"
+## Langkah 5: Uji Aliran OAuth
 
-## Nota keselamatan
+1. Buka aplikasi Marix
+2. Pergi ke **Tetapan** > **Sandaran & Pulihkan**
+3. Pilih tab **"Google Drive"**
+4. Klik **"Sambung ke Google Drive"**
+5. Pelayar akan dibuka dengan skrin OAuth Google
+6. Pilih akaun Google anda dan berikan kebenaran
+7. Aplikasi akan menerima token dan memaparkan "Disambungkan"
 
-- **DO NOT** commit `google-credentials.json` to Git
-- Refresh tokens are stored in Electron store (encrypted)
-- Only request minimal necessary permissions
-- PKCE is used for secure OAuth flow (no client secret needed)
+## Nota Keselamatan
 
-## Terbitkan aplikasi (Diperlukan)
+- **JANGAN** commit `google-credentials.json` ke Git
+- Gunakan **GitHub Secrets** untuk CI/CD builds untuk melindungi client_secret
+- Token muat semula disimpan dalam Electron store (disulitkan)
+- PKCE digunakan untuk keselamatan OAuth tambahan
 
-Untuk membenarkan semua pengguna menggunakan app:
+## Terbitkan Aplikasi (Diperlukan)
 
-1. Go to **OAuth consent screen**
-2. Click **"Publish App"**
-3. App anda akan diluluskan serta-merta
-4. Sesiapa sahaja boleh menggunakannya tanpa "unverified app" warnings
+1. Pergi ke **Skrin persetujuan OAuth**
+2. Klik **"Terbitkan aplikasi"**
+3. Aplikasi anda akan diluluskan serta-merta
+4. Sesiapa boleh menggunakannya tanpa amaran "aplikasi tidak disahkan"
 
-## Penyelesaian masalah
+## Penyelesaian Masalah
 
-### Error: "Access blocked: This app's request is invalid"
-- Check that OAuth consent screen is fully configured
-- Ensure redirect_uri matches your settings
+### Ralat: "Access blocked: This app's request is invalid"
+- Semak bahawa skrin persetujuan OAuth dikonfigurasi sepenuhnya
 
-### Error: "The OAuth client was not found"
-- Verify Client ID in credentials file
-- Re-download JSON file from Google Cloud Console
+### Ralat: "The OAuth client was not found"
+- Sahkan Client ID dalam fail kredensial
+- Muat turun semula fail JSON dari Google Cloud Console
 
-### Error: "Access denied"
-- User denied permission grant
-- Add appropriate scopes in OAuth consent screen
+### Ralat: "Access denied"
+- Pengguna menolak pemberian kebenaran

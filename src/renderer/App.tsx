@@ -111,7 +111,7 @@ const App: React.FC = () => {
   const [quickConnectOpen, setQuickConnectOpen] = useState(false);  // Quick connect dropdown
   const [quickConnectSearch, setQuickConnectSearch] = useState('');  // Quick connect search
   const [backupModalOpen, setBackupModalOpen] = useState<'create' | 'restore' | null>(null);  // Backup modal
-  const [backupMethod, setBackupMethod] = useState<'local' | 'gdrive' | 'github' | 'gitlab' | 'box'>('local');  // Backup method
+  const [backupMethod, setBackupMethod] = useState<'local' | 'gdrive' | 'github' | 'gitlab' | 'box' | 'onedrive'>('local');  // Backup method
   const [backupPassword, setBackupPassword] = useState('');  // Backup password
   const [backupConfirmPassword, setBackupConfirmPassword] = useState('');  // Confirm password
   const [backupError, setBackupError] = useState<string | null>(null);  // Backup error
@@ -127,6 +127,12 @@ const App: React.FC = () => {
   const [boxConnected, setBoxConnected] = useState(false);
   const [boxConnecting, setBoxConnecting] = useState(false);
   const [boxBackupInfo, setBoxBackupInfo] = useState<{ exists: boolean; metadata?: any } | null>(null);
+  
+  // OneDrive backup state
+  const [onedriveConnected, setOnedriveConnected] = useState(false);
+  const [onedriveConnecting, setOnedriveConnecting] = useState(false);
+  const [onedriveBackupInfo, setOnedriveBackupInfo] = useState<{ exists: boolean; metadata?: any } | null>(null);
+  const [onedriveUser, setOnedriveUser] = useState<{ displayName: string; mail?: string; userPrincipalName: string } | null>(null);
   
   // Google Drive backup states
   const [gdriveConnected, setGdriveConnected] = useState(false);
@@ -593,12 +599,14 @@ const App: React.FC = () => {
     });
   }, [t]);
 
-  // Check GitLab/Box/Google Drive connection when backup modal opens
+  // Check GitLab/Box/OneDrive/Google Drive connection when backup modal opens
   useEffect(() => {
     if (backupModalOpen && backupMethod === 'gitlab') {
       checkGitLabConnection();
     } else if (backupModalOpen && backupMethod === 'box') {
       checkBoxConnection();
+    } else if (backupModalOpen && backupMethod === 'onedrive') {
+      checkOnedriveConnection();
     } else if (backupModalOpen && backupMethod === 'gdrive') {
       checkGoogleDriveConnection();
     }
@@ -633,6 +641,27 @@ const App: React.FC = () => {
     } catch (err) {
       console.error('Failed to check Box connection:', err);
       setBoxConnected(false);
+    }
+  };
+
+  const checkOnedriveConnection = async () => {
+    try {
+      const result = await ipcRenderer.invoke('onedrive:hasToken');
+      setOnedriveConnected(result.hasToken);
+      
+      if (result.hasToken) {
+        // Get user info
+        const userResult = await ipcRenderer.invoke('onedrive:getUser');
+        if (userResult.success && userResult.user) {
+          setOnedriveUser(userResult.user);
+        }
+        // Check if backup exists
+        const backupCheck = await ipcRenderer.invoke('onedrive:checkBackup');
+        setOnedriveBackupInfo(backupCheck);
+      }
+    } catch (err) {
+      console.error('Failed to check OneDrive connection:', err);
+      setOnedriveConnected(false);
     }
   };
 
@@ -1184,6 +1213,150 @@ const App: React.FC = () => {
         }, 2000);
       } else {
         setBackupError(result.error || 'Failed to restore backup from Box');
+      }
+    } catch (err: any) {
+      setBackupError(err.message);
+    }
+    setBackupLoading(false);
+  };
+
+  // ==================== OneDrive Backup Handlers ====================
+
+  const handleOneDriveConnect = async () => {
+    setOnedriveConnecting(true);
+    setBackupError(null);
+    try {
+      const result = await ipcRenderer.invoke('onedrive:startOAuth');
+      if (result.success) {
+        setOnedriveConnected(true);
+        await checkOnedriveConnection();
+      } else {
+        setBackupError(result.error || 'Failed to connect to OneDrive');
+      }
+    } catch (err: any) {
+      setBackupError(err.message || 'Failed to connect to OneDrive');
+    }
+    setOnedriveConnecting(false);
+  };
+
+  const handleOneDriveDisconnect = async () => {
+    try {
+      await ipcRenderer.invoke('onedrive:logout');
+      setOnedriveConnected(false);
+      setOnedriveUser(null);
+      setOnedriveBackupInfo(null);
+    } catch (err: any) {
+      setBackupError(err.message);
+    }
+  };
+
+  const handleOneDriveBackup = async () => {
+    if (!backupPassword) {
+      setBackupError('Please enter a password');
+      return;
+    }
+    
+    // Validate password strength
+    const validation = await ipcRenderer.invoke('backup:validatePassword', backupPassword);
+    if (!validation.valid) {
+      setBackupError(validation.errors.join('\n'));
+      return;
+    }
+    
+    if (backupPassword !== backupConfirmPassword) {
+      setBackupError('Passwords do not match');
+      return;
+    }
+
+    setBackupLoading(true);
+    setBackupError(null);
+
+    try {
+      // Get TOTP entries, port forwards and snippets to include in backup
+      const totpEntriesStr = localStorage.getItem('totp_entries');
+      const totpEntries = totpEntriesStr ? JSON.parse(totpEntriesStr) : [];
+      
+      const portForwardsStr = localStorage.getItem('port_forwards');
+      const portForwards = portForwardsStr ? JSON.parse(portForwardsStr) : [];
+
+      const snippetsStr = localStorage.getItem('command_snippets');
+      const snippets = snippetsStr ? JSON.parse(snippetsStr) : [];
+
+      const result = await ipcRenderer.invoke('onedrive:uploadBackup', backupPassword, totpEntries, portForwards, snippets);
+      
+      if (result.success) {
+        setBackupSuccess('Backup uploaded to OneDrive successfully!');
+        setBackupPassword('');
+        setBackupConfirmPassword('');
+        await checkOnedriveConnection(); // Refresh backup info
+        setTimeout(() => {
+          setBackupModalOpen(null);
+          setBackupSuccess(null);
+        }, 2000);
+      } else {
+        setBackupError(result.error || 'Failed to upload backup');
+      }
+    } catch (err: any) {
+      setBackupError(err.message);
+    }
+    setBackupLoading(false);
+  };
+
+  const handleOneDriveRestore = async () => {
+    if (!backupPassword) {
+      setBackupError('Please enter a password');
+      return;
+    }
+
+    setBackupLoading(true);
+    setBackupError(null);
+
+    try {
+      const result = await ipcRenderer.invoke('onedrive:downloadBackup', backupPassword);
+      
+      if (result.success) {
+        // Reload servers and tags
+        await loadServers();
+        
+        // Restore 2FA TOTP entries if present
+        let totpCount = 0;
+        if (result.totpEntries && result.totpEntries.length > 0) {
+          localStorage.setItem('totp_entries', JSON.stringify(result.totpEntries));
+          totpCount = result.totpEntries.length;
+        }
+        
+        // Restore Port Forwards if present
+        let portForwardCount = 0;
+        if (result.portForwards && result.portForwards.length > 0) {
+          localStorage.setItem('port_forwards', JSON.stringify(result.portForwards));
+          portForwardCount = result.portForwards.length;
+        }
+        
+        // Restore Snippets if present
+        let snippetCount = 0;
+        if (result.snippets && result.snippets.length > 0) {
+          localStorage.setItem('command_snippets', JSON.stringify(result.snippets));
+          snippetCount = result.snippets.length;
+        }
+        
+        const serverCount = result.serverCount || 0;
+        const sshKeyCount = result.sshKeyCount || 0;
+        
+        let successMessage = `Backup restored from OneDrive!\n${serverCount} servers`;
+        if (sshKeyCount > 0) successMessage += `, ${sshKeyCount} SSH keys`;
+        if (totpCount > 0) successMessage += `, ${totpCount} 2FA entries`;
+        if (portForwardCount > 0) successMessage += `, ${portForwardCount} port forwards`;
+        if (snippetCount > 0) successMessage += `, ${snippetCount} snippets`;
+        successMessage += ' imported.';
+        
+        setBackupSuccess(successMessage);
+        setBackupPassword('');
+        setTimeout(() => {
+          setBackupModalOpen(null);
+          setBackupSuccess(null);
+        }, 2000);
+      } else {
+        setBackupError(result.error || 'Failed to restore backup from OneDrive');
       }
     } catch (err: any) {
       setBackupError(err.message);
@@ -6442,6 +6615,14 @@ const App: React.FC = () => {
           onBoxDisconnect={handleBoxDisconnect}
           onBoxBackup={handleBoxBackup}
           onBoxRestore={handleBoxRestore}
+          onedriveConnected={onedriveConnected}
+          onedriveConnecting={onedriveConnecting}
+          onedriveBackupInfo={onedriveBackupInfo}
+          onedriveUser={onedriveUser}
+          onOneDriveConnect={handleOneDriveConnect}
+          onOneDriveDisconnect={handleOneDriveDisconnect}
+          onOneDriveBackup={handleOneDriveBackup}
+          onOneDriveRestore={handleOneDriveRestore}
           t={t}
         />
       )}

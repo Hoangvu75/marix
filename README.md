@@ -200,6 +200,8 @@ Marix uses **auto-calibration** for Argon2id parameters—a widely-adopted best 
 </tr>
 </table>
 
+> **⚠️ Linux Users:** When upgrading, use `sudo dpkg -r marix` to uninstall the old version before installing the new one. Using Software Center may leave old files behind.
+
 ---
 
 ## ✨ Features

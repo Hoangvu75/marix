@@ -224,6 +224,7 @@ jobs:
             
             📋 **[View Full Changelog](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md)**
             🔒 **[Security Documentation](https://github.com/${{ github.repository }}/blob/main/SECURITY.md)**
+            💬 **[Join Our Discord](https://discord.gg/KSenHkCtN6)**
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -307,28 +308,36 @@ jobs:
           # Escape special characters for JSON
           ADDED=$(echo '${{ steps.changelog.outputs.added }}' | sed 's/"/\\"/g' | sed ':a;N;$!ba;s/\n/\\n/g')
           FIXED=$(echo '${{ steps.changelog.outputs.fixed }}' | sed 's/"/\\"/g' | sed ':a;N;$!ba;s/\n/\\n/g')
+          CHANGED=$(echo '${{ steps.changelog.outputs.changed }}' | sed 's/"/\\"/g' | sed ':a;N;$!ba;s/\n/\\n/g')
+          SECURITY=$(echo '${{ steps.changelog.outputs.security }}' | sed 's/"/\\"/g' | sed ':a;N;$!ba;s/\n/\\n/g')
           
           curl -H "Content-Type: application/json" \
             -X POST \
             -d "{
+              \"content\": \"# 🎉 Marix v${VERSION} Released!\\n\\nA new version of Marix SSH Client is now available!\\n\\n---\",
               \"embeds\": [{
-                \"title\": \"🎉 Marix v${VERSION} Released!\",
-                \"description\": \"A new version of Marix SSH Client is now available!\",
+                \"title\": \"📦 What's New in v${VERSION}\",
+                \"description\": \"*Released: $(date -u '+%Y-%m-%d %H:%M UTC')*\",
                 \"color\": 5814783,
                 \"fields\": [
                   {
-                    \"name\": \"✨ What's New\",
+                    \"name\": \"✨ Added\",
                     \"value\": \"${ADDED}\",
                     \"inline\": false
                   },
                   {
-                    \"name\": \"🐛 Bug Fixes\",
+                    \"name\": \"🐛 Fixed\",
                     \"value\": \"${FIXED}\",
                     \"inline\": false
                   },
                   {
-                    \"name\": \"📥 Downloads\",
-                    \"value\": \"🪟 [Windows](https://github.com/${{ github.repository }}/releases/download/${VERSION}/Marix.Setup.${VERSION}.exe)\\n🍎 [macOS Intel](https://github.com/${{ github.repository }}/releases/download/${VERSION}/Marix-${VERSION}-mac.zip)\\n🍎 [macOS ARM](https://github.com/${{ github.repository }}/releases/download/${VERSION}/Marix-${VERSION}-arm64-mac.zip)\\n🐧 [Linux AppImage](https://github.com/${{ github.repository }}/releases/download/${VERSION}/Marix-${VERSION}.AppImage)\\n🐧 [Linux DEB](https://github.com/${{ github.repository }}/releases/download/${VERSION}/marix_${VERSION}_amd64.deb)\\n🐧 [Linux RPM](https://github.com/${{ github.repository }}/releases/download/${VERSION}/marix-${VERSION}.x86_64.rpm)\",
+                    \"name\": \"🔄 Changed\",
+                    \"value\": \"${CHANGED}\",
+                    \"inline\": false
+                  },
+                  {
+                    \"name\": \"🔒 Security\",
+                    \"value\": \"${SECURITY}\",
                     \"inline\": false
                   }
                 ],
@@ -336,6 +345,46 @@ jobs:
                   \"text\": \"Marix - Your credentials never leave your device 🔐\"
                 },
                 \"timestamp\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",
+                \"url\": \"https://github.com/${{ github.repository }}/releases/tag/${VERSION}\"
+              },
+              {
+                \"title\": \"📥 Download Now\",
+                \"color\": 3066993,
+                \"fields\": [
+                  {
+                    \"name\": \"🪟 Windows\",
+                    \"value\": \"[Download EXE](https://github.com/${{ github.repository }}/releases/download/${VERSION}/Marix.Setup.${VERSION}.exe)\",
+                    \"inline\": true
+                  },
+                  {
+                    \"name\": \"🍎 macOS Intel\",
+                    \"value\": \"[Download ZIP](https://github.com/${{ github.repository }}/releases/download/${VERSION}/Marix-${VERSION}-mac.zip)\",
+                    \"inline\": true
+                  },
+                  {
+                    \"name\": \"🍎 macOS ARM\",
+                    \"value\": \"[Download ZIP](https://github.com/${{ github.repository }}/releases/download/${VERSION}/Marix-${VERSION}-arm64-mac.zip)\",
+                    \"inline\": true
+                  },
+                  {
+                    \"name\": \"🐧 Linux AppImage\",
+                    \"value\": \"[Download](https://github.com/${{ github.repository }}/releases/download/${VERSION}/Marix-${VERSION}.AppImage)\",
+                    \"inline\": true
+                  },
+                  {
+                    \"name\": \"🐧 Linux DEB\",
+                    \"value\": \"[Download](https://github.com/${{ github.repository }}/releases/download/${VERSION}/marix_${VERSION}_amd64.deb)\",
+                    \"inline\": true
+                  },
+                  {
+                    \"name\": \"🐧 Linux RPM\",
+                    \"value\": \"[Download](https://github.com/${{ github.repository }}/releases/download/${VERSION}/marix-${VERSION}.x86_64.rpm)\",
+                    \"inline\": true
+                  }
+                ],
+                \"footer\": {
+                  \"text\": \"View full release on GitHub\"
+                },
                 \"url\": \"https://github.com/${{ github.repository }}/releases/tag/${VERSION}\"
               }]
             }" \
