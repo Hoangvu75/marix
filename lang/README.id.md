@@ -1,15 +1,5 @@
 <p align="center">
-  <img src="../icon/icon.png" alt="Marix Logo" width="128" height="128">
-</p>
-
-<h1 align="center">Marix</h1>
-
-<p align="center">
-  <strong>Aplikasi SSH Zero-Knowledge Modern</strong>
-</p>
-
-<p align="center">
-  <em>Kredensial Anda tidak pernah meninggalkan perangkat. Tanpa cloud. Tanpa tracking. Tanpa kompromi.</em>
+  <img src="../icon/banner.png" alt="Marix - A Modern, Zero-Knowledge SSH Client" width="100%">
 </p>
 
 <p align="center">
@@ -22,7 +12,6 @@
  <a href="https://github.com/marixdev/marix/releases/latest">
   <img src="https://img.shields.io/github/v/release/marixdev/marix?color=orange&label=version" alt="Latest Version">
 </a>
-</p>
 
 <p align="center">
   <a href="https://marix.dev">🌐 Website</a> •
@@ -31,7 +20,6 @@
   <a href="#-fitur">✨ Fitur</a> •
   <a href="#-spesifikasi-keamanan">🛡️ Keamanan</a> •
   <a href="#-bahasa-lain">🌍 Bahasa</a>
-</p>
 
 ---
 
@@ -482,9 +470,6 @@ Lihat [LICENSE](../LICENSE) untuk teks lisensi lengkap.
 
 ---
 
-<p align="center">
-  <strong>Marix</strong><br>
   Aplikasi SSH zero-knowledge modern<br><br>
   <em>Data Anda. Tanggung jawab Anda. Kebebasan Anda.</em><br><br>
   Jika Anda menginginkan kenyamanan dengan mengorbankan privasi, Marix bukan untuk Anda.
-</p>

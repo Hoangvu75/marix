@@ -1,15 +1,5 @@
 <p align="center">
-  <img src="../icon/icon.png" alt="Marix Logo" width="128" height="128">
-</p>
-
-<h1 align="center">Marix</h1>
-
-<p align="center">
-  <strong>Modernong Zero-Knowledge SSH Client</strong>
-</p>
-
-<p align="center">
-  <em>Ang iyong mga kredensyal ay hindi kailanman umaalis sa iyong device. Walang cloud. Walang tracking. Walang kompromiso.</em>
+  <img src="../icon/banner.png" alt="Marix - A Modern, Zero-Knowledge SSH Client" width="100%">
 </p>
 
 <p align="center">
@@ -22,7 +12,6 @@
  <a href="https://github.com/marixdev/marix/releases/latest">
   <img src="https://img.shields.io/github/v/release/marixdev/marix?color=orange&label=version" alt="Latest Version">
 </a>
-</p>
 
 <p align="center">
   <a href="https://marix.dev">🌐 Website</a> •
@@ -31,7 +20,6 @@
   <a href="#-mga-feature">Mga Feature</a> •
   <a href="#-seguridad">Seguridad</a> •
   <a href="#-mga-wika">Mga Wika</a>
-</p>
 
 ---
 
@@ -482,9 +470,6 @@ Tingnan ang [LICENSE](../LICENSE) para sa buong teksto ng lisensya.
 
 ---
 
-<p align="center">
-  <strong>Marix</strong><br>
   Modernong Zero-Knowledge SSH Client<br><br>
   <em>Ang iyong data. Ang iyong responsibilidad. Ang iyong kalayaan.</em><br><br>
   Kung gusto mo ng kaginhawahan sa halaga ng iyong privacy, ang Marix ay hindi para sa iyo.
-</p>

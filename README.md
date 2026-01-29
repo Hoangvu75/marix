@@ -1,15 +1,5 @@
 <p align="center">
-  <img src="icon/icon.png" alt="Marix Logo" width="128" height="128">
-</p>
-
-<h1 align="center">Marix</h1>
-
-<p align="center">
-  <strong>A Modern, Zero-Knowledge SSH Client</strong>
-</p>
-
-<p align="center">
-  <em>Your credentials never leave your device. No cloud. No tracking. No compromise.</em>
+  <img src="icon/banner.png" alt="Marix - A Modern, Zero-Knowledge SSH Client" width="100%">
 </p>
 
 <p align="center">

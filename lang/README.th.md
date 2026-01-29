@@ -1,15 +1,5 @@
 <p align="center">
-  <img src="../icon/icon.png" alt="Marix Logo" width="128" height="128">
-</p>
-
-<h1 align="center">Marix</h1>
-
-<p align="center">
-  <strong>SSH Client แบบ Zero-Knowledge ที่ทันสมัย</strong>
-</p>
-
-<p align="center">
-  <em>ข้อมูลประจำตัวของคุณจะไม่ออกจากอุปกรณ์ ไม่มีคลาวด์ ไม่มีการติดตาม ไม่มีการประนีประนอม</em>
+  <img src="../icon/banner.png" alt="Marix - A Modern, Zero-Knowledge SSH Client" width="100%">
 </p>
 
 <p align="center">
@@ -22,7 +12,6 @@
  <a href="https://github.com/marixdev/marix/releases/latest">
   <img src="https://img.shields.io/github/v/release/marixdev/marix?color=orange&label=version" alt="Latest Version">
 </a>
-</p>
 
 <p align="center">
   <a href="https://marix.dev">🌐 เว็บไซต์</a> •
@@ -31,7 +20,6 @@
   <a href="#-คุณสมบัติ">คุณสมบัติ</a> •
   <a href="#-ความปลอดภัย">ความปลอดภัย</a> •
   <a href="#-ภาษา">ภาษา</a>
-</p>
 
 ---
 
@@ -482,9 +470,6 @@ sudo pacman -S freerdp         # Arch
 
 ---
 
-<p align="center">
-  <strong>Marix</strong><br>
   SSH Client แบบ Zero-Knowledge ที่ทันสมัย<br><br>
   <em>ข้อมูลของคุณ ความรับผิดชอบของคุณ อิสรภาพของคุณ</em><br><br>
   หากคุณต้องการความสะดวกโดยแลกกับความเป็นส่วนตัว Marix ไม่เหมาะกับคุณ
-</p>

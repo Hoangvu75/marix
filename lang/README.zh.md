@@ -1,15 +1,5 @@
 <p align="center">
-  <img src="../icon/icon.png" alt="Marix Logo" width="128" height="128">
-</p>
-
-<h1 align="center">Marix</h1>
-
-<p align="center">
-  <strong>现代零知识 SSH 应用</strong>
-</p>
-
-<p align="center">
-  <em>您的凭据永远不会离开您的设备。无云服务。无跟踪。无妥协。</em>
+  <img src="../icon/banner.png" alt="Marix - A Modern, Zero-Knowledge SSH Client" width="100%">
 </p>
 
 <p align="center">
@@ -22,7 +12,6 @@
  <a href="https://github.com/marixdev/marix/releases/latest">
   <img src="https://img.shields.io/github/v/release/marixdev/marix?color=orange&label=version" alt="Latest Version">
 </a>
-</p>
 
 <p align="center">
   <a href="https://marix.dev">🌐 网站</a> •
@@ -31,7 +20,6 @@
   <a href="#-功能特性">✨ 功能</a> •
   <a href="#-安全规格">🛡️ 安全</a> •
   <a href="#-其他语言">🌍 语言</a>
-</p>
 
 ---
 
@@ -482,9 +470,6 @@ sudo pacman -S freerdp         # Arch
 
 ---
 
-<p align="center">
-  <strong>Marix</strong><br>
   现代零知识 SSH 应用<br><br>
   <em>数据 của bạn. Trách nhiệm của bạn. Tự do của bạn.</em><br><br>
   如果您想要以隐私为代价的便利，Marix 不适合您。
-</p>

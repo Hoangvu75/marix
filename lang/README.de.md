@@ -1,15 +1,5 @@
 <p align="center">
-  <img src="../icon/icon.png" alt="Marix Logo" width="128" height="128">
-</p>
-
-<h1 align="center">Marix</h1>
-
-<p align="center">
-  <strong>Moderner Zero-Knowledge SSH-Client</strong>
-</p>
-
-<p align="center">
-  <em>Ihre Anmeldedaten verlassen niemals Ihr Gerät. Keine Cloud. Kein Tracking. Keine Kompromisse.</em>
+  <img src="../icon/banner.png" alt="Marix - A Modern, Zero-Knowledge SSH Client" width="100%">
 </p>
 
 <p align="center">
@@ -22,7 +12,6 @@
  <a href="https://github.com/marixdev/marix/releases/latest">
   <img src="https://img.shields.io/github/v/release/marixdev/marix?color=orange&label=version" alt="Latest Version">
 </a>
-</p>
 
 <p align="center">
   <a href="https://marix.dev">🌐 Website</a> •
@@ -31,7 +20,6 @@
   <a href="#-funktionen">Funktionen</a> •
   <a href="#-sicherheit">Sicherheit</a> •
   <a href="#-sprachen">Sprachen</a>
-</p>
 
 ---
 
@@ -482,9 +470,6 @@ Siehe [LICENSE](../LICENSE) für den vollständigen Lizenztext.
 
 ---
 
-<p align="center">
-  <strong>Marix</strong><br>
   Moderner Zero-Knowledge SSH-Client<br><br>
   <em>Ihre Daten. Ihre Verantwortung. Ihre Freiheit.</em><br><br>
   Wenn Sie Bequemlichkeit auf Kosten Ihrer Privatsphäre wollen, ist Marix nichts für Sie.
-</p>

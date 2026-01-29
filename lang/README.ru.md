@@ -1,15 +1,5 @@
 <p align="center">
-  <img src="../icon/icon.png" alt="Marix Logo" width="128" height="128">
-</p>
-
-<h1 align="center">Marix</h1>
-
-<p align="center">
-  <strong>Современный SSH-клиент с нулевым разглашением</strong>
-</p>
-
-<p align="center">
-  <em>Ваши учётные данные никогда не покидают ваше устройство. Без облака. Без отслеживания. Без компромиссов.</em>
+  <img src="../icon/banner.png" alt="Marix - A Modern, Zero-Knowledge SSH Client" width="100%">
 </p>
 
 <p align="center">
@@ -22,7 +12,6 @@
  <a href="https://github.com/marixdev/marix/releases/latest">
   <img src="https://img.shields.io/github/v/release/marixdev/marix?color=orange&label=version" alt="Latest Version">
 </a>
-</p>
 
 <p align="center">
   <a href="https://marix.dev">🌐 Сайт</a> •
@@ -31,7 +20,6 @@
   <a href="#-возможности">Возможности</a> •
   <a href="#-безопасность">Безопасность</a> •
   <a href="#-языки">Языки</a>
-</p>
 
 ---
 
@@ -482,9 +470,6 @@ sudo pacman -S freerdp         # Arch
 
 ---
 
-<p align="center">
-  <strong>Marix</strong><br>
   Современный SSH-клиент с нулевым разглашением<br><br>
   <em>Ваши данные. Ваша ответственность. Ваша свобода.</em><br><br>
   Если вам нужно удобство ценой вашей конфиденциальности, Marix не для вас.
-</p>

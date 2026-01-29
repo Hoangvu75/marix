@@ -1,15 +1,5 @@
 <p align="center">
-  <img src="../icon/icon.png" alt="Marix Logo" width="128" height="128">
-</p>
-
-<h1 align="center">Marix</h1>
-
-<p align="center">
-  <strong>Ứng dụng SSH Zero-Knowledge Hiện đại</strong>
-</p>
-
-<p align="center">
-  <em>Thông tin đăng nhập của bạn không bao giờ rời khỏi thiết bị. Không có cloud. Không có tracking. Không có thỏa hiệp.</em>
+  <img src="../icon/banner.png" alt="Marix - A Modern, Zero-Knowledge SSH Client" width="100%">
 </p>
 
 <p align="center">
@@ -22,7 +12,6 @@
  <a href="https://github.com/marixdev/marix/releases/latest">
   <img src="https://img.shields.io/github/v/release/marixdev/marix?color=orange&label=version" alt="Latest Version">
 </a>
-</p>
 
 <p align="center">
   <a href="https://marix.dev">🌐 Website</a> •
@@ -31,7 +20,6 @@
   <a href="#-tính-năng">✨ Tính năng</a> •
   <a href="#-thông-số-bảo-mật">🛡️ Bảo mật</a> •
   <a href="#-ngôn-ngữ-khác">🌍 Ngôn ngữ</a>
-</p>
 
 ---
 
@@ -482,9 +470,6 @@ Xem [LICENSE](../LICENSE) để biết toàn bộ văn bản giấy phép.
 
 ---
 
-<p align="center">
-  <strong>Marix</strong><br>
   Ứng dụng SSH zero-knowledge hiện đại<br><br>
   <em>Dữ liệu của bạn. Trách nhiệm của bạn. Tự do của bạn.</em><br><br>
   Nếu bạn muốn sự tiện lợi với cái giá là quyền riêng tư, Marix không dành cho bạn.
-</p>

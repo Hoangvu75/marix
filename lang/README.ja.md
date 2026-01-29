@@ -1,15 +1,5 @@
 <p align="center">
-  <img src="../icon/icon.png" alt="Marix Logo" width="128" height="128">
-</p>
-
-<h1 align="center">Marix</h1>
-
-<p align="center">
-  <strong>モダンなゼロナレッジ SSH クライアント</strong>
-</p>
-
-<p align="center">
-  <em>あなたの認証情報はデバイスを離れません。クラウドなし。トラッキングなし。妥協なし。</em>
+  <img src="../icon/banner.png" alt="Marix - A Modern, Zero-Knowledge SSH Client" width="100%">
 </p>
 
 <p align="center">
@@ -22,7 +12,6 @@
  <a href="https://github.com/marixdev/marix/releases/latest">
   <img src="https://img.shields.io/github/v/release/marixdev/marix?color=orange&label=version" alt="Latest Version">
 </a>
-</p>
 
 <p align="center">
   <a href="https://marix.dev">🌐 ウェブサイト</a> •
@@ -31,7 +20,6 @@
   <a href="#-機能">機能</a> •
   <a href="#-セキュリティ">セキュリティ</a> •
   <a href="#-言語">言語</a>
-</p>
 
 ---
 
@@ -482,9 +470,6 @@ sudo pacman -S freerdp         # Arch
 
 ---
 
-<p align="center">
-  <strong>Marix</strong><br>
   モダンなゼロナレッジ SSH クライアント<br><br>
   <em>あなたのデータ。あなたの責任。あなたの自由。</em><br><br>
   プライバシーを犠牲にした便利さを求めるなら、Marix はあなた向けではありません。
-</p>

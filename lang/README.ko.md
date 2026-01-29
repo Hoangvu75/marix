@@ -1,15 +1,5 @@
 <p align="center">
-  <img src="../icon/icon.png" alt="Marix Logo" width="128" height="128">
-</p>
-
-<h1 align="center">Marix</h1>
-
-<p align="center">
-  <strong>현대적인 제로 지식 SSH 애플리케이션</strong>
-</p>
-
-<p align="center">
-  <em>귀하의 자격 증명은 절대 기기를 떠나지 않습니다. 클라우드 없음. 추적 없음. 타협 없음.</em>
+  <img src="../icon/banner.png" alt="Marix - A Modern, Zero-Knowledge SSH Client" width="100%">
 </p>
 
 <p align="center">
@@ -22,7 +12,6 @@
  <a href="https://github.com/marixdev/marix/releases/latest">
   <img src="https://img.shields.io/github/v/release/marixdev/marix?color=orange&label=version" alt="Latest Version">
 </a>
-</p>
 
 <p align="center">
   <a href="https://marix.dev">🌐 Website</a> •
@@ -31,7 +20,6 @@
   <a href="#-기능">✨ 기능</a> •
   <a href="#-보안-사양">🛡️ 보안</a> •
   <a href="#-다른-언어">🌍 언어</a>
-</p>
 
 ---
 
@@ -482,9 +470,6 @@ sudo pacman -S freerdp         # Arch
 
 ---
 
-<p align="center">
-  <strong>Marix</strong><br>
   현대적인 제로 지식 SSH 애플리케이션<br><br>
   <em>데이터 của bạn. Trách nhiệm của bạn. Tự do của bạn.</em><br><br>
   프라이버시를 희생하는 편의성을 원한다면 Marix는 귀하를 위한 것이 아닙니다.
-</p>
