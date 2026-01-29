@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useLanguage } from '../contexts/LanguageContext';
 import XTermLogViewer, { XTermLogViewerRef } from './XTermLogViewer';
+import ConfirmModal from './ConfirmModal';
 import { getFrameworkIcon } from './FrameworkIcons';
 import legacyVersions from '../data/legacy-versions.json';
 
@@ -711,6 +712,9 @@ const SourceInstaller: React.FC<Props> = ({ isOpen, onClose, connectionId, targe
   const [currentCommand, setCurrentCommand] = useState('');
   const logEndRef = useRef<HTMLDivElement>(null);
   const xtermLogRef = useRef<XTermLogViewerRef>(null);
+  
+  // Confirm modal for uninstall
+  const [showUninstallConfirm, setShowUninstallConfirm] = useState(false);
   
   // Auto-scroll logs
   useEffect(() => {
@@ -1848,12 +1852,23 @@ ENVCONFIG`;
                         <div className="flex items-center gap-2">
                           <span className="text-green-400">✓ {t('sourceReady')}</span>
                           <button
-                            onClick={async () => {
-                              const confirmed = window.confirm(
-                                `Uninstall Node.js ${deps.nodeVersion}? You can then install a different version.`
-                              );
-                              if (!confirmed) return;
-                              
+                            onClick={() => setShowUninstallConfirm(true)}
+                            disabled={isInstalling}
+                            className="text-xs px-2 py-1 text-orange-400 hover:text-orange-300 hover:bg-orange-500/10 rounded transition"
+                            title="Uninstall to install a different version"
+                          >
+                            Uninstall
+                          </button>
+                          <ConfirmModal
+                            isOpen={showUninstallConfirm}
+                            title="Uninstall Node.js"
+                            message={`Uninstall Node.js ${deps.nodeVersion}? You can then install a different version.`}
+                            confirmText="Uninstall"
+                            cancelText={t('cancel')}
+                            variant="warning"
+                            onCancel={() => setShowUninstallConfirm(false)}
+                            onConfirm={async () => {
+                              setShowUninstallConfirm(false);
                               setIsInstalling(true);
                               addLog('info', `🗑️ Uninstalling Node.js ${deps.nodeVersion}...`);
                               
@@ -1878,12 +1893,7 @@ ENVCONFIG`;
                               }
                               setIsInstalling(false);
                             }}
-                            disabled={isInstalling}
-                            className="text-xs px-2 py-1 text-orange-400 hover:text-orange-300 hover:bg-orange-500/10 rounded transition"
-                            title="Uninstall to install a different version"
-                          >
-                            Uninstall
-                          </button>
+                          />
                         </div>
                       )}
                     </div>

@@ -44,6 +44,7 @@ import { lanFileTransferService } from './services/LANFileTransferService';
 import { getGoogleDriveService } from './services/GoogleDriveService';
 import { sessionMonitor, SessionMonitorData } from './services/SSHSessionMonitor';
 import { appSettings } from './services/AppSettingsStore';
+import { BenchmarkService } from './services/BenchmarkService';
 import { initDatabaseHandlers, getDatabaseConnectionCount, closeAllDatabaseConnections } from './databaseService';
 import buildInfo from './buildInfo';
 
@@ -239,13 +240,11 @@ function createWindow() {
   }
 
   // Handle close event - ask user if there are active connections
-  // Uses pre-cached translations for instant response
+  // Uses IPC to show custom modal in renderer for smoother UX
   let isQuitting = false;
+  let closeRequestId = 0;
   
   mainWindow.on('close', (event) => {
-    console.log('[App] Close event triggered, isQuitting:', isQuitting);
-    const startTime = Date.now();
-    
     if (isQuitting) return; // Already confirmed, let it close
     
     // Check for active connections
@@ -255,8 +254,6 @@ function createWindow() {
     const activeFTP = ftpManager.getActiveCount();
     const activeDB = getDatabaseConnectionCount();
     const totalActive = activeSSH + activeRDP + activeWSS + activeFTP + activeDB;
-    
-    console.log('[App] Active connections check took:', Date.now() - startTime, 'ms, total:', totalActive);
 
     if (totalActive > 0) {
       event.preventDefault();
@@ -269,39 +266,35 @@ function createWindow() {
       if (activeFTP > 0) details.push(`FTP: ${activeFTP}`);
       if (activeDB > 0) details.push(`Database: ${activeDB}`);
       
-      // Use cached translations - instant, no IPC needed
-      const t = closeDialogTranslations;
-      const message = t.message.replace('{{count}}', String(totalActive));
-      
-      console.log('[App] Showing dialog (sync) at:', Date.now() - startTime, 'ms');
-      
-      // Use SYNCHRONOUS dialog for instant display
-      const response = dialog.showMessageBoxSync(mainWindow!, {
-        type: 'question',
-        buttons: [t.closeButton, t.cancelButton],
-        defaultId: 1,
-        cancelId: 1,
-        title: t.title,
-        message: message,
-        detail: `${details.join(', ')}\n\n${t.detail}`,
-      });
-      
-      console.log('[App] Dialog response:', response, 'at:', Date.now() - startTime, 'ms');
-      
-      if (response === 0) {
-        isQuitting = true;
-        console.log('[App] Closing all connections...');
-        rdpManager.closeAll();
-        nativeSSH.closeAll();
-        sshManager.closeAll();
-        wssManager.closeAll();
-        ftpManager.closeAll();
-        closeAllDatabaseConnections();
-        console.log('[App] Destroying window at:', Date.now() - startTime, 'ms');
-        mainWindow?.destroy();
+      // Send to renderer to show custom modal
+      closeRequestId++;
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('app:confirmClose', {
+          requestId: closeRequestId,
+          totalActive,
+          details: details.join(', '),
+        });
       }
-      // If cancelled, do nothing - event already prevented
     }
+  });
+
+  // Handle close confirmation from renderer
+  ipcMain.on('app:closeConfirmed', (event, requestId: number) => {
+    if (requestId === closeRequestId) {
+      isQuitting = true;
+      rdpManager.closeAll();
+      nativeSSH.closeAll();
+      sshManager.closeAll();
+      wssManager.closeAll();
+      ftpManager.closeAll();
+      closeAllDatabaseConnections();
+      mainWindow?.destroy();
+    }
+  });
+
+  ipcMain.on('app:closeCancelled', (event, requestId: number) => {
+    // User cancelled, do nothing - just log
+    console.log('[App] Close cancelled by user, requestId:', requestId);
   });
 
   mainWindow.on('closed', () => {
@@ -1310,6 +1303,26 @@ ipcMain.handle('session-monitor:setEnabled', async (event, enabled: boolean) => 
 // Check if monitoring is enabled
 ipcMain.handle('session-monitor:isEnabled', async () => {
   return appSettings.get('sessionMonitorEnabled');
+});
+
+// ============================================================================
+// BENCHMARK IPC HANDLERS
+// ============================================================================
+
+const benchmarkService = new BenchmarkService(sshManager);
+
+// Run full benchmark on a connected SSH session
+ipcMain.handle('benchmark:run', async (event, connectionId: string) => {
+  try {
+    const result = await benchmarkService.runBenchmark(connectionId, (progress) => {
+      // Send progress updates to renderer
+      mainWindow?.webContents.send('benchmark:progress', progress);
+    });
+    return result;
+  } catch (err: any) {
+    console.error('[Benchmark] Error:', err);
+    throw new Error(err.message || 'Benchmark failed');
+  }
 });
 
 // Terminal font settings

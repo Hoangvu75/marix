@@ -2,6 +2,57 @@
 
 All notable changes to Marix SSH Client will be documented in this file.
 
+## [1.0.19] - 2026-01-29
+
+### Added
+- **Server Benchmark**: Test server performance directly from SSH terminal
+  - System Information: OS, CPU, RAM, Disk, Uptime, Virtualization type
+  - Disk Performance: Sequential Write/Read speed (dd), I/O Latency (ioping), Random 4K IOPS (fio)
+  - Network Speed: Multi-region testing via Speedtest.net API
+    - Auto-fetch servers from 18 global regions:
+      - Asia: Singapore, Tokyo, Hong Kong, Seoul, Mumbai
+      - Europe: London, Frankfurt, Paris, Amsterdam
+      - Americas: Los Angeles, New York, Chicago, Toronto, Sao Paulo
+      - Oceania: Sydney, Auckland
+      - Middle East/Africa: Dubai, Johannesburg
+    - Selects best server per country for diverse coverage
+    - Tests download, upload, and latency to each region
+  - Latency tests to 18 DNS servers across regions
+  - Beautiful modal UI with real-time progress indicator
+  - Button in SSH terminal footer (📊 Benchmark)
+
+- **Benchmark Export**: Export results in multiple formats
+  - **HTML**: Standalone webpage with styled layout
+  - **JSON**: Structured data with meta object (website, github links)
+  - **PNG**: Image screenshot with RGB colors (html2canvas compatible)
+  - **TXT**: ASCII art formatted text file
+  - All formats include footer with marix.dev and GitHub links
+
+- **paste.dev Integration**: Share benchmark results online
+  - Checkbox option before running benchmark
+  - Auto-upload TXT results after benchmark completes
+  - Display paste.dev link with Copy and Open buttons
+  - Uses paste.ee API with authentication
+
+### Fixed
+- **Disk Benchmark on Real Disk**: Fixed disk tests running on RAM instead of real disk
+  - Detected `/tmp` mounted as tmpfs (RAM) showing unrealistic speeds (5.7 GB/s)
+  - Now tests on home directory for accurate disk performance
+  - ioping runs on root filesystem `/` for real I/O latency
+
+- **PNG Export oklch Error**: Fixed "unsupported color function 'oklch'" error
+  - Created separate DOM element with RGB hex colors for html2canvas
+  - PNG now renders correctly without Tailwind oklch colors
+
+- **SSH Session Monitor**: Fixed throughput display showing "--" when idle
+  - Now shows "0 B/s" instead of "--" when no traffic
+  - Throughput updates every 1 second for real-time feedback
+
+### Changed
+- **App Close Dialog**: Replaced native Electron dialog with React ConfirmModal
+  - Smoother UI, no lag when closing app with active connections
+  - Consistent styling with other confirmation dialogs
+
 ## [1.0.18] - 2026-01-28
 
 ### Added

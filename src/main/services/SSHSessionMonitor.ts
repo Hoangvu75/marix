@@ -288,10 +288,8 @@ export class SSHSessionMonitor extends EventEmitter {
     session.lastBytesReceived = session.bytesReceived;
     session.lastBytesSent = session.bytesSent;
     
-    // Only emit update if there's activity
-    if (downloadDelta > 0 || uploadDelta > 0) {
-      this.emitUpdate(session);
-    }
+    // Always emit update so UI shows current speed (even 0 B/s)
+    this.emitUpdate(session);
   }
 
   /**

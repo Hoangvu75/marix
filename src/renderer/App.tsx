@@ -22,6 +22,7 @@ import TwoFactorPage from './components/TwoFactorPage';
 import SnippetPage from './components/SnippetPage';
 import PortForwardingPage from './components/PortForwardingPage';
 import SessionMonitorIndicator from './components/SessionMonitorIndicator';
+import BenchmarkModal from './components/BenchmarkModal';
 import LockScreen from './components/LockScreen';
 import { BackupModal } from './components/BackupModal';
 import ConfirmModal from './components/ConfirmModal';
@@ -104,6 +105,8 @@ const App: React.FC = () => {
   const focusTrapRef = useRef<HTMLInputElement>(null);
   // Confirm modal state (for closing sessions without native confirm dialog)
   const [closeConfirmModal, setCloseConfirmModal] = useState<{ sessionId: string; serverName: string } | null>(null);
+  // App close confirm modal state
+  const [appCloseConfirmModal, setAppCloseConfirmModal] = useState<{ requestId: number; totalActive: number; details: string } | null>(null);
   const [editingServer, setEditingServer] = useState<Server | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [currentTheme, setCurrentTheme] = useState('Dracula');
@@ -268,6 +271,9 @@ const App: React.FC = () => {
   const [noteSaving, setNoteSaving] = useState(false);
   const noteDebounceRef = React.useRef<NodeJS.Timeout | null>(null);
   
+  // Benchmark modal state
+  const [showBenchmarkModal, setShowBenchmarkModal] = useState(false);
+  
   // GitHub OAuth state
   const [githubUser, setGithubUser] = useState<{ login: string; avatar_url: string; name: string } | null>(null);
   const [githubRepoName, setGithubRepoName] = useState('');
@@ -422,6 +428,18 @@ const App: React.FC = () => {
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [sessions.length]);
+
+  // Listen for app close confirmation request from main process
+  useEffect(() => {
+    const handleConfirmClose = (data: { requestId: number; totalActive: number; details: string }) => {
+      setAppCloseConfirmModal(data);
+    };
+
+    ipcRenderer.on('app:confirmClose', handleConfirmClose);
+    return () => {
+      ipcRenderer.removeListener('app:confirmClose', handleConfirmClose);
+    };
+  }, []);
 
   // Global keyboard shortcuts
   useEffect(() => {
@@ -6048,6 +6066,18 @@ const App: React.FC = () => {
 
           {/* Right side - Controls */}
           <div className="flex items-center gap-3 flex-shrink-0">
+            {/* Benchmark button - show for SSH sessions */}
+            {activeSession && activeSession.type === 'terminal' && activeSession.server.protocol === 'ssh' && activeSession.server.id !== 'local' && (
+              <button
+                onClick={() => setShowBenchmarkModal(true)}
+                className={`flex items-center gap-1 text-xs ${appTheme === 'light' ? 'text-gray-500 hover:text-gray-700' : 'text-gray-500 hover:text-white'} transition`}
+                title={t('serverBenchmark') || 'Server Benchmark'}
+              >
+                <span className="text-sm">📊</span>
+                <span className="hidden sm:inline">{t('benchmark') || 'Benchmark'}</span>
+              </button>
+            )}
+            
             {/* Session monitor indicator - show for SSH sessions */}
             {activeSession && activeSession.type === 'terminal' && activeSession.server.protocol === 'ssh' && (
               <SessionMonitorIndicator connectionId={activeSession.connectionId} />
@@ -6213,6 +6243,17 @@ const App: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Benchmark Modal */}
+      {activeSession && activeSession.server.protocol === 'ssh' && activeSession.server.id !== 'local' && (
+        <BenchmarkModal
+          isOpen={showBenchmarkModal}
+          onClose={() => setShowBenchmarkModal(false)}
+          connectionId={activeSession.connectionId}
+          serverName={activeSession.server.name}
+          appTheme={appTheme}
+        />
       )}
 
       {/* Tag Edit Popup */}
@@ -6545,6 +6586,28 @@ const App: React.FC = () => {
             doCloseSession(sessionId);
           }}
           onCancel={() => setCloseConfirmModal(null)}
+        />
+      )}
+
+      {/* App Close Confirm Modal */}
+      {appCloseConfirmModal && (
+        <ConfirmModal
+          isOpen={true}
+          title={t('activeConnections')}
+          message={`${t('youHaveActiveConnections').replace('{{count}}', String(appCloseConfirmModal.totalActive))}\n\n${appCloseConfirmModal.details}\n\n${t('closeConnectionsConfirm')}`}
+          confirmText={t('closeAllAndExit')}
+          cancelText={t('cancel')}
+          variant="danger"
+          onConfirm={() => {
+            const requestId = appCloseConfirmModal.requestId;
+            setAppCloseConfirmModal(null);
+            ipcRenderer.send('app:closeConfirmed', requestId);
+          }}
+          onCancel={() => {
+            const requestId = appCloseConfirmModal.requestId;
+            setAppCloseConfirmModal(null);
+            ipcRenderer.send('app:closeCancelled', requestId);
+          }}
         />
       )}
 
@@ -7033,6 +7096,7 @@ const CloudflareTokenInput: React.FC<{
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showToken, setShowToken] = useState(false);
+  const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
 
   useEffect(() => {
     ipcRenderer.invoke('cloudflare:hasToken').then(setHasToken);
@@ -7060,14 +7124,15 @@ const CloudflareTokenInput: React.FC<{
     }
   };
 
-  const removeToken = async () => {
-    // Use setTimeout to prevent UI freeze from native confirm dialog
-    setTimeout(async () => {
-      if (!window.confirm(t('confirmRemoveToken'))) return;
-      await ipcRenderer.invoke('cloudflare:removeToken');
-      setHasToken(false);
-      onTokenRemoved();
-    }, 10);
+  const removeToken = () => {
+    setShowRemoveConfirm(true);
+  };
+
+  const doRemoveToken = async () => {
+    setShowRemoveConfirm(false);
+    await ipcRenderer.invoke('cloudflare:removeToken');
+    setHasToken(false);
+    onTokenRemoved();
   };
 
   return (
@@ -7146,6 +7211,18 @@ const CloudflareTokenInput: React.FC<{
           </p>
         </div>
       )}
+      
+      {/* Confirm Remove Token Modal */}
+      <ConfirmModal
+        isOpen={showRemoveConfirm}
+        title={t('remove')}
+        message={t('confirmRemoveToken')}
+        confirmText={t('remove')}
+        cancelText={t('cancel')}
+        variant="danger"
+        onCancel={() => setShowRemoveConfirm(false)}
+        onConfirm={doRemoveToken}
+      />
     </div>
   );
 };

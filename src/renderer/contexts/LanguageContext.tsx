@@ -1332,6 +1332,30 @@ export interface Translations {
   source: string;
   folder: string;
   file: string;
+  
+  // Server Benchmark
+  benchmark: string;
+  serverBenchmark: string;
+  benchmarkReady: string;
+  benchmarkDescription: string;
+  startBenchmark: string;
+  benchmarkStarting: string;
+  benchmarkFailed: string;
+  benchmarkDuration: string;
+  systemInformation: string;
+  diskPerformance: string;
+  networkSpeed: string;
+  sequentialWrite: string;
+  sequentialRead: string;
+  ioLatency: string;
+  noNetworkData: string;
+  warnings: string;
+  runAgain: string;
+  retry: string;
+  // Benchmark Export
+  uploadToPaste: string;
+  export: string;
+  exporting: string;
 }
 
 interface LanguageContextType {

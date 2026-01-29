@@ -48,7 +48,7 @@ const formatBytes = (bytes: number): string => {
 
 // Format speed (bytes per second)
 const formatSpeed = (bytesPerSec: number): string => {
-  if (bytesPerSec === 0) return '--';
+  if (bytesPerSec === 0) return '0 B/s';
   return formatBytes(bytesPerSec) + '/s';
 };
 
