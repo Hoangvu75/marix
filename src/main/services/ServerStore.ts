@@ -20,6 +20,7 @@ export interface ServerConfig {
   envVars?: { [key: string]: string };  // Environment variables for SSH
   defaultRemotePath?: string;  // Default remote path for SFTP
   defaultLocalPath?: string;   // Default local path for SFTP
+  bashScript?: string;  // Bash script content for Bash SSH hosts (echo JSON)
 }
 
 // Fields that contain sensitive data and should be encrypted

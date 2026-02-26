@@ -1707,6 +1707,60 @@ ipcMain.handle('servers:reorder', async (event, servers) => {
   }
 });
 
+// Bash SSH - run script content directly (user-entered script)
+ipcMain.handle('bash:runScriptContent', async (_event, scriptContent: string) => {
+  const { spawn } = require('child_process');
+  const os = require('os');
+  let tmpFile: string | null = null;
+  const cleanup = () => {
+    if (tmpFile) {
+      try { fs.unlinkSync(tmpFile); } catch {}
+      tmpFile = null;
+    }
+  };
+  return new Promise<{ success: boolean; output?: string; error?: string }>((resolve) => {
+    try {
+      const scriptContentTrimmed = (scriptContent || '').trim();
+      if (!scriptContentTrimmed) {
+        resolve({ success: false, error: 'Script content is empty' });
+        return;
+      }
+      const tmpDir = os.tmpdir();
+      tmpFile = path.join(tmpDir, `marix-bash-${Date.now()}.sh`);
+      fs.writeFileSync(tmpFile, scriptContentTrimmed);
+      try { fs.chmodSync(tmpFile, 0o700); } catch {}
+      const isWin = process.platform === 'win32';
+      const bashCmd = isWin
+        ? (process.env.BASH || path.join(process.env.ProgramFiles || 'C:\\Program Files', 'Git', 'bin', 'bash.exe'))
+        : '/bin/bash';
+      const child = spawn(bashCmd, [tmpFile], {
+        cwd: app.getAppPath(),
+        env: { ...process.env, LC_ALL: 'C' },
+        encoding: 'utf8',
+      });
+      let stdout = '';
+      let stderr = '';
+      child.stdout?.on('data', (data: Buffer | string) => { stdout += (data?.toString?.() || data); });
+      child.stderr?.on('data', (data: Buffer | string) => { stderr += (data?.toString?.() || data); });
+      child.on('close', (code: number) => {
+        cleanup();
+        if (code === 0) {
+          resolve({ success: true, output: stdout.trim() });
+        } else {
+          resolve({ success: false, error: stderr || stdout || `Exit code ${code}` });
+        }
+      });
+      child.on('error', (err: Error) => {
+        cleanup();
+        resolve({ success: false, error: err.message });
+      });
+    } catch (err: any) {
+      cleanup();
+      resolve({ success: false, error: err?.message || 'Unknown error' });
+    }
+  });
+});
+
 // Tag management handlers
 ipcMain.handle('tags:getColors', async () => {
   try {

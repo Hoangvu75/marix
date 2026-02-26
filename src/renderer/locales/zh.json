@@ -58,6 +58,7 @@
   "closeTab": "关闭标签",
   "newTab": "新标签",
   "localTerminal": "本地终端",
+  "bashSSH": "Bash SSH",
   "localFiles": "本地文件",
   "remoteFiles": "远程文件",
   "upload": "上传",

@@ -10,6 +10,7 @@ import RDPDepsInstaller from './components/RDPDepsInstaller';
 import WSSViewer from './components/WSSViewer';
 import DatabaseClient from './components/DatabaseClient';
 import AddServerModal from './components/AddServerModal';
+import BashSSHModal from './components/BashSSHModal';
 import ThemeSelector from './components/ThemeSelector';
 import LanguageSelector from './components/LanguageSelector';
 import SSHFingerprintModal from './components/SSHFingerprintModal';
@@ -50,7 +51,7 @@ export interface Server {
   username: string;
   password?: string;
   icon?: string;  // OS icon name: ubuntu, debian, centos, windows, etc.
-  protocol?: 'ssh' | 'ftp' | 'ftps' | 'rdp' | 'wss' | 'mysql' | 'postgresql' | 'mongodb' | 'redis' | 'sqlite';
+  protocol?: 'ssh' | 'bash-ssh' | 'ftp' | 'ftps' | 'rdp' | 'wss' | 'mysql' | 'postgresql' | 'mongodb' | 'redis' | 'sqlite';
   authType?: 'password' | 'key';
   privateKey?: string;
   passphrase?: string;
@@ -72,6 +73,7 @@ export interface Server {
   envVars?: { [key: string]: string };  // Environment variables for SSH (like ssh -o SetEnv)
   defaultRemotePath?: string;  // Default remote path for SFTP
   defaultLocalPath?: string;   // Default local path for SFTP
+  bashScript?: string;  // Bash script content for Bash SSH hosts (echo JSON)
 }
 
 export interface Session {
@@ -106,8 +108,6 @@ const App: React.FC = () => {
   
   // Hidden input ref for focus trap (fixes keyboard input after closing sessions)
   const focusTrapRef = useRef<HTMLInputElement>(null);
-  // Confirm modal state (for closing sessions without native confirm dialog)
-  const [closeConfirmModal, setCloseConfirmModal] = useState<{ sessionId: string; serverName: string } | null>(null);
   // App close confirm modal state
   const [appCloseConfirmModal, setAppCloseConfirmModal] = useState<{ requestId: number; totalActive: number; details: string } | null>(null);
   const [editingServer, setEditingServer] = useState<Server | null>(null);
@@ -255,6 +255,7 @@ const App: React.FC = () => {
   
   // Connecting state (for UI feedback)
   const [connectingServerId, setConnectingServerId] = useState<string | null>(null);
+  const [showBashSSHModal, setShowBashSSHModal] = useState(false);
   
   // Tab drag state
   const [draggedTabId, setDraggedTabId] = useState<string | null>(null);
@@ -2386,6 +2387,9 @@ const App: React.FC = () => {
     }
   };
 
+  // Bash SSH - open modal for script input and server creation
+  const handleBashSSH = () => setShowBashSSHModal(true);
+
   // Poll for RDP dependencies after install session is created
   useEffect(() => {
     if (!rdpInstallSessionId || !pendingRDPServer) return;
@@ -2598,47 +2602,87 @@ const App: React.FC = () => {
       // Check if already connected to this server
       const existingSession = sessions.find(s => s.server.id === server.id);
       if (existingSession) {
-        // Just switch to existing session
         setActiveSessionId(existingSession.id);
-        setSidebarOpen(false);  // Auto-hide sidebar
+        setSidebarOpen(false);
         return;
       }
 
-      // Check if already connecting to this server (prevent double-click race condition)
       if (connectingServerId === server.id) {
         console.log('[App] Already connecting to server:', server.name);
         return;
       }
 
+      let serverToConnect = server;
       const protocol = server.protocol || 'ssh';
 
-      // Validate inputs (WSS doesn't need host/username)
-      if (protocol !== 'wss' && (!server.host || !server.username)) {
+      // Bash SSH: run script to get dynamic credentials before connecting
+      if (protocol === 'ssh' && server.bashScript?.trim()) {
+        setConnectingServerId(server.id);
+        try {
+          const result = await ipcRenderer.invoke('bash:runScriptContent', server.bashScript.trim());
+          if (!result.success) {
+            setConnectingServerId(null);
+            alert(t('bashSSHError') || 'Script failed:\n\n' + (result.error || 'Unknown error'));
+            return;
+          }
+          const output = result.output?.trim() || '';
+          if (!output) {
+            setConnectingServerId(null);
+            alert(t('bashSSHEmptyOutput') || 'Script returned empty output');
+            return;
+          }
+          const jsonMatch = output.match(/\{[\s\S]*\}/);
+          const jsonStr = jsonMatch ? jsonMatch[0] : output;
+          let data: { host: string; port?: number; username: string; password?: string };
+          try {
+            data = JSON.parse(jsonStr);
+          } catch {
+            setConnectingServerId(null);
+            alert(t('bashSSHInvalidJSON') || 'Script output is not valid JSON');
+            return;
+          }
+          if (!data.host || !data.username) {
+            setConnectingServerId(null);
+            alert(t('bashSSHInvalidFields') || 'JSON must contain host and username');
+            return;
+          }
+          serverToConnect = {
+            ...server,
+            host: data.host,
+            port: data.port ?? 22,
+            username: data.username,
+            password: data.password,
+            authType: data.password ? 'password' : 'key',
+          };
+        } catch (err: any) {
+          setConnectingServerId(null);
+          alert(t('bashSSHError') || 'Script failed: ' + err.message);
+          return;
+        }
+      }
+
+      // Validate inputs (WSS doesn't need host/username; bashScript hosts validated above)
+      if (protocol !== 'wss' && (!serverToConnect.host || !serverToConnect.username)) {
         alert('Host and username are required');
         return;
       }
       
-      // Set connecting state for UI feedback
       setConnectingServerId(server.id);
       
-      // For SSH connections, check fingerprint first
       if (protocol === 'ssh') {
-        const fingerprintResult = await ipcRenderer.invoke('knownhosts:check', server.host, server.port || 22);
+        const fingerprintResult = await ipcRenderer.invoke('knownhosts:check', serverToConnect.host, serverToConnect.port || 22);
         
         if (fingerprintResult.status === 'unknown' || fingerprintResult.status === 'changed') {
-          // Show fingerprint modal and wait for user decision
           setFingerprintModal({
-            server,
+            server: serverToConnect,
             onProceed: () => {
               setFingerprintModal(null);
-              // Continue with connection after user accepts
-              performSSHConnect(server);
+              performSSHConnect(serverToConnect);
             },
           });
           return;
         }
-        // If status is 'match', continue directly
-        await performSSHConnect(server);
+        await performSSHConnect(serverToConnect);
         return;
       }
 
@@ -3111,17 +3155,10 @@ const App: React.FC = () => {
   };
 
   // Handle close session request - show custom confirm modal instead of window.confirm()
-  const handleCloseSession = async (id: string, skipConfirm = false) => {
+  const handleCloseSession = async (id: string, _skipConfirm = false) => {
     const session = sessions.find(s => s.id === id);
     if (!session) return;
-    
-    // Show custom confirm modal instead of window.confirm() to avoid focus issues
-    if (!skipConfirm) {
-      setCloseConfirmModal({ sessionId: id, serverName: session.server.name });
-      return;
-    }
-    
-    // Actual close logic - called when user confirms
+    // Always close immediately without confirmation
     doCloseSession(id);
   };
 
@@ -3720,6 +3757,15 @@ const App: React.FC = () => {
                       {t('localTerminal')}
                     </button>
                     <button
+                      onClick={handleBashSSH}
+                      className={`px-4 py-2 text-sm font-medium rounded-lg transition shadow-sm flex items-center gap-2 ${appTheme === 'light' ? 'bg-amber-100 hover:bg-amber-200 text-amber-800' : 'bg-amber-600/80 hover:bg-amber-600 text-white'}`}
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16m-7 6h7" />
+                      </svg>
+                      {t('bashSSH')}
+                    </button>
+                    <button
                       onClick={() => { setEditingServer(null); setShowModal(true); }}
                       className="px-4 py-2 bg-teal-600 hover:bg-teal-700 !text-white text-sm font-medium rounded-lg transition shadow-sm flex items-center gap-2"
                     >
@@ -3771,6 +3817,7 @@ const App: React.FC = () => {
               <div className="flex-1 overflow-hidden">
                 <ServerList
                   servers={filteredServers}
+                  connectingServerId={connectingServerId}
                   onConnect={handleConnect}
                   onConnectSFTP={handleConnectSFTP}
                   onEdit={handleEditServer}
@@ -6572,6 +6619,14 @@ const App: React.FC = () => {
         />
       )}
 
+      {showBashSSHModal && (
+        <BashSSHModal
+          onSave={(server) => setServers(prev => [...prev, server])}
+          onConnect={handleConnect}
+          onClose={() => setShowBashSSHModal(false)}
+        />
+      )}
+
       {/* SSH Fingerprint Modal */}
       {fingerprintModal && (
         <SSHFingerprintModal
@@ -6583,24 +6638,6 @@ const App: React.FC = () => {
             setConnectingServerId(null);
           }}
           onSkip={fingerprintModal.onProceed}
-        />
-      )}
-
-      {/* Close Session Confirm Modal */}
-      {closeConfirmModal && (
-        <ConfirmModal
-          isOpen={true}
-          title={t('confirmDisconnect')}
-          message={`${t('confirmCloseSession')} "${closeConfirmModal.serverName}"?`}
-          confirmText={t('disconnect')}
-          cancelText={t('cancel')}
-          variant="warning"
-          onConfirm={() => {
-            const sessionId = closeConfirmModal.sessionId;
-            setCloseConfirmModal(null);
-            doCloseSession(sessionId);
-          }}
-          onCancel={() => setCloseConfirmModal(null)}
         />
       )}
 

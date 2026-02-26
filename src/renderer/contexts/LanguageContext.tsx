@@ -4,7 +4,8 @@ import React, { createContext, useContext, useState, useEffect, useCallback, Rea
 export type Language = 
   | 'en' | 'vi' | 'id' | 'zh' | 'ko' 
   | 'ja' | 'fr' | 'de' | 'es' | 'th' 
-  | 'ms' | 'ru' | 'fil' | 'pt';
+  | 'ms' | 'ru' | 'fil' | 'pt' | 'ar'
+  | 'hi' | 'it' | 'tr' | 'nl' | 'pl';
 
 export interface LanguageInfo {
   code: Language;
@@ -28,6 +29,12 @@ export const LANGUAGES: LanguageInfo[] = [
   { code: 'ru', name: 'Russian', nativeName: 'Русский', flag: '🇷🇺' },
   { code: 'fil', name: 'Filipino', nativeName: 'Filipino', flag: '🇵🇭' },
   { code: 'pt', name: 'Portuguese', nativeName: 'Português', flag: '🇧🇷' },
+  { code: 'ar', name: 'Arabic', nativeName: 'العربية', flag: '🇸🇦' },
+  { code: 'hi', name: 'Hindi', nativeName: 'हिन्दी', flag: '🇮🇳' },
+  { code: 'it', name: 'Italian', nativeName: 'Italiano', flag: '🇮🇹' },
+  { code: 'tr', name: 'Turkish', nativeName: 'Türkçe', flag: '🇹🇷' },
+  { code: 'nl', name: 'Dutch', nativeName: 'Nederlands', flag: '🇳🇱' },
+  { code: 'pl', name: 'Polish', nativeName: 'Polski', flag: '🇵🇱' },
 ];
 
 // Translation keys type
@@ -104,6 +111,20 @@ export interface Translations {
   closeTab: string;
   newTab: string;
   localTerminal: string;
+  bashSSH: string;
+  bashSSHError?: string;
+  bashSSHEmptyOutput?: string;
+  bashSSHInvalidJSON?: string;
+  bashSSHInvalidFields?: string;
+  bashSSHSaveError?: string;
+  bashSSHScriptPath?: string;
+  bashSSHScriptContent?: string;
+  bashSSHScriptHint?: string;
+  bashSSHScriptRequired?: string;
+  bashSSHRun?: string;
+  bashSSHServerInfo?: string;
+  bashSSHCreateAndConnect?: string;
+  bashSSHDynamicCredentials?: string;
   
   // SFTP
   localFiles: string;
@@ -1392,6 +1413,12 @@ import ms from '../locales/ms.json';
 import ru from '../locales/ru.json';
 import fil from '../locales/fil.json';
 import pt from '../locales/pt.json';
+import ar from '../locales/ar.json';
+import hi from '../locales/hi.json';
+import it from '../locales/it.json';
+import tr from '../locales/tr.json';
+import nl from '../locales/nl.json';
+import pl from '../locales/pl.json';
 
 // Use type assertion to avoid strict type checking for translations
 // This allows partial translations in non-English locales
@@ -1409,7 +1436,13 @@ const translationsMap: Record<Language, Translations> = {
   ms: { ...en, ...ms } as Translations,
   ru: { ...en, ...ru } as Translations,
   fil: { ...en, ...fil } as Translations,
-  pt: { ...en, ...pt } as Translations
+  pt: { ...en, ...pt } as Translations,
+  ar: { ...en, ...ar } as Translations,
+  hi: { ...en, ...hi } as Translations,
+  it: { ...en, ...it } as Translations,
+  tr: { ...en, ...tr } as Translations,
+  nl: { ...en, ...nl } as Translations,
+  pl: { ...en, ...pl } as Translations
 };
 
 // Import geo language service

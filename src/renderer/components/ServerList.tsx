@@ -8,13 +8,15 @@ interface Server {
   port: number;
   username: string;
   icon?: string;
-  protocol?: 'ssh' | 'ftp' | 'ftps' | 'rdp' | 'wss' | 'mysql' | 'postgresql' | 'mongodb' | 'redis' | 'sqlite';
+  protocol?: 'ssh' | 'bash-ssh' | 'ftp' | 'ftps' | 'rdp' | 'wss' | 'mysql' | 'postgresql' | 'mongodb' | 'redis' | 'sqlite';
   wssUrl?: string;
   tags?: string[];
+  bashScript?: string;
 }
 
 interface Props {
   servers: Server[];
+  connectingServerId?: string | null;
   onConnect: (server: Server) => void;
   onConnectSFTP?: (server: Server) => void;
   onEdit: (server: Server) => void;
@@ -142,8 +144,9 @@ const PROTOCOL_CONFIG: Record<string, { color: string; bgColor: string; icon: Re
   },
 };
 
-const ServerList: React.FC<Props> = ({ 
-  servers, 
+const ServerList: React.FC<Props> = ({
+  servers,
+  connectingServerId,
   onConnect,
   onConnectSFTP,
   onEdit, 
@@ -446,6 +449,7 @@ const ServerList: React.FC<Props> = ({
               const protocol = PROTOCOL_CONFIG[server.protocol || 'ssh'];
               const isHovered = hoveredId === server.id;
               const isSelected = selectedServerIds.includes(server.id);
+              const isConnecting = connectingServerId === server.id;
               const connectionStr = server.protocol === 'wss' 
                 ? (server.wssUrl || server.host)
                 : `${server.username}@${server.host}:${server.port}`;
@@ -460,7 +464,9 @@ const ServerList: React.FC<Props> = ({
                   onDragLeave={handleDragLeave}
                   onDrop={(e) => handleDrop(e, server)}
                   className={`group relative bg-navy-800 rounded-lg border transition-all duration-200 cursor-pointer ${
-                    isSelected
+                    isConnecting
+                      ? 'border-amber-500 shadow-lg shadow-amber-500/20 ring-2 ring-amber-500/30'
+                      : isSelected
                       ? 'border-teal-500 shadow-lg shadow-teal-500/20 ring-2 ring-teal-500/30'
                       : dragOverId === server.id
                       ? 'border-teal-400 border-dashed bg-teal-500/10'
@@ -551,12 +557,27 @@ const ServerList: React.FC<Props> = ({
                       </div>
                     </div>
 
-                    {/* Server name */}
-                    <h3 className="font-semibold text-white text-sm truncate mb-1">{server.name}</h3>
+                    {/* Server name with connecting indicator */}
+                    <div className="flex items-center gap-2 mb-1">
+                      <h3 className="font-semibold text-white text-sm truncate flex-1">{server.name}</h3>
+                      {isConnecting && (
+                        <span className="flex-shrink-0 flex items-center gap-1 text-amber-400 text-xs">
+                          <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                          </svg>
+                          {t('connecting') || 'Connecting...'}
+                        </span>
+                      )}
+                    </div>
                     
-                    {/* Host */}
+                    {/* Host or Script indicator */}
                     <p className="text-xs text-gray-500 font-mono truncate">
-                      {server.protocol === 'wss' ? (server.wssUrl || server.host) : server.host}
+                      {server.bashScript
+                        ? (t('bashSSHDynamicCredentials') || 'Script → dynamic credentials')
+                        : server.protocol === 'wss'
+                          ? (server.wssUrl || server.host)
+                          : server.host}
                     </p>
 
                     {/* Tags */}
