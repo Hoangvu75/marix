@@ -11,11 +11,13 @@ interface TerminalInstance {
   element: HTMLDivElement;
   isReady: boolean;
   config?: any;  // Store config for reconnect
+  pendingPassword?: string;  // For JS SSH: password to auto-send when prompted
+  passwordSent?: boolean;  // Track if password was already sent
 }
 
 interface TerminalContextType {
   getTerminal: (connectionId: string) => TerminalInstance | undefined;
-  createTerminal: (connectionId: string, container: HTMLDivElement, themeName?: string, config?: any, fontFamily?: string) => TerminalInstance;
+  createTerminal: (connectionId: string, container: HTMLDivElement, themeName?: string, config?: any, fontFamily?: string, pendingPassword?: string) => TerminalInstance;
   destroyTerminal: (connectionId: string) => void;
   applyTheme: (connectionId: string, themeName: string) => void;
   applyThemeToAll: (themeName: string) => void;
@@ -66,7 +68,7 @@ export const TerminalProvider: React.FC<{ children: ReactNode }> = ({ children }
     });
   };
 
-  const createTerminal = (connectionId: string, container: HTMLDivElement, themeName: string = 'Dracula', config?: any, fontFamily?: string): TerminalInstance => {
+  const createTerminal = (connectionId: string, container: HTMLDivElement, themeName: string = 'Dracula', config?: any, fontFamily?: string, pendingPassword?: string): TerminalInstance => {
     // Check if already exists
     let instance = terminalsRef.current.get(connectionId);
     if (instance) {
@@ -169,6 +171,27 @@ export const TerminalProvider: React.FC<{ children: ReactNode }> = ({ children }
     const handleData = (connId: string, data: string) => {
       if (connId === connectionId) {
         xterm.write(data);
+        
+        // Auto-send pending password when prompted (for JS SSH)
+        const inst = terminalsRef.current.get(connectionId);
+        if (inst?.pendingPassword && !inst.passwordSent) {
+          const lowerData = data.toLowerCase();
+          const hasPasswordPrompt = 
+            lowerData.includes('password:') ||
+            lowerData.includes("'s password:") ||
+            lowerData.includes('password for');
+          
+          if (hasPasswordPrompt) {
+            console.log('[TerminalContext] Password prompt detected, auto-sending password');
+            inst.passwordSent = true;
+            // Small delay to ensure prompt is fully rendered
+            setTimeout(() => {
+              ipcRenderer.invoke('ssh:writeShell', connectionId, inst.pendingPassword + '\r');
+              // Clear password after sending for security
+              inst.pendingPassword = undefined;
+            }, 100);
+          }
+        }
       }
     };
 
@@ -246,6 +269,8 @@ export const TerminalProvider: React.FC<{ children: ReactNode }> = ({ children }
       element,
       isReady: true,  // Ready immediately with native SSH
       config: config,  // Store for auto-reconnect
+      pendingPassword: pendingPassword,  // For JS SSH auto-send
+      passwordSent: false,
     };
 
     terminalsRef.current.set(connectionId, instance);

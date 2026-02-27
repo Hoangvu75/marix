@@ -31,7 +31,7 @@ const AddServerModal: React.FC<Props> = ({ server, existingTags = [], onSave, on
     username: '',
     password: '',
     icon: 'linux',
-    protocol: 'ssh' as 'ssh' | 'bash-ssh' | 'ftp' | 'ftps' | 'rdp' | 'wss' | 'mysql' | 'postgresql' | 'mongodb' | 'redis' | 'sqlite',
+    protocol: 'ssh' as 'ssh' | 'js-ssh' | 'ftp' | 'ftps' | 'rdp' | 'wss' | 'mysql' | 'postgresql' | 'mongodb' | 'redis' | 'sqlite',
     authType: 'password' as 'password' | 'key',
     privateKey: '',
     passphrase: '',
@@ -49,7 +49,7 @@ const AddServerModal: React.FC<Props> = ({ server, existingTags = [], onSave, on
     envVars: {} as { [key: string]: string },  // Environment variables for SSH
     defaultRemotePath: '',  // Default remote path for SFTP
     defaultLocalPath: '',   // Default local path for SFTP
-    bashScript: '',  // Bash script for Bash SSH protocol
+    jsScript: '',  // JavaScript script for JS SSH protocol
   });
   const [tagInput, setTagInput] = useState('');
   const [showTagSuggestions, setShowTagSuggestions] = useState(false);
@@ -85,7 +85,7 @@ const AddServerModal: React.FC<Props> = ({ server, existingTags = [], onSave, on
         username: server.username,
         password: server.password || '',
         icon: server.icon || 'linux',
-        protocol: (server as any).bashScript ? 'bash-ssh' : (server.protocol || 'ssh'),
+        protocol: (server as any).jsScript ? 'js-ssh' : (server.protocol || 'ssh'),
         authType: server.authType || 'password',
         privateKey: server.privateKey || '',
         passphrase: server.passphrase || '',
@@ -103,7 +103,7 @@ const AddServerModal: React.FC<Props> = ({ server, existingTags = [], onSave, on
         envVars: (server as any).envVars || {},
         defaultRemotePath: (server as any).defaultRemotePath || '',
         defaultLocalPath: (server as any).defaultLocalPath || '',
-        bashScript: (server as any).bashScript || '',
+        jsScript: (server as any).jsScript || '',
       });
       
       // Set knock input string
@@ -139,7 +139,7 @@ const AddServerModal: React.FC<Props> = ({ server, existingTags = [], onSave, on
     tag => tag.toLowerCase().includes(tagInput.toLowerCase()) && !data.tags.includes(tag)
   );
 
-  const handleProtocolChange = (protocol: 'ssh' | 'bash-ssh' | 'ftp' | 'ftps' | 'rdp' | 'wss' | 'mysql' | 'postgresql' | 'mongodb' | 'redis' | 'sqlite') => {
+  const handleProtocolChange = (protocol: 'ssh' | 'js-ssh' | 'ftp' | 'ftps' | 'rdp' | 'wss' | 'mysql' | 'postgresql' | 'mongodb' | 'redis' | 'sqlite') => {
     let defaultPort = 22;
     let defaultIcon = data.icon;
     
@@ -170,7 +170,7 @@ const AddServerModal: React.FC<Props> = ({ server, existingTags = [], onSave, on
     } else if (protocol === 'sqlite') {
       defaultPort = 0;
       defaultIcon = 'sqlite';
-    } else if (protocol === 'bash-ssh') {
+    } else if (protocol === 'js-ssh') {
       defaultPort = 22;
       defaultIcon = 'linux';
     } else if (data.icon === 'ftp' || data.icon === 'sftp' || data.icon === 'windows' || data.icon === 'wss' || data.icon === 'mysql' || data.icon === 'postgresql' || data.icon === 'mongodb' || data.icon === 'redis' || data.icon === 'sqlite') {
@@ -264,14 +264,14 @@ const AddServerModal: React.FC<Props> = ({ server, existingTags = [], onSave, on
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Bash SSH: only name + script
-    if (data.protocol === 'bash-ssh') {
+    // JS SSH: only name + script
+    if (data.protocol === 'js-ssh') {
       if (!data.name.trim()) {
-        alert(t('bashSSHScriptRequired') || 'Server name is required');
+        alert(t('jsSSHNameRequired') || 'Server name is required');
         return;
       }
-      if (!(data as any).bashScript?.trim()) {
-        alert(t('bashSSHScriptRequired') || 'Script content is required');
+      if (!(data as any).jsScript?.trim()) {
+        alert(t('jsSSHScriptRequired') || 'Script content is required');
         return;
       }
       const saveData = {
@@ -281,7 +281,7 @@ const AddServerModal: React.FC<Props> = ({ server, existingTags = [], onSave, on
         port: 22,
         username: '',
         password: undefined,
-        bashScript: (data as any).bashScript.trim(),
+        jsScript: (data as any).jsScript.trim(),
       };
       onSave(saveData);
       return;
@@ -463,7 +463,7 @@ const AddServerModal: React.FC<Props> = ({ server, existingTags = [], onSave, on
             >
               <optgroup label="Remote Access">
                 <option value="ssh">SSH (Secure Shell)</option>
-                <option value="bash-ssh">{t('bashSSH') || 'Bash SSH'}</option>
+                <option value="js-ssh">{t('jsSSH') || 'JS SSH'}</option>
                 <option value="rdp">RDP (Windows Remote Desktop)</option>
                 <option value="wss">WSS (WebSocket Secure)</option>
               </optgroup>
@@ -512,22 +512,22 @@ const AddServerModal: React.FC<Props> = ({ server, existingTags = [], onSave, on
             </div>
           )}
 
-          {/* Bash SSH: Script content */}
-          {data.protocol === 'bash-ssh' && (
+          {/* JS SSH: Script content */}
+          {data.protocol === 'js-ssh' && (
             <div>
               <label className="block text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">
-                {t('bashSSHScriptContent') || 'Script content'}
+                {t('jsSSHScriptContent') || 'JavaScript Script'}
               </label>
               <textarea
-                value={(data as any).bashScript || ''}
-                onChange={(e) => setData(prev => ({ ...prev, bashScript: e.target.value }))}
-                placeholder={`echo '{"host":"...","port":22,"username":"...","password":"..."}'`}
+                value={(data as any).jsScript || ''}
+                onChange={(e) => setData(prev => ({ ...prev, jsScript: e.target.value }))}
+                placeholder={`// Return: { host, port?, username, password? }\nconst resp = await fetch('...');\nreturn resp.json();`}
                 rows={8}
                 className="w-full px-3 py-2.5 bg-navy-900 border border-navy-600 rounded-lg text-sm text-white placeholder-gray-500 focus:outline-none focus:border-teal-500 font-mono resize-y"
-                required={data.protocol === 'bash-ssh'}
+                required={data.protocol === 'js-ssh'}
               />
               <p className="text-xs text-gray-500 mt-1">
-                {t('bashSSHScriptHint') || 'Script must echo valid JSON with host, username (port optional, password optional)'}
+                {t('jsSSHScriptHint') || 'Script must return object: { host, username, port?, password? }'}
               </p>
             </div>
           )}
@@ -566,7 +566,7 @@ const AddServerModal: React.FC<Props> = ({ server, existingTags = [], onSave, on
 
           <div>
             <label className="block text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">
-              {data.protocol === 'wss' ? t('displayName') : data.protocol === 'bash-ssh' ? t('serverName') : t('hostName')}
+              {data.protocol === 'wss' ? t('displayName') : data.protocol === 'js-ssh' ? t('serverName') : t('hostName')}
             </label>
             <input
               type="text"
@@ -579,8 +579,8 @@ const AddServerModal: React.FC<Props> = ({ server, existingTags = [], onSave, on
             />
           </div>
 
-          {/* Tags (hide for Bash SSH) */}
-          {data.protocol !== 'bash-ssh' && (
+          {/* Tags (hide for JS SSH) */}
+          {data.protocol !== 'js-ssh' && (
           <div>
             <label className="block text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">{t('tags')}</label>
             <div className="flex flex-wrap gap-2 mb-2">
@@ -638,7 +638,7 @@ const AddServerModal: React.FC<Props> = ({ server, existingTags = [], onSave, on
           )}
 
           {/* Address & Port (not for WSS - WSS uses URL) */}
-          {data.protocol !== 'wss' && data.protocol !== 'bash-ssh' && (
+          {data.protocol !== 'wss' && data.protocol !== 'js-ssh' && (
             <div className="grid grid-cols-3 gap-3">
               <div className="col-span-2">
                 <label className="block text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">{t('hostIp')}</label>
@@ -802,8 +802,8 @@ const AddServerModal: React.FC<Props> = ({ server, existingTags = [], onSave, on
             </div>
           )}
 
-          {/* Username (not for WSS, not for Bash SSH) */}
-          {data.protocol !== 'wss' && data.protocol !== 'bash-ssh' && (
+          {/* Username (not for WSS, not for JS SSH) */}
+          {data.protocol !== 'wss' && data.protocol !== 'js-ssh' && (
             <div>
               <label className="block text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">{t('username')}</label>
               <input
@@ -848,8 +848,8 @@ const AddServerModal: React.FC<Props> = ({ server, existingTags = [], onSave, on
             </div>
           )}
 
-          {/* Password field (not for WSS, not for Bash SSH) */}
-          {(data.authType === 'password' || data.protocol !== 'ssh') && data.protocol !== 'wss' && data.protocol !== 'bash-ssh' && (
+          {/* Password field (not for WSS, not for JS SSH) */}
+          {(data.authType === 'password' || data.protocol !== 'ssh') && data.protocol !== 'wss' && data.protocol !== 'js-ssh' && (
             <div>
               <label className="block text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">{t('password')}</label>
               <input

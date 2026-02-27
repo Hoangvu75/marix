@@ -10,7 +10,7 @@ import RDPDepsInstaller from './components/RDPDepsInstaller';
 import WSSViewer from './components/WSSViewer';
 import DatabaseClient from './components/DatabaseClient';
 import AddServerModal from './components/AddServerModal';
-import BashSSHModal from './components/BashSSHModal';
+import JsSSHModal from './components/JsSSHModal';
 import ThemeSelector from './components/ThemeSelector';
 import LanguageSelector from './components/LanguageSelector';
 import SSHFingerprintModal from './components/SSHFingerprintModal';
@@ -51,7 +51,7 @@ export interface Server {
   username: string;
   password?: string;
   icon?: string;  // OS icon name: ubuntu, debian, centos, windows, etc.
-  protocol?: 'ssh' | 'bash-ssh' | 'ftp' | 'ftps' | 'rdp' | 'wss' | 'mysql' | 'postgresql' | 'mongodb' | 'redis' | 'sqlite';
+  protocol?: 'ssh' | 'js-ssh' | 'ftp' | 'ftps' | 'rdp' | 'wss' | 'mysql' | 'postgresql' | 'mongodb' | 'redis' | 'sqlite';
   authType?: 'password' | 'key';
   privateKey?: string;
   passphrase?: string;
@@ -73,7 +73,7 @@ export interface Server {
   envVars?: { [key: string]: string };  // Environment variables for SSH (like ssh -o SetEnv)
   defaultRemotePath?: string;  // Default remote path for SFTP
   defaultLocalPath?: string;   // Default local path for SFTP
-  bashScript?: string;  // Bash script content for Bash SSH hosts (echo JSON)
+  jsScript?: string;  // JavaScript script for JS SSH hosts (returns credentials object)
 }
 
 export interface Session {
@@ -82,6 +82,7 @@ export interface Session {
   connectionId: string;
   type: 'terminal' | 'sftp' | 'rdp' | 'wss' | 'database';
   theme?: string;
+  pendingPassword?: string;  // For JS SSH: password to auto-send when terminal prompts
   sftpPaths?: {
     localPath: string;
     remotePath: string;
@@ -255,7 +256,7 @@ const App: React.FC = () => {
   
   // Connecting state (for UI feedback)
   const [connectingServerId, setConnectingServerId] = useState<string | null>(null);
-  const [showBashSSHModal, setShowBashSSHModal] = useState(false);
+  const [showJsSSHModal, setShowJsSSHModal] = useState(false);
   
   // Tab drag state
   const [draggedTabId, setDraggedTabId] = useState<string | null>(null);
@@ -2387,8 +2388,8 @@ const App: React.FC = () => {
     }
   };
 
-  // Bash SSH - open modal for script input and server creation
-  const handleBashSSH = () => setShowBashSSHModal(true);
+  // JS SSH - open modal for script input and server creation
+  const handleJsSSH = () => setShowJsSSHModal(true);
 
   // Poll for RDP dependencies after install session is created
   useEffect(() => {
@@ -2615,53 +2616,41 @@ const App: React.FC = () => {
       let serverToConnect = server;
       const protocol = server.protocol || 'ssh';
 
-      // Bash SSH: run script to get dynamic credentials before connecting
-      if (protocol === 'ssh' && server.bashScript?.trim()) {
+      // JS SSH: run JavaScript script to get dynamic credentials before connecting
+      if (protocol === 'ssh' && server.jsScript?.trim()) {
         setConnectingServerId(server.id);
         try {
-          const result = await ipcRenderer.invoke('bash:runScriptContent', server.bashScript.trim());
+          const result = await ipcRenderer.invoke('js:runScript', server.jsScript.trim());
           if (!result.success) {
             setConnectingServerId(null);
-            alert(t('bashSSHError') || 'Script failed:\n\n' + (result.error || 'Unknown error'));
+            alert(t('jsSSHError') || 'Script failed:\n\n' + (result.error || 'Unknown error'));
             return;
           }
-          const output = result.output?.trim() || '';
-          if (!output) {
+          const data = result.data;
+          if (!data || !data.host || !data.username) {
             setConnectingServerId(null);
-            alert(t('bashSSHEmptyOutput') || 'Script returned empty output');
+            alert(t('jsSSHInvalidFields') || 'Script must return object with host and username');
             return;
           }
-          const jsonMatch = output.match(/\{[\s\S]*\}/);
-          const jsonStr = jsonMatch ? jsonMatch[0] : output;
-          let data: { host: string; port?: number; username: string; password?: string };
-          try {
-            data = JSON.parse(jsonStr);
-          } catch {
-            setConnectingServerId(null);
-            alert(t('bashSSHInvalidJSON') || 'Script output is not valid JSON');
-            return;
-          }
-          if (!data.host || !data.username) {
-            setConnectingServerId(null);
-            alert(t('bashSSHInvalidFields') || 'JSON must contain host and username');
-            return;
-          }
+          // Store password for auto-send when terminal prompts (handled by TerminalContext)
           serverToConnect = {
             ...server,
             host: data.host,
             port: data.port ?? 22,
             username: data.username,
-            password: data.password,
-            authType: data.password ? 'password' : 'key',
+            password: undefined,  // Don't pass to SSH config - let terminal handle it
+            authType: 'password',
+            // @ts-ignore - temporary field for JS SSH flow
+            _pendingPassword: data.password,
           };
         } catch (err: any) {
           setConnectingServerId(null);
-          alert(t('bashSSHError') || 'Script failed: ' + err.message);
+          alert(t('jsSSHError') || 'Script failed: ' + err.message);
           return;
         }
       }
 
-      // Validate inputs (WSS doesn't need host/username; bashScript hosts validated above)
+      // Validate inputs (WSS doesn't need host/username; jsScript hosts validated above)
       if (protocol !== 'wss' && (!serverToConnect.host || !serverToConnect.username)) {
         alert('Host and username are required');
         return;
@@ -2979,12 +2968,17 @@ const App: React.FC = () => {
 
       // Don't connect SFTP here - will connect on-demand when user clicks SFTP tab
 
+      // Extract pending password for JS SSH flow (if any)
+      // @ts-ignore - _pendingPassword is a temporary field
+      const pendingPassword = server._pendingPassword;
+      
       const terminalSession: Session = {
         id: `term-${Date.now()}`,
         server,
         connectionId: result.connectionId,
         type: 'terminal',
         theme: currentTheme,
+        pendingPassword,  // For JS SSH: auto-send when terminal prompts
         sftpPaths: {
           localPath: server.defaultLocalPath || '',
           remotePath: server.defaultRemotePath || '',
@@ -3757,13 +3751,13 @@ const App: React.FC = () => {
                       {t('localTerminal')}
                     </button>
                     <button
-                      onClick={handleBashSSH}
+                      onClick={handleJsSSH}
                       className={`px-4 py-2 text-sm font-medium rounded-lg transition shadow-sm flex items-center gap-2 ${appTheme === 'light' ? 'bg-amber-100 hover:bg-amber-200 text-amber-800' : 'bg-amber-600/80 hover:bg-amber-600 text-white'}`}
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16m-7 6h7" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
                       </svg>
-                      {t('bashSSH')}
+                      {t('jsSSH')}
                     </button>
                     <button
                       onClick={() => { setEditingServer(null); setShowModal(true); }}
@@ -5942,11 +5936,12 @@ const App: React.FC = () => {
               style={{ display: session.id === activeSessionId ? 'block' : 'none' }}
             >
               {session.type === 'terminal' ? (
-                <XTermTerminal 
+                <XTermTerminal
                   connectionId={session.connectionId}
                   theme={currentTheme}
                   server={session.server}
                   showSnippetPanel={session.server.id !== 'local'}
+                  pendingPassword={session.pendingPassword}
                 />
               ) : session.type === 'rdp' ? (
                 <RDPViewer
@@ -6619,11 +6614,11 @@ const App: React.FC = () => {
         />
       )}
 
-      {showBashSSHModal && (
-        <BashSSHModal
+      {showJsSSHModal && (
+        <JsSSHModal
           onSave={(server) => setServers(prev => [...prev, server])}
           onConnect={handleConnect}
-          onClose={() => setShowBashSSHModal(false)}
+          onClose={() => setShowJsSSHModal(false)}
         />
       )}
 

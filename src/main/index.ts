@@ -1707,56 +1707,105 @@ ipcMain.handle('servers:reorder', async (event, servers) => {
   }
 });
 
-// Bash SSH - run script content directly (user-entered script)
-ipcMain.handle('bash:runScriptContent', async (_event, scriptContent: string) => {
-  const { spawn } = require('child_process');
-  const os = require('os');
-  let tmpFile: string | null = null;
-  const cleanup = () => {
-    if (tmpFile) {
-      try { fs.unlinkSync(tmpFile); } catch {}
-      tmpFile = null;
-    }
-  };
-  return new Promise<{ success: boolean; output?: string; error?: string }>((resolve) => {
+// JS SSH - run JavaScript script to fetch SSH credentials
+// Script runs in a sandboxed environment with fetch() available
+ipcMain.handle('js:runScript', async (_event, scriptContent: string) => {
+  return new Promise<{ success: boolean; data?: any; error?: string }>(async (resolve) => {
     try {
       const scriptContentTrimmed = (scriptContent || '').trim();
       if (!scriptContentTrimmed) {
         resolve({ success: false, error: 'Script content is empty' });
         return;
       }
-      const tmpDir = os.tmpdir();
-      tmpFile = path.join(tmpDir, `marix-bash-${Date.now()}.sh`);
-      fs.writeFileSync(tmpFile, scriptContentTrimmed);
-      try { fs.chmodSync(tmpFile, 0o700); } catch {}
-      const isWin = process.platform === 'win32';
-      const bashCmd = isWin
-        ? (process.env.BASH || path.join(process.env.ProgramFiles || 'C:\\Program Files', 'Git', 'bin', 'bash.exe'))
-        : '/bin/bash';
-      const child = spawn(bashCmd, [tmpFile], {
-        cwd: app.getAppPath(),
-        env: { ...process.env, LC_ALL: 'C' },
-        encoding: 'utf8',
+      
+      // Wrap script in async function to support await
+      const wrappedScript = `
+        (async () => {
+          ${scriptContentTrimmed}
+        })()
+      `;
+      
+      // Execute script with timeout
+      const timeoutMs = 30000; // 30 seconds
+      let timeoutId: NodeJS.Timeout | null = null;
+      
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timeoutId = setTimeout(() => {
+          reject(new Error('Script timeout (30s)'));
+        }, timeoutMs);
       });
-      let stdout = '';
-      let stderr = '';
-      child.stdout?.on('data', (data: Buffer | string) => { stdout += (data?.toString?.() || data); });
-      child.stderr?.on('data', (data: Buffer | string) => { stderr += (data?.toString?.() || data); });
-      child.on('close', (code: number) => {
-        cleanup();
-        if (code === 0) {
-          resolve({ success: true, output: stdout.trim() });
-        } else {
-          resolve({ success: false, error: stderr || stdout || `Exit code ${code}` });
+      
+      const executePromise = (async () => {
+        // Use vm module for sandboxed execution
+        const vm = require('vm');
+        
+        // Create sandbox with fetch and common utilities
+        const sandbox = {
+          fetch: globalThis.fetch || require('node-fetch'),
+          console: {
+            log: (...args: any[]) => console.log('[JS Script]', ...args),
+            error: (...args: any[]) => console.error('[JS Script]', ...args),
+            warn: (...args: any[]) => console.warn('[JS Script]', ...args),
+          },
+          JSON,
+          Date,
+          Math,
+          parseInt,
+          parseFloat,
+          encodeURIComponent,
+          decodeURIComponent,
+          encodeURI,
+          decodeURI,
+          atob: (str: string) => Buffer.from(str, 'base64').toString('binary'),
+          btoa: (str: string) => Buffer.from(str, 'binary').toString('base64'),
+          Buffer,
+          URLSearchParams,
+          URL,
+          setTimeout: (fn: () => void, ms: number) => setTimeout(fn, Math.min(ms, 10000)), // Max 10s delay
+        };
+        
+        // Create context
+        const context = vm.createContext(sandbox);
+        
+        // Execute script
+        const script = new vm.Script(wrappedScript, { timeout: timeoutMs });
+        const result = await script.runInContext(context, { timeout: timeoutMs });
+        
+        return result;
+      })();
+      
+      try {
+        const result = await Promise.race([executePromise, timeoutPromise]);
+        if (timeoutId) clearTimeout(timeoutId);
+        
+        // Validate result
+        if (!result || typeof result !== 'object') {
+          resolve({ success: false, error: 'Script must return an object' });
+          return;
         }
-      });
-      child.on('error', (err: Error) => {
-        cleanup();
-        resolve({ success: false, error: err.message });
-      });
+        
+        if (!result.host || !result.username) {
+          resolve({ success: false, error: 'Script must return object with host and username' });
+          return;
+        }
+        
+        resolve({ 
+          success: true, 
+          data: {
+            host: String(result.host),
+            port: result.port ? Number(result.port) : 22,
+            username: String(result.username),
+            password: result.password ? String(result.password) : undefined,
+            name: result.name ? String(result.name) : undefined,
+          }
+        });
+      } catch (err: any) {
+        if (timeoutId) clearTimeout(timeoutId);
+        throw err;
+      }
     } catch (err: any) {
-      cleanup();
-      resolve({ success: false, error: err?.message || 'Unknown error' });
+      console.error('[JS Script] Error:', err);
+      resolve({ success: false, error: err?.message || 'Script execution failed' });
     }
   });
 });

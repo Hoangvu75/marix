@@ -21,9 +21,10 @@ interface Props {
     groupId?: string;
   };
   showSnippetPanel?: boolean;
+  pendingPassword?: string;  // For JS SSH: auto-send when terminal prompts
 }
 
-const XTermTerminal: React.FC<Props> = ({ connectionId, theme = 'Dracula', server, showSnippetPanel = true }) => {
+const XTermTerminal: React.FC<Props> = ({ connectionId, theme = 'Dracula', server, showSnippetPanel = true, pendingPassword }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const { getTerminal, createTerminal, applyTheme } = useTerminalContext();
@@ -153,7 +154,7 @@ const XTermTerminal: React.FC<Props> = ({ connectionId, theme = 'Dracula', serve
         username: server.username,
         password: server.password,
       } : undefined;
-      instance = createTerminal(connectionId, containerRef.current, theme, config);
+      instance = createTerminal(connectionId, containerRef.current, theme, config, undefined, pendingPassword);
       instanceRef.current = instance;
     }
 

@@ -111,21 +111,20 @@ export interface Translations {
   closeTab: string;
   newTab: string;
   localTerminal: string;
-  bashSSH: string;
-  bashSSHError?: string;
-  bashSSHEmptyOutput?: string;
-  bashSSHInvalidJSON?: string;
-  bashSSHInvalidFields?: string;
-  bashSSHSaveError?: string;
-  bashSSHScriptPath?: string;
-  bashSSHScriptContent?: string;
-  bashSSHScriptHint?: string;
-  bashSSHScriptRequired?: string;
-  bashSSHRun?: string;
-  bashSSHServerInfo?: string;
-  bashSSHCreateAndConnect?: string;
-  bashSSHDynamicCredentials?: string;
-  
+  jsSSH: string;
+  jsSSHError?: string;
+  jsSSHInvalidFields?: string;
+  jsSSHSaveError?: string;
+  jsSSHScriptContent?: string;
+  jsSSHScriptHint?: string;
+  jsSSHScriptRequired?: string;
+  jsSSHNameRequired?: string;
+  jsSSHRun?: string;
+  jsSSHTestSuccess?: string;
+  jsSSHCreateAndConnect?: string;
+  jsSSHDynamicCredentials?: string;
+  loadExample?: string;
+
   // SFTP
   localFiles: string;
   remoteFiles: string;

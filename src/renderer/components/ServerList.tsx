@@ -8,10 +8,10 @@ interface Server {
   port: number;
   username: string;
   icon?: string;
-  protocol?: 'ssh' | 'bash-ssh' | 'ftp' | 'ftps' | 'rdp' | 'wss' | 'mysql' | 'postgresql' | 'mongodb' | 'redis' | 'sqlite';
+  protocol?: 'ssh' | 'js-ssh' | 'ftp' | 'ftps' | 'rdp' | 'wss' | 'mysql' | 'postgresql' | 'mongodb' | 'redis' | 'sqlite';
   wssUrl?: string;
   tags?: string[];
-  bashScript?: string;
+  jsScript?: string;
 }
 
 interface Props {
@@ -573,8 +573,8 @@ const ServerList: React.FC<Props> = ({
                     
                     {/* Host or Script indicator */}
                     <p className="text-xs text-gray-500 font-mono truncate">
-                      {server.bashScript
-                        ? (t('bashSSHDynamicCredentials') || 'Script → dynamic credentials')
+                      {server.jsScript
+                        ? (t('jsSSHDynamicCredentials') || 'JS Script → dynamic credentials')
                         : server.protocol === 'wss'
                           ? (server.wssUrl || server.host)
                           : server.host}
