@@ -38,7 +38,8 @@ test.describe('Marix E2E Tests', () => {
     
     // Wait for app to be ready
     await page.waitForLoadState('domcontentloaded');
-    await page.waitForLoadState('networkidle');
+    // Note: Do NOT use 'networkidle' here - Electron apps maintain persistent
+    // IPC/WebSocket connections that prevent networkidle from ever being reached
     // Give app time to fully render React components
     await page.waitForTimeout(5000);
   });

@@ -2,6 +2,23 @@
 
 All notable changes to Marix SSH Client will be documented in this file.
 
+## [1.0.21] - 2026-02-27
+
+### Fixed
+- **E2E Tests**: Fixed all E2E tests failing due to `waitForLoadState('networkidle')` timeout in `beforeAll` hook
+  - Electron apps maintain persistent IPC/WebSocket connections, preventing `networkidle` from ever being reached
+  - Removed `networkidle` wait; `domcontentloaded` + render delay is sufficient
+  - All 14 E2E tests were blocked (1 failed + 13 skipped) across all 3 platforms (Ubuntu, macOS, Windows)
+
+- **Benchmark Upload Data Format**: Fixed benchmark data upload to benix.app missing/broken fields
+  - Fixed field names: `cpuCores` → `cores`, `cpuFreq` → `frequency`, `sequentialWrite` → `seqWrite`, `sequentialRead` → `seqRead`, `ioping` → `ioLatency`
+  - Fixed memory/swap/disk format from string to structured object `{ used, total, percent }`
+  - Fixed network results from string with units (`"362 Mbps"`) to numeric values
+  - Fixed duration from milliseconds to seconds
+  - Fixed CPU benchmark to use nested `{ singleThread, multiThread, scaling }` structure
+  - Added missing fields: `network.location`, `system.virtualization`, `system.isVirtual`
+  - Fixed IP mask formatting typo (extra space in masked IP)
+
 ## [1.0.20] - 2026-02-26
 
 ### Added
