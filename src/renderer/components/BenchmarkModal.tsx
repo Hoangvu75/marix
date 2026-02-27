@@ -712,7 +712,7 @@ const BenchmarkModal: React.FC<Props> = ({
     if (!ip) return ip;
     const parts = ip.split('.');
     if (parts.length === 4) {
-      return `${parts[0]}.${parts[1]}.**. ${parts[3]}`;
+      return `${parts[0]}.${parts[1]}.**.${parts[3]}`;
     }
     // IPv6: mask middle segments
     if (ip.includes(':')) {
@@ -727,23 +727,34 @@ const BenchmarkModal: React.FC<Props> = ({
   // Upload benchmark results to benix.app
   const uploadToBenixApi = async (res: BenchmarkResult): Promise<string | null> => {
     try {
-      // Build benix-compatible payload
+      // Build benix-compatible payload - must match BenchmarkData type in benix API
       const payload: any = {
         data: {
           system: res.systemInfo ? {
-            os: res.systemInfo.os,
             hostname: res.systemInfo.hostname,
+            os: res.systemInfo.os,
             kernel: res.systemInfo.kernel,
-            arch: res.systemInfo.arch,
             cpu: res.systemInfo.cpu?.model || '',
-            cpuCores: res.systemInfo.cpu?.cores || '',
-            cpuFreq: res.systemInfo.cpu?.frequency || '',
-            memory: `${res.systemInfo.memory?.used || ''} / ${res.systemInfo.memory?.total || ''}`,
-            swap: `${res.systemInfo.swap?.used || ''} / ${res.systemInfo.swap?.total || ''}`,
-            disk: `${res.systemInfo.disk?.used || ''} / ${res.systemInfo.disk?.total || ''}`,
+            cores: res.systemInfo.cpu?.cores || 0,
+            frequency: res.systemInfo.cpu?.frequency || '',
+            memory: {
+              used: res.systemInfo.memory?.used || '',
+              total: res.systemInfo.memory?.total || '',
+              percent: res.systemInfo.memory?.usagePercent || 0
+            },
+            swap: {
+              used: res.systemInfo.swap?.used || '',
+              total: res.systemInfo.swap?.total || '',
+              percent: 0
+            },
+            disk: {
+              used: res.systemInfo.disk?.used || '',
+              total: res.systemInfo.disk?.total || '',
+              percent: res.systemInfo.disk?.usagePercent || 0
+            },
+            virtualization: res.systemInfo.virtualization || '',
             uptime: res.systemInfo.uptime || '',
             loadAverage: res.systemInfo.loadAverage || '',
-            virtualization: res.systemInfo.virtualization || '',
             ipv4: res.systemInfo.ipv4 ?? false,
             ipv6: res.systemInfo.ipv6 ?? false
           } : null,
@@ -753,10 +764,10 @@ const BenchmarkModal: React.FC<Props> = ({
             threads: res.cpuBenchmark.threads || 0,
             frequency: res.cpuBenchmark.frequency,
             cache: res.cpuBenchmark.cache,
+            virtualization: res.cpuBenchmark.virtualization || '',
+            isVirtual: res.cpuBenchmark.isVirtual || false,
             hasAESNI: res.cpuBenchmark.hasAESNI,
-            singleThread: res.cpuBenchmark.benchmark.singleThread,
-            multiThread: res.cpuBenchmark.benchmark.multiThread,
-            scaling: res.cpuBenchmark.benchmark.scaling,
+            benchmark: res.cpuBenchmark.benchmark,
             crypto: res.cpuBenchmark.crypto,
             cpuSteal: res.cpuBenchmark.cpuSteal,
             stealRating: res.cpuBenchmark.stealRating
@@ -770,17 +781,24 @@ const BenchmarkModal: React.FC<Props> = ({
             latency: res.memoryBenchmark.latency
           } : null,
           disk: res.diskBenchmark ? {
-            sequentialWrite: res.diskBenchmark.sequentialWrite.speed,
-            sequentialRead: res.diskBenchmark.sequentialRead.speed,
-            ioping: res.diskBenchmark.ioping,
+            seqWrite: res.diskBenchmark.sequentialWrite.speed,
+            seqRead: res.diskBenchmark.sequentialRead.speed,
+            ioLatency: res.diskBenchmark.ioping,
             fio: res.diskBenchmark.fio || {}
           } : null,
           network: res.networkBenchmark ? {
             publicIp: maskIp(res.networkBenchmark.publicIp || ''),
-            provider: res.networkBenchmark.provider,
-            tests: res.networkBenchmark.tests
+            provider: res.networkBenchmark.provider || '',
+            location: '',
+            tests: res.networkBenchmark.tests.map(t => ({
+              server: t.server,
+              location: t.location,
+              download: parseFloat(t.download) || 0,
+              upload: parseFloat(t.upload) || 0,
+              latency: parseFloat(t.latency) || 0
+            }))
           } : null,
-          duration: res.duration
+          duration: Math.round((res.duration || 0) / 1000)
         },
         source: 'marix',
         is_private: false
