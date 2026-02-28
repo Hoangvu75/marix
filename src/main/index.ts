@@ -1395,17 +1395,24 @@ sessionMonitor.on('session-closed', (connectionId: string) => {
 
 ipcMain.handle('sftp:connect', async (event, connectionId, config) => {
   try {
-    // Check if ssh2 already connected
-    let client = sshManager.getConnection(connectionId);
+    // First, try to find existing SSH2 connection by server info (ignoring timestamp)
+    let client: any = null;
+    let sftpConnectionId = connectionId;
+    
+    const existingConn = sshManager.findConnectionByServer(config.host, config.port, config.username);
+    if (existingConn) {
+      console.log('[Main] Found existing SSH2 connection for SFTP:', existingConn.connectionId);
+      client = existingConn.client;
+      sftpConnectionId = existingConn.connectionId;
+    }
     
     if (!client) {
-      // Connect ssh2 on-demand for SFTP - need to use the same connectionId format
-      console.log('[Main] Connecting SSH2 for SFTP, connectionId:', connectionId);
+      // No existing connection, create new SSH2 connection for SFTP
+      console.log('[Main] Creating new SSH2 connection for SFTP');
       const newConnId = await sshManager.connect(config);
       console.log('[Main] SSH2 connected, newConnId:', newConnId);
-      // newConnId should match connectionId (both are user@host:port format)
       client = sshManager.getConnection(newConnId);
-      console.log('[Main] SSH2 client found:', !!client);
+      sftpConnectionId = newConnId;
     }
     
     if (!client) {
@@ -1707,6 +1714,126 @@ ipcMain.handle('servers:reorder', async (event, servers) => {
   }
 });
 
+// Simple hosts export/import (JSON) -----------------------------------------
+
+// Export hosts (servers + tag colors) to a JSON file
+ipcMain.handle('hosts:exportToFile', async () => {
+  try {
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const defaultName = `marix-hosts-${timestamp}.json`;
+    const homePath = app.getPath('home');
+    const defaultPath = path.join(homePath, defaultName);
+
+    const saveResult = await dialog.showSaveDialog(mainWindow!, {
+      title: 'Export Hosts',
+      defaultPath,
+      filters: [{ name: 'Marix Hosts JSON', extensions: ['json'] }],
+      properties: ['showOverwriteConfirmation', 'createDirectory'],
+    });
+
+    if (saveResult.canceled || !saveResult.filePath) {
+      return { success: false, canceled: true };
+    }
+
+    const servers = serverStore.getAllServers();
+    const tagColors = serverStore.getTagColors();
+
+    const payload = {
+      version: '1.0',
+      exportedAt: new Date().toISOString(),
+      servers,
+      tagColors,
+    };
+
+    fs.writeFileSync(saveResult.filePath, JSON.stringify(payload, null, 2), 'utf8');
+
+    console.log('[Main] hosts:exportToFile - exported', servers.length, 'servers to', saveResult.filePath);
+    return { success: true, filePath: saveResult.filePath, count: servers.length };
+  } catch (error: any) {
+    console.error('[Main] hosts:exportToFile error:', error.message);
+    return { success: false, error: error.message };
+  }
+});
+
+// Import hosts from a JSON file created by hosts:exportToFile
+ipcMain.handle('hosts:importFromFile', async () => {
+  try {
+    const openResult = await dialog.showOpenDialog(mainWindow!, {
+      title: 'Import Hosts',
+      filters: [{ name: 'Marix Hosts JSON', extensions: ['json'] }],
+      properties: ['openFile'],
+    });
+
+    if (openResult.canceled || !openResult.filePaths || openResult.filePaths.length === 0) {
+      return { success: false, canceled: true };
+    }
+
+    const filePath = openResult.filePaths[0];
+    const raw = fs.readFileSync(filePath, 'utf8');
+
+    let parsed: any;
+    try {
+      parsed = JSON.parse(raw);
+    } catch (e: any) {
+      return { success: false, error: 'Invalid JSON file format' };
+    }
+
+    // Support both { servers: [...] } and raw array formats
+    const servers = Array.isArray(parsed)
+      ? parsed
+      : Array.isArray(parsed?.servers)
+        ? parsed.servers
+        : [];
+
+    if (!Array.isArray(servers) || servers.length === 0) {
+      return { success: false, error: 'No servers found in file' };
+    }
+
+    // Merge: get existing ids to avoid duplicates
+    const existingServers = serverStore.getAllServers();
+    const existingIds = new Set(existingServers.map((s: any) => s.id));
+
+    // Normalize and ensure unique id per imported server
+    const normalizedServers = servers.map((s: any) => {
+      let id =
+        typeof s.id === 'string' && s.id.trim()
+          ? s.id
+          : `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      if (existingIds.has(id)) {
+        id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      }
+      existingIds.add(id);
+      const createdAt =
+        typeof s.createdAt === 'number' && Number.isFinite(s.createdAt)
+          ? s.createdAt
+          : Date.now();
+      return {
+        ...s,
+        id,
+        createdAt,
+      };
+    });
+
+    // Merge: add imported servers to existing (do not remove existing)
+    for (const server of normalizedServers) {
+      serverStore.addServer(server);
+    }
+
+    // Merge tag colors (imported overwrite only when key exists in parsed)
+    if (parsed && parsed.tagColors && typeof parsed.tagColors === 'object') {
+      const current = serverStore.getTagColors();
+      const merged = { ...current, ...parsed.tagColors };
+      serverStore.setTagColors(merged);
+    }
+
+    console.log('[Main] hosts:importFromFile - merged', normalizedServers.length, 'servers from', filePath);
+    return { success: true, imported: normalizedServers.length, filePath };
+  } catch (error: any) {
+    console.error('[Main] hosts:importFromFile error:', error.message);
+    return { success: false, error: error.message };
+  }
+});
+
 // JS SSH - run JavaScript script to fetch SSH credentials
 // Script runs in a sandboxed environment with fetch() available
 ipcMain.handle('js:runScript', async (_event, scriptContent: string) => {
@@ -1738,14 +1865,36 @@ ipcMain.handle('js:runScript', async (_event, scriptContent: string) => {
       const executePromise = (async () => {
         // Use vm module for sandboxed execution
         const vm = require('vm');
+        const https = require('https');
+        
+        // Create a custom fetch that ignores SSL certificate errors (like curl -k)
+        const unsafeFetch = async (url: string, options: any = {}) => {
+          const urlObj = new URL(url);
+          
+          // For HTTPS requests, use custom agent that ignores SSL errors
+          if (urlObj.protocol === 'https:') {
+            const agent = new https.Agent({
+              rejectUnauthorized: false, // Ignore self-signed certs
+            });
+            options = { ...options, agent };
+          }
+          
+          // Use node-fetch for compatibility with custom agent
+          const nodeFetch = require('node-fetch');
+          return nodeFetch(url, options);
+        };
         
         // Create sandbox with fetch and common utilities
         const sandbox = {
-          fetch: globalThis.fetch || require('node-fetch'),
+          fetch: unsafeFetch, // Use custom fetch that ignores SSL errors
           console: {
             log: (...args: any[]) => console.log('[JS Script]', ...args),
             error: (...args: any[]) => console.error('[JS Script]', ...args),
             warn: (...args: any[]) => console.warn('[JS Script]', ...args),
+          },
+          process: {
+            env: { ...process.env },
+            platform: process.platform,
           },
           JSON,
           Date,

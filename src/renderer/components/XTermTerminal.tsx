@@ -22,9 +22,10 @@ interface Props {
   };
   showSnippetPanel?: boolean;
   pendingPassword?: string;  // For JS SSH: auto-send when terminal prompts
+  isActive?: boolean;  // Whether this terminal tab is currently active/visible
 }
 
-const XTermTerminal: React.FC<Props> = ({ connectionId, theme = 'Dracula', server, showSnippetPanel = true, pendingPassword }) => {
+const XTermTerminal: React.FC<Props> = ({ connectionId, theme = 'Dracula', server, showSnippetPanel = true, pendingPassword, isActive = true }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const { getTerminal, createTerminal, applyTheme } = useTerminalContext();
@@ -173,13 +174,31 @@ const XTermTerminal: React.FC<Props> = ({ connectionId, theme = 'Dracula', serve
 
     return () => {
       window.removeEventListener('resize', handleResize);
-      
+
       // Detach but don't destroy
       if (instanceRef.current && instanceRef.current.element.parentElement) {
         instanceRef.current.element.parentElement.removeChild(instanceRef.current.element);
       }
     };
   }, [connectionId]);
+
+  // Refit terminal when tab becomes active (fixes display issues when switching tabs)
+  useEffect(() => {
+    if (isActive && instanceRef.current) {
+      // Small delay to ensure DOM is ready after display:none → display:block
+      const timer = setTimeout(() => {
+        if (instanceRef.current && instanceRef.current.fitAddon) {
+          instanceRef.current.fitAddon.fit();
+          // Also refresh the terminal to redraw content
+          instanceRef.current.xterm.refresh(0, instanceRef.current.xterm.rows - 1);
+          // Focus the terminal
+          instanceRef.current.xterm.focus();
+          console.log('[XTermTerminal] Refitted on tab activation:', connectionId);
+        }
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [isActive, connectionId]);
 
   // Apply theme when it changes
   useEffect(() => {

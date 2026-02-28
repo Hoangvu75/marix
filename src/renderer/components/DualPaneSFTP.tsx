@@ -395,16 +395,22 @@ const DualPaneSFTP: React.FC<Props> = ({ connectionId, server, initialLocalPath,
   // Connect SFTP/FTP
   useEffect(() => {
     const connectRemote = async () => {
-      // Always try to reconnect when component mounts
-      // Clear any stale connection state first
-      sftpConnections.delete(connectionId);
-      setConnected(false);
-      
       // For FTP, the connection is already established in App.tsx
       if (isFTP) {
         sftpConnections.set(connectionId, true);
         setConnected(true);
         loadRemoteFiles('/');
+        if (onSftpConnected) {
+          onSftpConnected();
+        }
+        return;
+      }
+      
+      // Check if already connected (persisted across tab switches)
+      if (sftpConnections.get(connectionId)) {
+        console.log('[DualPaneSFTP] Already connected, reusing session');
+        setConnected(true);
+        loadRemoteFiles(remotePath || '/');
         if (onSftpConnected) {
           onSftpConnected();
         }
@@ -439,10 +445,8 @@ const DualPaneSFTP: React.FC<Props> = ({ connectionId, server, initialLocalPath,
     
     connectRemote();
     
-    // Cleanup on unmount
-    return () => {
-      sftpConnections.delete(connectionId);
-    };
+    // DON'T cleanup on unmount - keep connection alive for tab switching
+    // Connection will be cleaned up when the session is closed
   }, [connectionId]);
 
   // Load local files

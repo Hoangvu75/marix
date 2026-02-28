@@ -27,6 +27,7 @@ import BenchmarkModal from './components/BenchmarkModal';
 import LockScreen from './components/LockScreen';
 import { BackupModal } from './components/BackupModal';
 import ConfirmModal from './components/ConfirmModal';
+import MessageModal from './components/MessageModal';
 import { useTerminalContext } from './contexts/TerminalContext';
 import { useLanguage } from './contexts/LanguageContext';
 
@@ -111,6 +112,8 @@ const App: React.FC = () => {
   const focusTrapRef = useRef<HTMLInputElement>(null);
   // App close confirm modal state
   const [appCloseConfirmModal, setAppCloseConfirmModal] = useState<{ requestId: number; totalActive: number; details: string } | null>(null);
+  const [hostsMessage, setHostsMessage] = useState<{ title: string; message: string; variant: 'success' | 'error' | 'info' } | null>(null);
+  const [importConfirmOpen, setImportConfirmOpen] = useState(false);
   const [editingServer, setEditingServer] = useState<Server | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [currentTheme, setCurrentTheme] = useState('Dracula');
@@ -262,6 +265,13 @@ const App: React.FC = () => {
   const [draggedTabId, setDraggedTabId] = useState<string | null>(null);
   const [dragOverTabId, setDragOverTabId] = useState<string | null>(null);
   
+  // Tab context menu state
+  const [tabContextMenu, setTabContextMenu] = useState<{
+    x: number;
+    y: number;
+    sessionId: string;
+  } | null>(null);
+
   // RDP connecting overlay state
   const [rdpConnecting, setRdpConnecting] = useState<{ server: Server; status: 'connecting' | 'error'; error?: string } | null>(null);
   
@@ -722,6 +732,72 @@ const App: React.FC = () => {
       }
     } catch (err) {
       console.error('[App] Failed to load servers:', err);
+    }
+  };
+
+  // Export hosts (servers + tag colors) to JSON file
+  const handleExportHosts = async () => {
+    try {
+      const result = await ipcRenderer.invoke('hosts:exportToFile');
+      if (result.success) {
+        setHostsMessage({
+          title: t('hosts') || 'Hosts',
+          message: (t('hostsExportSuccess') || 'Exported successfully.') + '\n' + (result.filePath || ''),
+          variant: 'success',
+        });
+      } else if (!result.canceled) {
+        setHostsMessage({
+          title: t('hostsExportError') || 'Export failed',
+          message: result.error || '',
+          variant: 'error',
+        });
+      }
+    } catch (err: any) {
+      setHostsMessage({
+        title: t('hostsExportError') || 'Export failed',
+        message: err?.message || '',
+        variant: 'error',
+      });
+    }
+  };
+
+  // Import hosts from JSON file (merge with existing)
+  const handleImportHostsClick = () => {
+    setImportConfirmOpen(true);
+  };
+
+  const handleImportHostsConfirm = async () => {
+    setImportConfirmOpen(false);
+    try {
+      const result = await ipcRenderer.invoke('hosts:importFromFile');
+      if (result.success) {
+        await loadServers();
+        try {
+          const tagColorsResult = await ipcRenderer.invoke('tags:getColors');
+          if (tagColorsResult && tagColorsResult.colors) {
+            setTagColors(tagColorsResult.colors);
+          }
+        } catch (e) {
+          console.error('[App] Failed to reload tag colors after hosts import:', e);
+        }
+        setHostsMessage({
+          title: t('hosts') || 'Hosts',
+          message: (t('hostsImportSuccess') || 'Imported successfully.') + ` (${result.imported || 0})`,
+          variant: 'success',
+        });
+      } else if (!result.canceled) {
+        setHostsMessage({
+          title: t('hostsImportError') || 'Import failed',
+          message: result.error || '',
+          variant: 'error',
+        });
+      }
+    } catch (err: any) {
+      setHostsMessage({
+        title: t('hostsImportError') || 'Import failed',
+        message: err?.message || '',
+        variant: 'error',
+      });
     }
   };
 
@@ -2367,7 +2443,6 @@ const App: React.FC = () => {
 
       setSessions([...sessions, localSession]);
       setActiveSessionId(localSession.id);
-      setSidebarOpen(false);
       console.log('[App] Local Terminal session created:', localSession.id);
 
       // If this is for RDP install, track the session and pending server
@@ -2475,7 +2550,6 @@ const App: React.FC = () => {
     const existingSession = sessions.find(s => s.server.id === server.id);
     if (existingSession) {
       setActiveSessionId(existingSession.id);
-      setSidebarOpen(false);
       setConnectingServerId(null);
       return;
     }
@@ -2532,7 +2606,6 @@ const App: React.FC = () => {
           
           setSessions(prev => [...prev, rdpSession]);
           setActiveSessionId(rdpSession.id);
-          setSidebarOpen(false);
           setConnectingServerId(null);
           setRdpConnecting(null); // Close overlay
           
@@ -2604,7 +2677,6 @@ const App: React.FC = () => {
       const existingSession = sessions.find(s => s.server.id === server.id);
       if (existingSession) {
         setActiveSessionId(existingSession.id);
-        setSidebarOpen(false);
         return;
       }
 
@@ -2709,7 +2781,6 @@ const App: React.FC = () => {
 
         setSessions([...sessions, ftpSession]);
         setActiveSessionId(ftpSession.id);
-        setSidebarOpen(false);  // Auto-hide sidebar
         setConnectingServerId(null);
         console.log('[App] FTP Session created:', ftpSession.id);
         return;
@@ -2763,7 +2834,6 @@ const App: React.FC = () => {
 
         setSessions([...sessions, wssSession]);
         setActiveSessionId(wssSession.id);
-        setSidebarOpen(false);  // Auto-hide sidebar
         setConnectingServerId(null);
         console.log('[App] WSS Session created:', wssSession.id, 'status:', result.success ? 'connected' : 'error');
         return;
@@ -2783,7 +2853,6 @@ const App: React.FC = () => {
 
         setSessions([...sessions, dbSession]);
         setActiveSessionId(dbSession.id);
-        setSidebarOpen(false);  // Auto-hide sidebar
         setConnectingServerId(null);
         console.log('[App] Database Session created:', dbSession.id);
         return;
@@ -2811,7 +2880,6 @@ const App: React.FC = () => {
         setSessions(sessions.map(s => 
           s.id === existingSession.id ? { ...s, type: 'sftp' } : s
         ));
-        setSidebarOpen(false);
         return;
       }
 
@@ -2861,7 +2929,6 @@ const App: React.FC = () => {
         setSessions(sessions.map(s => 
           s.id === existingSession.id ? { ...s, type: 'sftp' } : s
         ));
-        setSidebarOpen(false);
         setConnectingServerId(null);
         return;
       }
@@ -2909,7 +2976,6 @@ const App: React.FC = () => {
 
       setSessions(prev => [...prev, sftpSession]);
       setActiveSessionId(sftpSession.id);
-      setSidebarOpen(false);
       setConnectingServerId(null);
       
       console.log('[App] SFTP Session created:', sftpSession.id);
@@ -2927,7 +2993,6 @@ const App: React.FC = () => {
       const existingSession = sessions.find(s => s.server.id === server.id);
       if (existingSession) {
         setActiveSessionId(existingSession.id);
-        setSidebarOpen(false);
         setConnectingServerId(null);
         return;
       }
@@ -2987,7 +3052,6 @@ const App: React.FC = () => {
 
       setSessions(prev => [...prev, terminalSession]);
       setActiveSessionId(terminalSession.id);
-      setSidebarOpen(false);  // Auto-hide sidebar
       setConnectingServerId(null);
       
       console.log('[App] Session created:', terminalSession.id);
@@ -3154,6 +3218,119 @@ const App: React.FC = () => {
     if (!session) return;
     // Always close immediately without confirmation
     doCloseSession(id);
+  };
+
+  // Tab context menu actions
+  const handleCloseTabsToLeft = async (sessionId: string) => {
+    const targetIndex = sessions.findIndex(s => s.id === sessionId);
+    if (targetIndex <= 0) return;
+    
+    const sessionsToClose = sessions.slice(0, targetIndex);
+    const remainingSessions = sessions.slice(targetIndex);
+    
+    // Update UI state first
+    setSessions(remainingSessions);
+    if (!remainingSessions.find(s => s.id === activeSessionId)) {
+      setActiveSessionId(remainingSessions[0]?.id || null);
+    }
+    
+    // Then disconnect in background
+    for (const session of sessionsToClose) {
+      const protocol = session.server.protocol || 'ssh';
+      const connectionId = session.connectionId;
+      try {
+        if (protocol === 'ftp' || protocol === 'ftps') {
+          await ipcRenderer.invoke('ftp:disconnect', connectionId);
+        } else if (protocol === 'wss') {
+          await ipcRenderer.invoke('wss:disconnect', connectionId);
+        } else if (['mysql', 'postgresql', 'mongodb', 'redis', 'sqlite'].includes(protocol)) {
+          await ipcRenderer.invoke('db:disconnect', connectionId);
+        } else {
+          destroyTerminal(connectionId);
+          await ipcRenderer.invoke('ssh:disconnect', connectionId);
+        }
+      } catch (err) {
+        console.error('[App] Error disconnecting:', err);
+      }
+    }
+  };
+
+  const handleCloseTabsToRight = async (sessionId: string) => {
+    const targetIndex = sessions.findIndex(s => s.id === sessionId);
+    if (targetIndex === -1 || targetIndex >= sessions.length - 1) return;
+    
+    const sessionsToClose = sessions.slice(targetIndex + 1);
+    const remainingSessions = sessions.slice(0, targetIndex + 1);
+    
+    // Update UI state first
+    setSessions(remainingSessions);
+    if (!remainingSessions.find(s => s.id === activeSessionId)) {
+      setActiveSessionId(remainingSessions[remainingSessions.length - 1]?.id || null);
+    }
+    
+    // Then disconnect in background
+    for (const session of sessionsToClose) {
+      const protocol = session.server.protocol || 'ssh';
+      const connectionId = session.connectionId;
+      try {
+        if (protocol === 'ftp' || protocol === 'ftps') {
+          await ipcRenderer.invoke('ftp:disconnect', connectionId);
+        } else if (protocol === 'wss') {
+          await ipcRenderer.invoke('wss:disconnect', connectionId);
+        } else if (['mysql', 'postgresql', 'mongodb', 'redis', 'sqlite'].includes(protocol)) {
+          await ipcRenderer.invoke('db:disconnect', connectionId);
+        } else {
+          destroyTerminal(connectionId);
+          await ipcRenderer.invoke('ssh:disconnect', connectionId);
+        }
+      } catch (err) {
+        console.error('[App] Error disconnecting:', err);
+      }
+    }
+  };
+
+  const handleCloseAllTabs = async () => {
+    // Close all sessions - need to process sequentially to avoid race conditions
+    // Copy sessions to avoid issues with state changes during iteration
+    const sessionsToClose = [...sessions];
+    
+    // Clear UI state first
+    setSessions([]);
+    setActiveSessionId(null);
+    setSidebarOpen(true);
+    setActiveMenu('hosts');
+    
+    // Then disconnect all in background
+    for (const session of sessionsToClose) {
+      const protocol = session.server.protocol || 'ssh';
+      const connectionId = session.connectionId;
+      try {
+        if (protocol === 'ftp' || protocol === 'ftps') {
+          await ipcRenderer.invoke('ftp:disconnect', connectionId);
+        } else if (protocol === 'wss') {
+          await ipcRenderer.invoke('wss:disconnect', connectionId);
+        } else if (['mysql', 'postgresql', 'mongodb', 'redis', 'sqlite'].includes(protocol)) {
+          await ipcRenderer.invoke('db:disconnect', connectionId);
+        } else {
+          destroyTerminal(connectionId);
+          await ipcRenderer.invoke('ssh:disconnect', connectionId);
+        }
+      } catch (err) {
+        console.error('[App] Error disconnecting:', err);
+      }
+    }
+  };
+
+  const handleDuplicateSession = async (sessionId: string) => {
+    const session = sessions.find(s => s.id === sessionId);
+    if (!session) return;
+    // Create a copy of server with a unique ID to bypass existing session check
+    const duplicatedServer = {
+      ...session.server,
+      id: `${session.server.id}-dup-${Date.now()}`,
+      _originalId: session.server.id, // Keep reference to original
+    };
+    handleConnect(duplicatedServer);
   };
 
   // Actually perform the session close (after confirmation or skipConfirm)
@@ -3407,6 +3584,14 @@ const App: React.FC = () => {
                   setDragOverTabId(null);
                 }}
                 onClick={() => setActiveSessionId(session.id)}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  setTabContextMenu({
+                    x: e.clientX,
+                    y: e.clientY,
+                    sessionId: session.id,
+                  });
+                }}
                 className={`group flex items-center gap-2 px-3 h-full border-r cursor-pointer transition text-xs ${
                   dragOverTabId === session.id
                     ? 'border-teal-400 border-l-2 bg-teal-500/10'
@@ -3736,9 +3921,36 @@ const App: React.FC = () => {
               {/* Header with controls */}
               <div className="flex-shrink-0 p-4 border-b border-navy-700">
                 <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 flex-wrap">
                     <h2 className="text-xl font-semibold text-white">{t('hosts')}</h2>
                     <span className="text-sm text-gray-500">({filteredServers.length} servers)</span>
+                    {/* Export / Import - left side, same style as right buttons */}
+                    <button
+                      onClick={handleExportHosts}
+                      className={`px-4 py-2 text-sm font-medium rounded-lg transition shadow-sm flex items-center gap-2 ${
+                        appTheme === 'light'
+                          ? 'bg-gray-200 hover:bg-gray-300 text-gray-700'
+                          : 'bg-navy-700 hover:bg-navy-600 text-white'
+                      }`}
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M16 8l-4-4m0 0L8 8m4-4v12" />
+                      </svg>
+                      <span>{t('exportHosts') || 'Export hosts'}</span>
+                    </button>
+                    <button
+                      onClick={handleImportHostsClick}
+                      className={`px-4 py-2 text-sm font-medium rounded-lg transition shadow-sm flex items-center gap-2 ${
+                        appTheme === 'light'
+                          ? 'bg-gray-200 hover:bg-gray-300 text-gray-700'
+                          : 'bg-navy-700 hover:bg-navy-600 text-white'
+                      }`}
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V6a2 2 0 012-2h12a2 2 0 012 2v2M8 16l4 4m0 0l4-4m-4 4V8" />
+                      </svg>
+                      <span>{t('importHosts') || 'Import hosts'}</span>
+                    </button>
                   </div>
                   <div className="flex items-center gap-2">
                     <button
@@ -5938,10 +6150,11 @@ const App: React.FC = () => {
               {session.type === 'terminal' ? (
                 <XTermTerminal
                   connectionId={session.connectionId}
-                  theme={currentTheme}
+                  theme={appTheme === 'light' ? 'Light' : currentTheme}
                   server={session.server}
                   showSnippetPanel={session.server.id !== 'local'}
                   pendingPassword={session.pendingPassword}
+                  isActive={session.id === activeSessionId}
                 />
               ) : session.type === 'rdp' ? (
                 <RDPViewer
@@ -6622,6 +6835,94 @@ const App: React.FC = () => {
         />
       )}
 
+      {/* Tab Context Menu */}
+      {tabContextMenu && (
+        <div
+          className="fixed z-50"
+          style={{ left: tabContextMenu.x, top: tabContextMenu.y }}
+        >
+          <div 
+            className="fixed inset-0" 
+            onClick={() => setTabContextMenu(null)}
+            onContextMenu={(e) => { e.preventDefault(); setTabContextMenu(null); }}
+          />
+          <div className={`relative rounded-lg shadow-xl border overflow-hidden min-w-[180px] ${
+            appTheme === 'light' 
+              ? 'bg-white border-gray-200' 
+              : 'bg-navy-800 border-navy-600'
+          }`}>
+            <button
+              onClick={() => {
+                handleCloseTabsToLeft(tabContextMenu.sessionId);
+                setTabContextMenu(null);
+              }}
+              disabled={sessions.findIndex(s => s.id === tabContextMenu.sessionId) === 0}
+              className={`w-full px-4 py-2.5 text-left text-sm flex items-center gap-3 transition ${
+                appTheme === 'light'
+                  ? 'hover:bg-gray-100 text-gray-700 disabled:text-gray-400 disabled:hover:bg-transparent'
+                  : 'hover:bg-navy-700 text-gray-200 disabled:text-gray-500 disabled:hover:bg-transparent'
+              }`}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
+              </svg>
+              {t('closeToLeft') || 'Close to Left'}
+            </button>
+            <button
+              onClick={() => {
+                handleCloseTabsToRight(tabContextMenu.sessionId);
+                setTabContextMenu(null);
+              }}
+              disabled={sessions.findIndex(s => s.id === tabContextMenu.sessionId) === sessions.length - 1}
+              className={`w-full px-4 py-2.5 text-left text-sm flex items-center gap-3 transition ${
+                appTheme === 'light'
+                  ? 'hover:bg-gray-100 text-gray-700 disabled:text-gray-400 disabled:hover:bg-transparent'
+                  : 'hover:bg-navy-700 text-gray-200 disabled:text-gray-500 disabled:hover:bg-transparent'
+              }`}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+              </svg>
+              {t('closeToRight') || 'Close to Right'}
+            </button>
+            <div className={`border-t ${appTheme === 'light' ? 'border-gray-200' : 'border-navy-600'}`} />
+            <button
+              onClick={() => {
+                handleCloseAllTabs();
+                setTabContextMenu(null);
+              }}
+              className={`w-full px-4 py-2.5 text-left text-sm flex items-center gap-3 transition ${
+                appTheme === 'light'
+                  ? 'hover:bg-red-50 text-red-600'
+                  : 'hover:bg-red-500/10 text-red-400'
+              }`}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+              {t('closeAllTabs') || 'Close All'}
+            </button>
+            <div className={`border-t ${appTheme === 'light' ? 'border-gray-200' : 'border-navy-600'}`} />
+            <button
+              onClick={() => {
+                handleDuplicateSession(tabContextMenu.sessionId);
+                setTabContextMenu(null);
+              }}
+              className={`w-full px-4 py-2.5 text-left text-sm flex items-center gap-3 transition ${
+                appTheme === 'light'
+                  ? 'hover:bg-gray-100 text-gray-700'
+                  : 'hover:bg-navy-700 text-gray-200'
+              }`}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+              </svg>
+              {t('duplicateSession') || 'Duplicate Session'}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* SSH Fingerprint Modal */}
       {fingerprintModal && (
         <SSHFingerprintModal
@@ -6655,6 +6956,31 @@ const App: React.FC = () => {
             setAppCloseConfirmModal(null);
             ipcRenderer.send('app:closeCancelled', requestId);
           }}
+        />
+      )}
+
+      {/* Hosts import confirm (merge) */}
+      {importConfirmOpen && (
+        <ConfirmModal
+          isOpen={true}
+          title={t('importHosts') || 'Import hosts'}
+          message={t('hostsImportConfirm') || 'Add hosts from file to your list. Existing hosts will be kept. Continue?'}
+          confirmText={t('confirm') || 'Confirm'}
+          cancelText={t('cancel') || 'Cancel'}
+          variant="info"
+          onConfirm={handleImportHostsConfirm}
+          onCancel={() => setImportConfirmOpen(false)}
+        />
+      )}
+
+      {/* Hosts message (export/import success or error) */}
+      {hostsMessage && (
+        <MessageModal
+          isOpen={true}
+          title={hostsMessage.title}
+          message={hostsMessage.message}
+          variant={hostsMessage.variant}
+          onClose={() => setHostsMessage(null)}
         />
       )}
 

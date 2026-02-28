@@ -125,6 +125,21 @@ export interface Translations {
   jsSSHDynamicCredentials?: string;
   loadExample?: string;
 
+  // Hosts import/export
+  exportHosts?: string;
+  importHosts?: string;
+  hostsExportError?: string;
+  hostsImportError?: string;
+  hostsExportSuccess?: string;
+  hostsImportSuccess?: string;
+  hostsImportConfirm?: string;
+
+  // Tab context menu
+  closeToLeft?: string;
+  closeToRight?: string;
+  closeAllTabs?: string;
+  duplicateSession?: string;
+
   // SFTP
   localFiles: string;
   remoteFiles: string;

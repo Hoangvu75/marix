@@ -78,8 +78,9 @@ export class SSHConnectionManager {
   private shellEmitters: Map<string, EventEmitter> = new Map();
 
   async connect(config: SSHConfig): Promise<string> {
-    const connectionId = `${config.username}@${config.host}:${config.port}`;
-    
+    // Use timestamp to ensure each connection is unique (allows multiple sessions to same server)
+    const connectionId = `${config.username}@${config.host}:${config.port}-${Date.now()}`;
+
     console.log('[SSHConnectionManager] Connecting:', connectionId);
     
     return new Promise((resolve, reject) => {
@@ -104,9 +105,19 @@ export class SSHConnectionManager {
         readyTimeout: 30000,
         keepaliveInterval: 10000,
         keepaliveCountMax: 3,
+        // Enable keyboard-interactive auth (required for some servers like AWS EC2)
+        tryKeyboard: true,
         // Enable legacy algorithms for old servers (CentOS 6, RHEL 6, etc.)
         algorithms: LEGACY_ALGORITHMS,
       };
+
+      // Handle keyboard-interactive authentication (some servers only support this)
+      client.on('keyboard-interactive', (name, instructions, instructionsLang, prompts, finish) => {
+        console.log('[SSHConnectionManager] Keyboard-interactive auth requested');
+        // Respond to all prompts with password (typically just one password prompt)
+        const responses = prompts.map(() => config.password || '');
+        finish(responses);
+      });
 
       // Capture greeting (server identification)
       client.on('greeting', (message: string) => {
@@ -143,6 +154,21 @@ export class SSHConnectionManager {
         reject(err);
       }
     });
+  }
+
+  // Find any connection matching host/port/username (ignoring timestamp in connectionId)
+  findConnectionByServer(host: string, port: number, username: string): { connectionId: string; client: Client } | undefined {
+    const targetBase = `${username}@${host}:${port}`;
+    
+    for (const [connId, connData] of this.connections) {
+      // connectionId format: user@host:port-timestamp
+      // Check if base matches (before timestamp)
+      if (connId.startsWith(targetBase)) {
+        console.log('[SSHConnectionManager] Found matching connection:', connId);
+        return { connectionId: connId, client: connData.client };
+      }
+    }
+    return undefined;
   }
 
   async disconnect(connectionId: string): Promise<void> {

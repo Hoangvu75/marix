@@ -94,15 +94,10 @@ export class NativeSSHManager {
     cols: number = 80,
     rows: number = 24
   ): Promise<{ connectionId: string; emitter: EventEmitter }> {
-    const connectionId = `${config.username}@${config.host}:${config.port}`;
-    
-    console.log('[NativeSSH] Connecting:', connectionId);
+    // Use timestamp to ensure each connection is unique (allows multiple sessions to same server)
+    const connectionId = `${config.username}@${config.host}:${config.port}-${Date.now()}`;
 
-    // Check if already connected
-    if (this.sessions.has(connectionId)) {
-      const session = this.sessions.get(connectionId)!;
-      return { connectionId, emitter: session.emitter };
-    }
+    console.log('[NativeSSH] Connecting:', connectionId);
 
     const emitter = new EventEmitter();
     let keyFilePath: string | undefined;

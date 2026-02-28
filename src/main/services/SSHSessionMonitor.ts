@@ -116,8 +116,8 @@ export class SSHSessionMonitor extends EventEmitter {
       return;
     }
 
-    // Parse connectionId to get host and port (format: user@host:port)
-    const match = connectionId.match(/@(.+):(\d+)$/);
+    // Parse connectionId to get host and port (format: user@host:port or user@host:port-timestamp)
+    const match = connectionId.match(/@([^:@]+):(\d+)(?:-\d+)?$/);
     if (!match) {
       console.log('[SessionMonitor] Invalid connectionId format:', connectionId);
       return;

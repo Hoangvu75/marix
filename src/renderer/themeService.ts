@@ -197,6 +197,30 @@ const INLINE_THEMES: Record<string, ITheme> = {
     brightCyan: '#94e2d5',
     brightWhite: '#a6adc8',
   },
+  // Light theme for terminal when app is in light mode (readable text on light background)
+  'Light': {
+    background: '#f5f5f5',
+    foreground: '#1e1e1e',
+    cursor: '#1e1e1e',
+    cursorAccent: '#f5f5f5',
+    selectionBackground: '#b4d5fe',
+    black: '#2e2e2e',
+    red: '#c41a16',
+    green: '#0e7d0e',
+    yellow: '#b58900',
+    blue: '#268bd2',
+    magenta: '#d33682',
+    cyan: '#2aa198',
+    white: '#4e4e4e',
+    brightBlack: '#6e6e6e',
+    brightRed: '#c41a16',
+    brightGreen: '#0e7d0e',
+    brightYellow: '#b58900',
+    brightBlue: '#268bd2',
+    brightMagenta: '#d33682',
+    brightCyan: '#2aa198',
+    brightWhite: '#1e1e1e',
+  },
 };
 
 /**
