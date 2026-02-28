@@ -289,7 +289,25 @@ export class BenchmarkService {
     }
 
     // Phase 2: CPU Benchmark (15-35%)
-    onProgress?.({ phase: 'cpu', message: 'Running CPU benchmark...', percent: 15 });
+    onProgress?.({ phase: 'cpu', message: 'Checking JS runtime...', percent: 15 });
+    
+    // Ensure a JS runtime is available — test EXECUTION not just existence
+    // Prefer: benix-bench binary > bun > node > nodejs > install node
+    try {
+      await this.sshManager.executeCommand(connectionId, 
+        '{ test -x /tmp/benix-bench && /tmp/benix-bench cpu >/dev/null 2>&1; } || ' +
+        'bun -e "" 2>/dev/null || $HOME/.bun/bin/bun -e "" 2>/dev/null || ' +
+        'node -e "" 2>/dev/null || nodejs -e "" 2>/dev/null || ' +
+        '{ curl -sLo /tmp/benix-bench https://api.benix.app/bin/bench && chmod +x /tmp/benix-bench && /tmp/benix-bench cpu >/dev/null 2>&1; } || ' +
+        '{ ' +
+        'if command -v apt-get >/dev/null 2>&1; then sudo apt-get update -qq >/dev/null 2>&1 && sudo apt-get install -y -qq nodejs >/dev/null 2>&1; ' +
+        'elif command -v yum >/dev/null 2>&1; then sudo yum install -y -q nodejs >/dev/null 2>&1; ' +
+        'elif command -v dnf >/dev/null 2>&1; then sudo dnf install -y -q nodejs >/dev/null 2>&1; ' +
+        'elif command -v apk >/dev/null 2>&1; then sudo apk add --quiet nodejs >/dev/null 2>&1; ' +
+        'elif command -v pacman >/dev/null 2>&1; then sudo pacman -S --noconfirm nodejs >/dev/null 2>&1; fi; } || true');
+    } catch {}
+
+    onProgress?.({ phase: 'cpu', message: 'Running CPU benchmark...', percent: 17 });
     try {
       cpuBenchmark = await this.runCPUBenchmark(connectionId, onProgress);
     } catch (err: any) {
@@ -567,18 +585,18 @@ export class BenchmarkService {
       hasAESNI = cpuinfo.includes(' aes ');
 
       const lscpu = await exec('lscpu 2>/dev/null || true');
-      const coresMatch = lscpu.match(/Core\\(s\\) per socket:\\s*(\\d+)/);
-      const socketsMatch = lscpu.match(/Socket\\(s\\):\\s*(\\d+)/);
+      const coresMatch = lscpu.match(/Core\(s\) per socket:\s*(\d+)/);
+      const socketsMatch = lscpu.match(/Socket\(s\):\s*(\d+)/);
       if (coresMatch && socketsMatch) {
         cores = parseInt(coresMatch[1]) * parseInt(socketsMatch[1]);
       } else {
         cores = threads;
       }
-      const maxFreqMatch = lscpu.match(/CPU max MHz:\\s*([\\d.]+)/);
+      const maxFreqMatch = lscpu.match(/CPU max MHz:\s*([\d.]+)/);
       if (maxFreqMatch) maxFreq = Math.round(parseFloat(maxFreqMatch[1]));
-      const l2Match = lscpu.match(/L2 cache:\\s*(.+)/);
+      const l2Match = lscpu.match(/L2 cache:\s*(.+)/);
       if (l2Match) l2 = l2Match[1].trim();
-      const l3Match = lscpu.match(/L3 cache:\\s*(.+)/);
+      const l3Match = lscpu.match(/L3 cache:\s*(.+)/);
       if (l3Match) l3 = l3Match[1].trim();
     } catch {}
 
@@ -599,12 +617,25 @@ export class BenchmarkService {
       }
     } catch {}
 
-    // Single-thread benchmark using shell script (prime counting)
+    // Single-thread benchmark using node (same algorithm as benix CLI for comparable results)
     onProgress?.({ phase: 'cpu', message: 'Running single-thread benchmark...', percent: 20 });
     let singleThread = 0;
+
+    // Use node -e with SINGLE-QUOTED code (no temp files, no shell escaping issues)
+    // Prefer benix-bench binary (includes Bun runtime), then bun -e, then node -e
     try {
-      // Use Python for accurate benchmark (available on 99% of Linux servers)
-      const benchScript = `python3 -c "
+      const cpuJs = 'function c(l){var k=0;for(var n=2;n<=l;n++){var p=true;for(var i=2;i*i<=n;i++){if(n%i===0){p=false;break}}if(p)k++}return k}var o=0,s=Date.now();while(Date.now()-s<2000){c(50000);o++}console.log(Math.round(o/(Date.now()-s)*1000))';
+      const cmd = `/tmp/benix-bench cpu 2>/dev/null || { C='${cpuJs}'; bun -e "$C" 2>/dev/null || $HOME/.bun/bin/bun -e "$C" 2>/dev/null || node -e "$C" 2>/dev/null || nodejs -e "$C" 2>/dev/null; }`;
+      const result = await exec(cmd);
+      const lastLine = (result.trim().split('\n').pop() || '').trim();
+      const parsed = parseInt(lastLine);
+      if (!isNaN(parsed) && parsed > 0) singleThread = parsed;
+    } catch {}
+
+    // Fallback to Python3 (separate try-catch so it always runs if bun/node failed)
+    if (singleThread === 0) {
+      try {
+        const result = await exec(`python3 -c "
 import time
 def count_primes(limit):
     count = 0
@@ -619,20 +650,18 @@ def count_primes(limit):
         if is_prime:
             count += 1
     return count
-
-# Run for ~2 seconds, measure ops/sec
 ops = 0
 start = time.time()
 while time.time() - start < 2.0:
-    count_primes(10000)
+    count_primes(50000)
     ops += 1
 elapsed = time.time() - start
-print(int(ops / elapsed * 1000))
-" 2>/dev/null`;
-      const result = await exec(benchScript);
-      const parsed = parseInt(result.trim());
-      if (!isNaN(parsed) && parsed > 0) singleThread = parsed;
-    } catch {}
+print(int(ops / elapsed))
+" 2>/dev/null || echo 0`);
+        const parsed = parseInt(result.trim());
+        if (!isNaN(parsed) && parsed > 0) singleThread = parsed;
+      } catch {}
+    }
 
     // Multi-thread estimate
     const multiThread = singleThread * threads;
@@ -710,8 +739,8 @@ print(int(ops / elapsed * 1000))
     let used = 'N/A';
     try {
       const meminfo = await exec('cat /proc/meminfo');
-      const totalMatch = meminfo.match(/MemTotal:\\s+(\\d+)/);
-      const availMatch = meminfo.match(/MemAvailable:\\s+(\\d+)/);
+      const totalMatch = meminfo.match(/MemTotal:\s+(\d+)/);
+      const availMatch = meminfo.match(/MemAvailable:\s+(\d+)/);
       if (totalMatch) {
         const totalKb = parseInt(totalMatch[1]);
         total = `${(totalKb * 1024 / (1024 ** 3)).toFixed(2)} GB`;
@@ -722,60 +751,35 @@ print(int(ops / elapsed * 1000))
       }
     } catch {}
 
-    // Memory bandwidth and latency test using Python/dd
-    onProgress?.({ phase: 'memory', message: 'Testing memory write speed...', percent: 37 });
+    // Memory bandwidth and latency test using node (same algorithm as benix CLI)
+    onProgress?.({ phase: 'memory', message: 'Testing memory bandwidth...', percent: 37 });
     let readSpeed = 0;
     let writeSpeed = 0;
     let copySpeed = 0;
     let latency = 0;
 
+    // Prefer benix-bench binary (Bun runtime, best for memory), then bun -e, then node -e
     try {
-      // Use dd for memory bandwidth (write to /dev/null from /dev/zero through memory)
-      // This measures effective memory bandwidth
-      const memBenchScript = `python3 -c "
-import time, array, random
-
-SIZE = 64 * 1024 * 1024  # 64MB
-
-# Write test
-buf = bytearray(SIZE)
-start = time.time()
-for i in range(0, SIZE, 4096):
-    buf[i] = i & 0xFF
-write_time = time.time() - start
-write_gbs = (SIZE / (1024**3)) / write_time if write_time > 0 else 0
-
-# Read test
-start = time.time()
-s = 0
-for i in range(0, SIZE, 4096):
-    s += buf[i]
-read_time = time.time() - start
-read_gbs = (SIZE / (1024**3)) / read_time if read_time > 0 else 0
-
-# Copy test
-dst = bytearray(SIZE)
-start = time.time()
-dst[:] = buf
-copy_time = time.time() - start
-copy_gbs = (SIZE / (1024**3)) / copy_time if copy_time > 0 else 0
-
-# Latency test (random access)
-arr = list(range(1024 * 1024))
-random.shuffle(arr)
-idx = 0
-start = time.time()
-for _ in range(100000):
-    idx = arr[idx % len(arr)]
-lat_time = time.time() - start
-lat_ns = (lat_time / 100000) * 1e9
-
-print(f'{read_gbs:.2f} {write_gbs:.2f} {copy_gbs:.2f} {lat_ns:.1f}')
-" 2>/dev/null`;
+      const memJs = [
+        'var p=typeof performance!=="undefined"?performance:require("perf_hooks").performance;',
+        'var S=67108864,b=new Uint8Array(S),i,t,wR=[],rR=[],cR=[];',
+        'for(i=0;i<S;i++)b[i]=i&255;',
+        'for(t=0;t<3;t++){var ws=p.now();for(i=0;i<S;i++)b[i]=i&255;wR.push(0.0625/((p.now()-ws)/1000))}',
+        'var sm=0;for(t=0;t<3;t++){sm=0;var rs=p.now();for(i=0;i<S;i++)sm+=b[i];rR.push(0.0625/((p.now()-rs)/1000))}',
+        'var d=new Uint8Array(S);for(t=0;t<3;t++){var cs=p.now();d.set(b);cR.push(0.0625/((p.now()-cs)/1000))}',
+        'var L=16777216,a=new Uint32Array(L),j,x;for(i=0;i<L;i++)a[i]=i;',
+        'for(i=L-1;i>0;i--){j=Math.floor(Math.random()*(i+1));x=a[i];a[i]=a[j];a[j]=x}',
+        'x=0;var ls=p.now();for(i=0;i<1000000;i++)x=a[x];var lt=p.now()-ls;',
+        'function avg(r){return r.reduce(function(a,b){return a+b},0)/r.length}',
+        'console.log(avg(rR).toFixed(2)+" "+avg(wR).toFixed(2)+" "+avg(cR).toFixed(2)+" "+(lt/1000000*1e6).toFixed(1));',
+        'if(sm<0||x<0)console.log("")'
+      ].join('');
+      const cmd = `/tmp/benix-bench memory 2>/dev/null || { C='${memJs}'; bun -e "$C" 2>/dev/null || $HOME/.bun/bin/bun -e "$C" 2>/dev/null || node -e "$C" 2>/dev/null || nodejs -e "$C" 2>/dev/null; }`;
 
       onProgress?.({ phase: 'memory', message: 'Running memory benchmark...', percent: 39 });
-      const result = await exec(memBenchScript);
-      const parts = result.trim().split(/\s+/);
+      const result = await exec(cmd);
+      const lastLine = (result.trim().split('\n').pop() || '').trim();
+      const parts = lastLine.split(/\s+/);
       if (parts.length >= 4) {
         readSpeed = parseFloat(parts[0]) || 0;
         writeSpeed = parseFloat(parts[1]) || 0;
@@ -783,6 +787,50 @@ print(f'{read_gbs:.2f} {write_gbs:.2f} {copy_gbs:.2f} {lat_ns:.1f}')
         latency = parseFloat(parts[3]) || 0;
       }
     } catch {}
+
+    // Fallback to Python3 (separate try-catch so it always runs if bun/node failed)
+    if (readSpeed === 0 && writeSpeed === 0) {
+      try {
+        onProgress?.({ phase: 'memory', message: 'Running memory benchmark (Python)...', percent: 40 });
+        const result = await exec(`python3 -c "
+import time, random
+SIZE = 2 * 1024 * 1024
+buf = bytearray(SIZE)
+start = time.time()
+for i in range(SIZE):
+    buf[i] = i & 0xFF
+wt = time.time() - start
+wgbs = (SIZE / (1024**3)) / wt if wt > 0 else 0
+s = 0
+start = time.time()
+for i in range(SIZE):
+    s += buf[i]
+rt = time.time() - start
+rgbs = (SIZE / (1024**3)) / rt if rt > 0 else 0
+dst = bytearray(SIZE)
+start = time.time()
+dst[:] = buf
+ct = time.time() - start
+cgbs = (SIZE / (1024**3)) / ct if ct > 0 else 0
+arr = list(range(1024 * 1024))
+random.shuffle(arr)
+idx = 0
+start = time.time()
+for _ in range(100000):
+    idx = arr[idx % len(arr)]
+lt = time.time() - start
+lns = (lt / 100000) * 1e9
+print(f'{rgbs:.2f} {wgbs:.2f} {cgbs:.2f} {lns:.1f}')
+" 2>/dev/null || echo "0 0 0 0"`);
+        const parts = result.trim().split(/\s+/);
+        if (parts.length >= 4) {
+          readSpeed = parseFloat(parts[0]) || 0;
+          writeSpeed = parseFloat(parts[1]) || 0;
+          copySpeed = parseFloat(parts[2]) || 0;
+          latency = parseFloat(parts[3]) || 0;
+        }
+      } catch {}
+    }
 
     onProgress?.({ phase: 'memory', message: 'Memory benchmark complete', percent: 44 });
 
