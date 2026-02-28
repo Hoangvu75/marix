@@ -17,11 +17,12 @@ interface TerminalInstance {
 
 interface TerminalContextType {
   getTerminal: (connectionId: string) => TerminalInstance | undefined;
-  createTerminal: (connectionId: string, container: HTMLDivElement, themeName?: string, config?: any, fontFamily?: string, pendingPassword?: string) => TerminalInstance;
+  createTerminal: (connectionId: string, container: HTMLDivElement, themeName?: string, config?: any, fontFamily?: string, pendingPassword?: string, fontSize?: number) => TerminalInstance;
   destroyTerminal: (connectionId: string) => void;
   applyTheme: (connectionId: string, themeName: string) => void;
   applyThemeToAll: (themeName: string) => void;
   applyFontToAll: (fontFamily: string) => void;
+  applyFontSizeToAll: (fontSize: number) => void;
 }
 
 const TerminalContext = createContext<TerminalContextType | undefined>(undefined);
@@ -41,7 +42,7 @@ export const TerminalProvider: React.FC<{ children: ReactNode }> = ({ children }
       // First apply sync (instant for inline themes)
       const syncTheme = getThemeSync(themeName);
       instance.xterm.options.theme = syncTheme;
-      
+
       // Then load full theme async if needed
       const asyncTheme = await getTheme(themeName);
       instance.xterm.options.theme = asyncTheme;
@@ -68,7 +69,16 @@ export const TerminalProvider: React.FC<{ children: ReactNode }> = ({ children }
     });
   };
 
-  const createTerminal = (connectionId: string, container: HTMLDivElement, themeName: string = 'Dracula', config?: any, fontFamily?: string, pendingPassword?: string): TerminalInstance => {
+  // Apply font size to all terminals
+  const applyFontSizeToAll = (fontSize: number) => {
+    terminalsRef.current.forEach((instance, connId) => {
+      instance.xterm.options.fontSize = fontSize;
+      instance.fitAddon.fit(); // Refit after size change
+      console.log('[TerminalContext] Applied fontSize:', fontSize, 'to', connId);
+    });
+  };
+
+  const createTerminal = (connectionId: string, container: HTMLDivElement, themeName: string = 'Dracula', config?: any, fontFamily?: string, pendingPassword?: string, fontSize?: number): TerminalInstance => {
     // Check if already exists
     let instance = terminalsRef.current.get(connectionId);
     if (instance) {
@@ -84,7 +94,7 @@ export const TerminalProvider: React.FC<{ children: ReactNode }> = ({ children }
     // Create new terminal with copy/paste support (optimized for performance)
     const xterm = new XTerm({
       cursorBlink: true,
-      fontSize: 14,
+      fontSize: fontSize ?? 14,
       fontFamily: fontFamily ? `"${fontFamily}", "JetBrains Mono", "Fira Code", monospace` : '"JetBrains Mono", "Fira Code", monospace',
       lineHeight: 1.2,
       theme: theme,
@@ -106,7 +116,7 @@ export const TerminalProvider: React.FC<{ children: ReactNode }> = ({ children }
     container.appendChild(element);
 
     xterm.open(element);
-    
+
     // Fit and send size to SSH server
     const doFitAndResize = () => {
       fitAddon.fit();
@@ -114,7 +124,7 @@ export const TerminalProvider: React.FC<{ children: ReactNode }> = ({ children }
       console.log('[TerminalContext] Terminal size:', cols, 'x', rows);
       ipcRenderer.invoke('ssh:resizeShell', connectionId, cols, rows);
     };
-    
+
     // Initial fit with small delay
     setTimeout(doFitAndResize, 100);
     // Second fit to ensure accuracy after layout stabilizes
@@ -124,7 +134,7 @@ export const TerminalProvider: React.FC<{ children: ReactNode }> = ({ children }
     xterm.onSelectionChange(() => {
       const selection = xterm.getSelection();
       if (selection) {
-        navigator.clipboard.writeText(selection).catch(() => {});
+        navigator.clipboard.writeText(selection).catch(() => { });
       }
     });
 
@@ -139,7 +149,7 @@ export const TerminalProvider: React.FC<{ children: ReactNode }> = ({ children }
       if (event.type !== 'keydown') {
         return true;  // Let keyup events pass through normally
       }
-      
+
       // Ctrl+Shift+C for copy
       if (event.ctrlKey && event.shiftKey && event.key === 'C') {
         const selection = xterm.getSelection();
@@ -148,10 +158,10 @@ export const TerminalProvider: React.FC<{ children: ReactNode }> = ({ children }
         }
         return false;
       }
-      
+
       // Ctrl+Shift+V or Ctrl+V for paste
-      if ((event.ctrlKey && event.shiftKey && event.key === 'V') || 
-          (event.ctrlKey && !event.shiftKey && event.key === 'v')) {
+      if ((event.ctrlKey && event.shiftKey && event.key === 'V') ||
+        (event.ctrlKey && !event.shiftKey && event.key === 'v')) {
         isPasting = true;
         navigator.clipboard.readText().then(text => {
           if (text) {
@@ -162,7 +172,7 @@ export const TerminalProvider: React.FC<{ children: ReactNode }> = ({ children }
         }).catch(() => { isPasting = false; });
         return false;
       }
-      
+
       return true;
     });
 
@@ -171,16 +181,43 @@ export const TerminalProvider: React.FC<{ children: ReactNode }> = ({ children }
     const handleData = (connId: string, data: string) => {
       if (connId === connectionId) {
         xterm.write(data);
-        
-        // Auto-send pending password when prompted (for JS SSH)
+
+        // Get the terminal instance for this connection
         const inst = terminalsRef.current.get(connectionId);
+
+        // Detect SSH binary connection errors in terminal output.
+        // NativeSSH (node-pty) always spawns immediately and returns success, so
+        // actual connect failures appear as text written to the PTY by the SSH binary.
+        const isSshError = (
+          data.includes('ssh: connect to host') ||
+          (data.includes('Connection timed out') && data.includes('port'))
+        );
+        if (isSshError && inst?.config) {
+          const { host, port } = inst.config;
+          // Stop auto-reconnect loop by clearing config
+          inst.config = undefined;
+          // Strip ANSI/VT100 escape sequences that the PTY injects before the error text
+          // e.g. \x1b[?25l\x1b[2J\x1b[m\x1b[H → removed, leaving plain text
+          // eslint-disable-next-line no-control-regex
+          const cleanData = data.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '').replace(/[\r\n]+/g, ' ').trim();
+          // Dispatch event so App shows the error popup
+          window.dispatchEvent(new CustomEvent('ssh:reconnectFailed', {
+            detail: {
+              host,
+              port,
+              error: cleanData,
+            },
+          }));
+        }
+
+        // Auto-send pending password when prompted (for JS SSH)
         if (inst?.pendingPassword && !inst.passwordSent) {
           const lowerData = data.toLowerCase();
-          const hasPasswordPrompt = 
+          const hasPasswordPrompt =
             lowerData.includes('password:') ||
             lowerData.includes("'s password:") ||
             lowerData.includes('password for');
-          
+
           if (hasPasswordPrompt) {
             console.log('[TerminalContext] Password prompt detected, auto-sending password');
             inst.passwordSent = true;
@@ -200,23 +237,38 @@ export const TerminalProvider: React.FC<{ children: ReactNode }> = ({ children }
         const inst = terminalsRef.current.get(connectionId);
         if (inst) {
           inst.isReady = false;
-          
+
           // Auto reconnect if we have config
           if (inst.config) {
             xterm.writeln('\r\n\x1b[33m[Connection lost. Reconnecting...]\x1b[0m');
-            
+
             // Attempt reconnect after 2 seconds
             setTimeout(async () => {
               try {
+                // NativeSSH always returns {success:true} immediately (process is spawned
+                // but not yet connected). Actual connect failures are detected in handleData
+                // via SSH error text. So we just re-spawn here; handleData will catch failures.
                 const result = await ipcRenderer.invoke('ssh:connect', inst.config);
-                if (result.success) {
-                  inst.isReady = true;
-                  xterm.writeln('\x1b[32m[Reconnected]\x1b[0m\r\n');
-                } else {
+                if (!result.success) {
+                  // Only reaches here for non-NativeSSH paths (e.g. JS SSH)
                   xterm.writeln(`\x1b[31m[Reconnect failed: ${result.error}]\x1b[0m`);
+                  window.dispatchEvent(new CustomEvent('ssh:reconnectFailed', {
+                    detail: {
+                      host: inst.config?.host,
+                      port: inst.config?.port,
+                      error: result.error || 'Unknown error',
+                    },
+                  }));
                 }
               } catch (err: any) {
                 xterm.writeln(`\x1b[31m[Reconnect error: ${err.message}]\x1b[0m`);
+                window.dispatchEvent(new CustomEvent('ssh:reconnectFailed', {
+                  detail: {
+                    host: inst.config?.host,
+                    port: inst.config?.port,
+                    error: err.message || 'Unknown error',
+                  },
+                }));
               }
             }, 2000);
           } else {
@@ -247,7 +299,7 @@ export const TerminalProvider: React.FC<{ children: ReactNode }> = ({ children }
         const { cols, rows } = xterm;
         // This just confirms shell exists (already created in connect)
         const result = await ipcRenderer.invoke('ssh:createShell', connectionId, cols, rows);
-        
+
         if (result.success) {
           const inst = terminalsRef.current.get(connectionId);
           if (inst) {
@@ -261,7 +313,7 @@ export const TerminalProvider: React.FC<{ children: ReactNode }> = ({ children }
         xterm.writeln(`\x1b[31mError: ${err.message}\x1b[0m`);
       }
     };
-    
+
     // Mark ready immediately since native SSH already has shell
     instance = {
       xterm,
@@ -274,10 +326,10 @@ export const TerminalProvider: React.FC<{ children: ReactNode }> = ({ children }
     };
 
     terminalsRef.current.set(connectionId, instance);
-    
+
     // Confirm shell in background
     initShell();
-    
+
     return instance;
   };
 
@@ -285,7 +337,7 @@ export const TerminalProvider: React.FC<{ children: ReactNode }> = ({ children }
     const instance = terminalsRef.current.get(connectionId);
     if (instance) {
       console.log('[TerminalContext] Destroying terminal:', connectionId);
-      
+
       // Remove listeners first
       const listeners = listenersRef.current.get(connectionId);
       if (listeners) {
@@ -297,7 +349,7 @@ export const TerminalProvider: React.FC<{ children: ReactNode }> = ({ children }
       // Get element reference before dispose
       const element = instance.xterm.element;
       const parentElement = element?.parentElement;
-      
+
       // Find and disable the hidden textarea that xterm uses for keyboard input
       const textarea = element?.querySelector('textarea.xterm-helper-textarea') as HTMLTextAreaElement | null;
       if (textarea) {
@@ -351,16 +403,24 @@ export const TerminalProvider: React.FC<{ children: ReactNode }> = ({ children }
           console.log('[TerminalContext] Error removing element:', e);
         }
       }
-      
+
       // Remove from map
       terminalsRef.current.delete(connectionId);
-      
+
       console.log('[TerminalContext] Terminal destroyed:', connectionId);
     }
   };
 
   return (
-    <TerminalContext.Provider value={{ getTerminal, createTerminal, destroyTerminal, applyTheme, applyThemeToAll, applyFontToAll }}>
+    <TerminalContext.Provider value={{
+      getTerminal,
+      createTerminal,
+      destroyTerminal,
+      applyTheme,
+      applyThemeToAll,
+      applyFontToAll,
+      applyFontSizeToAll,
+    }}>
       {children}
     </TerminalContext.Provider>
   );

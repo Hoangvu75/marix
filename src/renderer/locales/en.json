@@ -9,6 +9,7 @@
   "addNewHost": "Add New Host",
   "editServer": "Edit Server",
   "deleteServer": "Delete Server",
+  "duplicateHost": "Duplicate host",
   "connect": "Connect",
   "disconnect": "Disconnect",
   "noServers": "No servers added yet",
@@ -1224,5 +1225,15 @@
   "retry": "Try Again",
   "uploadToPaste": "Upload results to paste.dev (shareable link)",
   "export": "Export",
-  "exporting": "Exporting..."
+  "exporting": "Exporting...",
+  "commandRecallDelete": "Delete",
+  "snippetCatGeneral": "General",
+  "snippetCatSystem": "System",
+  "snippetCatNetwork": "Network",
+  "snippetCatDocker": "Docker",
+  "snippetCatGit": "Git",
+  "snippetCatDatabase": "Database",
+  "snippetCatCustom": "Custom",
+  "terminalFontSize": "Font Size",
+  "terminalFontSizeDesc": "Terminal text size in pixels (8–24)"
 }

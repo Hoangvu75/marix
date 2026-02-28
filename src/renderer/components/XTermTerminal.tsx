@@ -23,9 +23,10 @@ interface Props {
   showSnippetPanel?: boolean;
   pendingPassword?: string;  // For JS SSH: auto-send when terminal prompts
   isActive?: boolean;  // Whether this terminal tab is currently active/visible
+  fontSize?: number;  // Terminal font size in px (default: 14)
 }
 
-const XTermTerminal: React.FC<Props> = ({ connectionId, theme = 'Dracula', server, showSnippetPanel = true, pendingPassword, isActive = true }) => {
+const XTermTerminal: React.FC<Props> = ({ connectionId, theme = 'Dracula', server, showSnippetPanel = true, pendingPassword, isActive = true, fontSize = 14 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const { getTerminal, createTerminal, applyTheme } = useTerminalContext();
@@ -33,7 +34,7 @@ const XTermTerminal: React.FC<Props> = ({ connectionId, theme = 'Dracula', serve
   const [bgColor, setBgColor] = useState('#282a36'); // Default Dracula background
   const [snippetPanelCollapsed, setSnippetPanelCollapsed] = useState(false);
   const [snippetPanelVisible, setSnippetPanelVisible] = useState(showSnippetPanel);
-  
+
   // Command Recall Panel state
   const [commandRecallPanelVisible, setCommandRecallPanelVisible] = useState(true);
   const [commandRecallPanelCollapsed, setCommandRecallPanelCollapsed] = useState(true); // Start collapsed
@@ -131,12 +132,12 @@ const XTermTerminal: React.FC<Props> = ({ connectionId, theme = 'Dracula', serve
 
     // Check if terminal already exists
     let instance = getTerminal(connectionId);
-    
+
     if (instance) {
       // Reattach existing terminal
       console.log('[XTermTerminal] Reattaching terminal:', connectionId);
       containerRef.current.appendChild(instance.element);
-      
+
       // Refit and send size to SSH
       setTimeout(() => {
         instance!.fitAddon.fit();
@@ -144,7 +145,7 @@ const XTermTerminal: React.FC<Props> = ({ connectionId, theme = 'Dracula', serve
         console.log('[XTermTerminal] Refit size:', cols, 'x', rows);
         ipcRenderer.invoke('ssh:resizeShell', connectionId, cols, rows);
       }, 100);
-      
+
       instanceRef.current = instance;
     } else {
       // Create new terminal with theme and config for auto-reconnect
@@ -155,7 +156,7 @@ const XTermTerminal: React.FC<Props> = ({ connectionId, theme = 'Dracula', serve
         username: server.username,
         password: server.password,
       } : undefined;
-      instance = createTerminal(connectionId, containerRef.current, theme, config, undefined, pendingPassword);
+      instance = createTerminal(connectionId, containerRef.current, theme, config, undefined, pendingPassword, fontSize);
       instanceRef.current = instance;
     }
 
@@ -212,11 +213,11 @@ const XTermTerminal: React.FC<Props> = ({ connectionId, theme = 'Dracula', serve
     const handleGlobalHotkey = (e: KeyboardEvent) => {
       // Only handle if this terminal's container is in the DOM and visible
       if (!wrapperRef.current || !document.body.contains(wrapperRef.current)) return;
-      
+
       // Check if terminal container or its children have focus
       const activeElement = document.activeElement;
       const isTerminalFocused = wrapperRef.current.contains(activeElement);
-      
+
       // Tab key for Command Recall Panel toggle (when input is empty)
       // Allow Tab to work even if terminal isn't focused (as long as it's visible)
       if (e.key === 'Tab' && !e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey) {
@@ -233,23 +234,23 @@ const XTermTerminal: React.FC<Props> = ({ connectionId, theme = 'Dracula', serve
           return;
         }
       }
-      
+
       // For other hotkeys, require terminal to be focused
       if (!isTerminalFocused) return;
-      
+
       // Check for Ctrl+Shift+[key] (Windows/Linux) or Cmd+Shift+[key] (Mac)
       const isModifierPressed = (e.ctrlKey || e.metaKey) && e.shiftKey && !e.altKey;
-      
+
       if (isModifierPressed) {
         const pressedKey = e.key.toLowerCase();
         const hotkeys = getCustomHotkeys();
         console.log('[XTermTerminal] Hotkey check:', pressedKey, 'available:', hotkeys.length);
         const hotkey = hotkeys.find(h => h.key.toLowerCase() === pressedKey);
-        
+
         if (hotkey) {
           e.preventDefault();
           e.stopPropagation();
-          
+
           const instance = instanceRef.current;
           console.log('[XTermTerminal] Found hotkey, terminal ready:', instance?.isReady);
           if (instance && instance.isReady) {
@@ -262,11 +263,11 @@ const XTermTerminal: React.FC<Props> = ({ connectionId, theme = 'Dracula', serve
         }
       }
     };
-    
+
     // Use capture phase to intercept before other handlers
     window.addEventListener('keydown', handleGlobalHotkey, true);
     console.log('[XTermTerminal] Global hotkey listener added for:', connectionId);
-    
+
     return () => {
       window.removeEventListener('keydown', handleGlobalHotkey, true);
     };
@@ -280,7 +281,7 @@ const XTermTerminal: React.FC<Props> = ({ connectionId, theme = 'Dracula', serve
 
     const serverId = server.id;
     const xterm = instance.xterm;
-    
+
     // Track input buffer using xterm's onData event
     // This captures what is actually sent to the terminal
     const onDataDispose = xterm.onData((data: string) => {
@@ -338,7 +339,7 @@ const XTermTerminal: React.FC<Props> = ({ connectionId, theme = 'Dracula', serve
         }
       }
     });
-    
+
     return () => {
       onDataDispose.dispose();
     };
@@ -357,19 +358,19 @@ const XTermTerminal: React.FC<Props> = ({ connectionId, theme = 'Dracula', serve
           onToggleCollapse={() => setCommandRecallPanelCollapsed(!commandRecallPanelCollapsed)}
         />
       )}
-      
+
       {/* Terminal Container */}
-      <div 
+      <div
         ref={wrapperRef}
         className="flex-1 h-full p-2 min-w-0"
         onContextMenu={handleRightClickPaste}
       >
-        <div 
-          ref={containerRef} 
+        <div
+          ref={containerRef}
           className="w-full h-full"
         />
       </div>
-      
+
       {/* Snippet Panel - Right side */}
       {snippetPanelVisible && (
         <SnippetPanel

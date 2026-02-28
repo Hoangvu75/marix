@@ -318,22 +318,35 @@ export class NativeSSHManager {
   }
 
   /**
-   * Write data to shell
+   * Write data to shell. No-op if pty has already exited.
    */
   writeToShell(connectionId: string, data: string): void {
     const session = this.sessions.get(connectionId);
     if (session) {
-      session.pty.write(data);
+      try {
+        session.pty.write(data);
+      } catch (err: any) {
+        if (!err?.message?.includes('already exited')) {
+          console.warn('[NativeSSH] writeToShell:', err?.message);
+        }
+      }
     }
   }
 
   /**
-   * Resize shell
+   * Resize shell. No-op if pty has already exited (e.g. SSH connection failed).
    */
   resizeShell(connectionId: string, cols: number, rows: number): void {
     const session = this.sessions.get(connectionId);
     if (session) {
-      session.pty.resize(cols, rows);
+      try {
+        session.pty.resize(cols, rows);
+      } catch (err: any) {
+        // Avoid Windows "JavaScript error in main process" when resize is called after pty exit
+        if (err?.message?.includes('already exited') === false) {
+          console.warn('[NativeSSH] resizeShell:', err?.message);
+        }
+      }
     }
   }
 

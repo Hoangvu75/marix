@@ -29,22 +29,22 @@ const SnippetPanel: React.FC<SnippetPanelProps> = ({
 }) => {
   const { t } = useLanguage();
   const isDark = theme === 'dark';
-  
+
   // Detect macOS for correct hotkey display
   const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
   const modifierDisplay = isMac ? '⌘⇧' : 'Ctrl+Shift+';
-  
+
   const [snippets, setSnippets] = useState<CommandSnippet[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  
+
   // Load snippets
   useEffect(() => {
     const loadSnippets = () => {
       const allSnippets = snippetStore.getForContext(hostId, groupId);
       setSnippets(allSnippets);
     };
-    
+
     loadSnippets();
     const unsubscribe = snippetStore.subscribe(loadSnippets);
     return () => unsubscribe();
@@ -53,11 +53,11 @@ const SnippetPanel: React.FC<SnippetPanelProps> = ({
   // Filter snippets
   const filteredSnippets = useMemo(() => {
     let result = snippets;
-    
+
     if (selectedCategory) {
       result = result.filter(s => s.category === selectedCategory);
     }
-    
+
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       result = result.filter(s =>
@@ -67,7 +67,7 @@ const SnippetPanel: React.FC<SnippetPanelProps> = ({
         s.tags?.some(tag => tag.toLowerCase().includes(q))
       );
     }
-    
+
     return result;
   }, [snippets, selectedCategory, searchQuery]);
 
@@ -96,6 +96,26 @@ const SnippetPanel: React.FC<SnippetPanelProps> = ({
     return icons[category] || '⚡';
   };
 
+  // Translate category name using locale keys (falls back to raw value)
+  const translateCategory = (category: string) => {
+    const categoryKeys: Record<string, string> = {
+      'General': 'snippetCatGeneral',
+      'System': 'snippetCatSystem',
+      'Network': 'snippetCatNetwork',
+      'Docker': 'snippetCatDocker',
+      'Git': 'snippetCatGit',
+      'Database': 'snippetCatDatabase',
+      'Custom': 'snippetCatCustom',
+    };
+    const key = categoryKeys[category];
+    if (key) {
+      const translated = t(key as any);
+      // t() returns the key itself when not found — return raw category in that case
+      return translated === key ? category : translated;
+    }
+    return category;
+  };
+
   // Handle snippet click
   const handleInsert = useCallback((snippet: CommandSnippet) => {
     onInsertCommand(snippet.command);
@@ -104,9 +124,9 @@ const SnippetPanel: React.FC<SnippetPanelProps> = ({
   // Collapsed state
   if (isCollapsed) {
     return (
-      <div 
+      <div
         className="flex flex-col items-center py-4 px-1"
-        style={{ 
+        style={{
           backgroundColor: isDark ? '#1e293b' : '#1e40af',
           borderLeft: isDark ? '1px solid #334155' : '1px solid #1e3a8a'
         }}
@@ -121,7 +141,7 @@ const SnippetPanel: React.FC<SnippetPanelProps> = ({
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
           </svg>
         </button>
-        <span 
+        <span
           className="text-xs mt-2 font-bold"
           style={{ writingMode: 'vertical-rl', color: 'white' }}
         >
@@ -132,17 +152,17 @@ const SnippetPanel: React.FC<SnippetPanelProps> = ({
   }
 
   return (
-    <div 
+    <div
       className="w-72 flex flex-col h-full"
-      style={{ 
+      style={{
         backgroundColor: isDark ? '#1e293b' : '#f8fafc',
         borderLeft: isDark ? '1px solid #334155' : '3px solid #3b82f6'
       }}
     >
       {/* Header - Blue for light, dark for dark */}
-      <div 
+      <div
         className="flex items-center justify-between px-3 py-3"
-        style={{ 
+        style={{
           backgroundColor: isDark ? '#0f172a' : '#2563eb',
           borderBottom: isDark ? '1px solid #334155' : '1px solid #1d4ed8'
         }}
@@ -154,7 +174,7 @@ const SnippetPanel: React.FC<SnippetPanelProps> = ({
           <span className="text-sm font-bold" style={{ color: 'white' }}>
             {t('snippets') || 'Snippets'}
           </span>
-          <span 
+          <span
             className="px-2 py-0.5 rounded-full text-xs font-bold"
             style={{ backgroundColor: 'rgba(255,255,255,0.2)', color: 'white' }}
           >
@@ -174,16 +194,16 @@ const SnippetPanel: React.FC<SnippetPanelProps> = ({
       </div>
 
       {/* Search */}
-      <div 
+      <div
         className="px-3 py-3"
-        style={{ 
+        style={{
           backgroundColor: isDark ? '#1e293b' : 'white',
           borderBottom: isDark ? '1px solid #334155' : '2px solid #e2e8f0'
         }}
       >
         <div className="relative">
-          <svg 
-            className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" 
+          <svg
+            className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4"
             style={{ color: isDark ? '#64748b' : '#64748b' }}
             fill="none" stroke="currentColor" viewBox="0 0 24 24"
           >
@@ -195,7 +215,7 @@ const SnippetPanel: React.FC<SnippetPanelProps> = ({
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder={t('snippetSearch') || 'Search snippets...'}
             className="w-full pl-10 pr-3 py-2.5 text-sm rounded-lg focus:outline-none focus:ring-2"
-            style={{ 
+            style={{
               backgroundColor: isDark ? '#0f172a' : '#f1f5f9',
               border: isDark ? '1px solid #334155' : '2px solid #cbd5e1',
               color: isDark ? 'white' : '#0f172a',
@@ -206,9 +226,9 @@ const SnippetPanel: React.FC<SnippetPanelProps> = ({
       </div>
 
       {/* Category Filter */}
-      <div 
+      <div
         className="flex flex-wrap gap-2 px-3 py-3"
-        style={{ 
+        style={{
           backgroundColor: isDark ? '#1e293b' : '#f1f5f9',
           borderBottom: isDark ? '1px solid #334155' : '2px solid #e2e8f0'
         }}
@@ -247,26 +267,26 @@ const SnippetPanel: React.FC<SnippetPanelProps> = ({
       </div>
 
       {/* Snippets List */}
-      <div 
+      <div
         className="flex-1 overflow-y-auto px-3 py-3"
         style={{ backgroundColor: isDark ? '#1e293b' : 'white' }}
       >
         {snippets.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center">
-            <svg 
-              className="w-12 h-12 mb-3" 
+            <svg
+              className="w-12 h-12 mb-3"
               style={{ color: isDark ? '#475569' : '#94a3b8' }}
               fill="none" stroke="currentColor" viewBox="0 0 24 24"
             >
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
             </svg>
-            <p 
+            <p
               className="text-sm font-bold"
               style={{ color: isDark ? '#64748b' : '#475569' }}
             >
               {t('snippetNoSnippets') || 'No snippets yet'}
             </p>
-            <p 
+            <p
               className="text-xs mt-1"
               style={{ color: isDark ? '#475569' : '#64748b' }}
             >
@@ -275,7 +295,7 @@ const SnippetPanel: React.FC<SnippetPanelProps> = ({
           </div>
         ) : filteredSnippets.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-32 text-center">
-            <p 
+            <p
               className="text-sm font-bold"
               style={{ color: isDark ? '#64748b' : '#475569' }}
             >
@@ -287,22 +307,22 @@ const SnippetPanel: React.FC<SnippetPanelProps> = ({
             {Object.entries(groupedSnippets).map(([category, categorySnippets]) => (
               <div key={category}>
                 {/* Category header */}
-                <div 
+                <div
                   className="flex items-center gap-2 px-2 py-2 mb-2 rounded-lg"
-                  style={{ 
+                  style={{
                     backgroundColor: isDark ? '#0f172a' : '#dbeafe',
                     borderLeft: '3px solid #3b82f6'
                   }}
                 >
                   <span className="text-sm">{getCategoryIcon(category)}</span>
-                  <span 
+                  <span
                     className="text-xs font-black uppercase tracking-wider"
                     style={{ color: isDark ? '#94a3b8' : '#1e40af' }}
                   >
-                    {category}
+                    {translateCategory(category)}
                   </span>
                 </div>
-                
+
                 {/* Snippets in category */}
                 {categorySnippets.map(snippet => (
                   <button
@@ -325,16 +345,16 @@ const SnippetPanel: React.FC<SnippetPanelProps> = ({
                     title={snippet.description || t('snippetClickToInsert') || 'Click to insert'}
                   >
                     <div className="flex items-center justify-between mb-2">
-                      <span 
+                      <span
                         className="text-sm font-black truncate"
                         style={{ color: isDark ? '#e2e8f0' : '#0f172a' }}
                       >
                         {snippet.name}
                       </span>
                       {snippet.hotkey && (
-                        <span 
+                        <span
                           className="flex-shrink-0 ml-2 px-2 py-1 rounded-md text-xs font-mono font-black"
-                          style={{ 
+                          style={{
                             backgroundColor: '#2563eb',
                             color: 'white',
                             boxShadow: '0 2px 4px -1px rgba(37, 99, 235, 0.4)'
@@ -344,11 +364,11 @@ const SnippetPanel: React.FC<SnippetPanelProps> = ({
                         </span>
                       )}
                     </div>
-                    <div 
+                    <div
                       className="px-2.5 py-2 rounded-lg"
                       style={{ backgroundColor: isDark ? '#1e293b' : '#e2e8f0' }}
                     >
-                      <code 
+                      <code
                         className="text-xs font-mono font-bold block truncate"
                         style={{ color: isDark ? '#34d399' : '#047857' }}
                       >
@@ -364,14 +384,14 @@ const SnippetPanel: React.FC<SnippetPanelProps> = ({
       </div>
 
       {/* Footer */}
-      <div 
+      <div
         className="px-3 py-3 text-center"
-        style={{ 
+        style={{
           backgroundColor: isDark ? '#0f172a' : '#2563eb',
           borderTop: isDark ? '1px solid #334155' : 'none'
         }}
       >
-        <p 
+        <p
           className="text-xs font-bold"
           style={{ color: 'white' }}
         >

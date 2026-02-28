@@ -1,9 +1,9 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 
 // Supported languages
-export type Language = 
-  | 'en' | 'vi' | 'id' | 'zh' | 'ko' 
-  | 'ja' | 'fr' | 'de' | 'es' | 'th' 
+export type Language =
+  | 'en' | 'vi' | 'id' | 'zh' | 'ko'
+  | 'ja' | 'fr' | 'de' | 'es' | 'th'
   | 'ms' | 'ru' | 'fil' | 'pt' | 'ar'
   | 'hi' | 'it' | 'tr' | 'nl' | 'pl';
 
@@ -41,14 +41,14 @@ export const LANGUAGES: LanguageInfo[] = [
 export interface Translations {
   // App
   appName: string;
-  
+
   // Menu items
   hosts: string;
   settings: string;
   cloudflareDns: string;
   whoisLookup: string;
   lookup: string;
-  
+
   // Server list
   addServer: string;
   addNewHost: string;
@@ -66,7 +66,7 @@ export interface Translations {
   noMatchingServers: string;
   clearSearch: string;
   noActionsAvailable: string;
-  
+
   // Server form
   serverName: string;
   serverAlreadyExists: string;
@@ -92,18 +92,18 @@ export interface Translations {
   cancel: string;
   create: string;
   update: string;
-  
+
   // Protocols
   protocolSsh: string;
   protocolFtp: string;
   protocolFtps: string;
   protocolRdp: string;
   protocolWss: string;
-  
+
   // Auth types
   authPassword: string;
   authKey: string;
-  
+
   // Sessions
   terminal: string;
   sftp: string;
@@ -124,6 +124,8 @@ export interface Translations {
   jsSSHCreateAndConnect?: string;
   jsSSHDynamicCredentials?: string;
   loadExample?: string;
+
+  duplicateHost?: string;
 
   // Hosts import/export
   exportHosts?: string;
@@ -157,7 +159,7 @@ export interface Translations {
   home: string;
   chmod: string;
   closeMenu: string;
-  
+
   // Settings
   appearance: string;
   themeMode: string;
@@ -176,7 +178,7 @@ export interface Translations {
   exportToFile: string;
   importFromFile: string;
   backupDescription: string;
-  
+
   // Backup
   backupPassword: string;
   confirmPassword: string;
@@ -185,7 +187,7 @@ export interface Translations {
   backupSuccess: string;
   restoreSuccess: string;
   backupError: string;
-  
+
   // Cloudflare
   cfApiToken: string;
   cfApiTokenDesc: string;
@@ -200,13 +202,13 @@ export interface Translations {
   cfRecordContent: string;
   cfProxied: string;
   cfTtl: string;
-  
+
   // WHOIS
   whoisEnterDomain: string;
   whoisLookupBtn: string;
   whoisLoading: string;
   whoisNoResult: string;
-  
+
   // Network Tools
   ntDnsLookup: string;
   ntPing: string;
@@ -218,7 +220,7 @@ export interface Translations {
   ntLoading: string;
   ntHistory: string;
   ntClearHistory: string;
-  
+
   // Common
   loading: string;
   error: string;
@@ -240,16 +242,16 @@ export interface Translations {
   pasted: string;
   moved: string;
   optional: string;
-  
+
   // Theme toggle
   switchToLightMode: string;
   switchToDarkMode: string;
-  
+
   // About
   about: string;
   version: string;
   platform: string;
-  
+
   // Build Info
   buildInfo: string;
   commitSha: string;
@@ -262,7 +264,7 @@ export interface Translations {
   chromeVersion: string;
   nodeVersion: string;
   v8Version: string;
-  
+
   // Tags
   addTag: string;
   editTag: string;
@@ -270,14 +272,14 @@ export interface Translations {
   tagColor: string;
   noTags: string;
   searchTags: string;
-  
+
   // Connection
   connecting: string;
   connected: string;
   disconnected: string;
   connectionFailed: string;
   reconnect: string;
-  
+
   // File operations
   fileSize: string;
   fileDate: string;
@@ -285,13 +287,13 @@ export interface Translations {
   fileType: string;
   permissions: string;
   owner: string;
-  
+
   // Confirmation dialogs
   confirmDelete: string;
   confirmDisconnect: string;
   confirmCloseSession: string;
   confirmOverwrite: string;
-  
+
   // Close dialog (when exiting with active connections)
   activeConnections: string;
   closeAllAndExit: string;
@@ -299,7 +301,7 @@ export interface Translations {
   closeConnectionsConfirm: string;
   serverAlreadyConnected: string;
   serverAlreadyConnectedMessage: string;
-  
+
   // Server Notes (Sticky Note feature)
   notes: string;
   serverNotes: string;
@@ -307,7 +309,7 @@ export interface Translations {
   notePlaceholder: string;
   noteSaved: string;
   noteSaving: string;
-  
+
   // Errors
   errorConnection: string;
   errorAuth: string;
@@ -320,7 +322,7 @@ export interface Translations {
   // Sidebar
   hideSidebar: string;
   showSidebar: string;
-  
+
   // AddServerModal
   importRdpFile: string;
   selectKeyFile: string;
@@ -330,7 +332,7 @@ export interface Translations {
   selectKeyFromKeychain: string;
   orSelectFile: string;
   orPasteManually: string;
-  
+
   // GitHub Backup
   githubBackup: string;
   githubBackupDesc: string;
@@ -352,7 +354,7 @@ export interface Translations {
   backupDownloadFailed: string;
   restoreSuccessWithCount: string;
   confirmPasswordPlaceholder: string;
-  
+
   // Cloudflare DNS
   selectDomain: string;
   selectDomainPlaceholder: string;
@@ -372,7 +374,7 @@ export interface Translations {
   ttl: string;
   proxy: string;
   actions: string;
-  
+
   // WHOIS
   whoisTitle: string;
   whoisPlaceholder: string;
@@ -385,7 +387,7 @@ export interface Translations {
   nameServers: string;
   status: string;
   rawWhois: string;
-  
+
   // Network Tools
   selectTool: string;
   run: string;
@@ -426,7 +428,7 @@ export interface Translations {
   toolDNSCheckDesc: string;
   toolIPInfo: string;
   toolIPInfoDesc: string;
-  
+
   // SFTP Panel
   sftpLocal: string;
   sftpRemote: string;
@@ -447,7 +449,7 @@ export interface Translations {
   sftpInstallSource: string;
   sftpCompressTo: string;
   sftpExtractHere: string;
-  
+
   // Source Installer
   sourceInstallerTitle: string;
   sourceInstallerDesc: string;
@@ -514,7 +516,7 @@ export interface Translations {
   sourceReactDesc: string;
   sourceNextJSDesc: string;
   sourceTypeScriptDesc: string;
-  
+
   // Database
   database: string;
   databaseServer: string;
@@ -587,7 +589,7 @@ export interface Translations {
   dbAddFilter: string;
   dbApplyFilter: string;
   dbClearFilters: string;
-  
+
   // ERD Diagram
   dbERD: string;
   erdLoading: string;
@@ -602,7 +604,7 @@ export interface Translations {
   erdHelp: string;
   erdNoTables: string;
   erdSelectDatabase: string;
-  
+
   // Import/Export Database
   dbImportExport: string;
   dbImportExportDesc: string;
@@ -633,7 +635,7 @@ export interface Translations {
   dbSmartDropDesc: string;
   dbOperationLog: string;
   dbMoreColumns: string;
-  
+
   // WebSocket
   wssTypeMessage: string;
   wssAutoScroll: string;
@@ -643,7 +645,7 @@ export interface Translations {
   wssReceived: string;
   wssMessages: string;
   wssSend: string;
-  
+
   // RDP
   rdpConnected: string;
   rdpConnecting: string;
@@ -680,11 +682,11 @@ export interface Translations {
   rdpErrorCertificate: string;
   rdpErrorClosed: string;
   rdpErrorGeneric: string;
-  
+
   // Common Ports
   commonPorts: string;
   clickToSelectPort: string;
-  
+
   // Known Hosts Manager
   knownHosts: string;
   manageKnownHosts: string;
@@ -702,7 +704,7 @@ export interface Translations {
   hostRemoved: string;
   importHostPlaceholder: string;
   importHostDesc: string;
-  
+
   // SSH Fingerprint Modal
   verifyingHost: string;
   verifyingFingerprint: string;
@@ -721,7 +723,7 @@ export interface Translations {
   fingerprintError: string;
   couldNotVerify: string;
   retryVerification: string;
-  
+
   // SSH Key Manager
   sshKeyManager: string;
   selectKeyToUse: string;
@@ -762,20 +764,20 @@ export interface Translations {
   publicKeyExportedSuccessfully: string;
   failedToExportKey: string;
   browseFile: string;
-  
+
   // Web Check (consolidated HTTP/HTTPS)
   toolWebCheck: string;
   toolWebCheckDesc: string;
   toolWhois: string;
   toolWhoisDesc: string;
-  
+
   // Tools Menu
   tools: string;
   toolProxyCheck: string;
   proxyCheckDesc: string;
   toolPortListener: string;
   portListenerDesc: string;
-  
+
   // SMTP Test
   smtpTestDesc: string;
   smtpServer: string;
@@ -789,7 +791,7 @@ export interface Translations {
   smtpTestSuccess: string;
   responseTime: string;
   testEmailSent: string;
-  
+
   // Proxy Check
   proxyType: string;
   proxyServer: string;
@@ -799,7 +801,7 @@ export interface Translations {
   proxyWorking: string;
   externalIp: string;
   statusCode: string;
-  
+
   // Port Listener
   scanPorts: string;
   scanning: string;
@@ -807,7 +809,7 @@ export interface Translations {
   lastScan: string;
   process: string;
   clickScanToStart: string;
-  
+
   // Cloudflare Modal
   addDnsRecord: string;
   editDnsRecord: string;
@@ -837,7 +839,7 @@ export interface Translations {
   saveChanges: string;
   lowerPriorityHigher: string;
   rootOrSubdomain: string;
-  
+
   // Lookup Results
   successStatus: string;
   failedStatus: string;
@@ -862,10 +864,10 @@ export interface Translations {
   key: string;
   keys: string;
   keychain: string;
-  
+
   noHostsMatchSearch: string;
   connectToServerToAddKnownHosts: string;
-  
+
   // Cloudflare Token
   tokenConfigured: string;
   tokenSavedEncrypted: string;
@@ -874,14 +876,14 @@ export interface Translations {
   verifying: string;
   saveToken: string;
   getApiTokenFrom: string;
-  
+
   // Server IP selection for Cloudflare DNS
   selectFromServerList: string;
   selectServer: string;
   manualEntry: string;
   resolving: string;
   noIpFound: string;
-  
+
   // About / Info Modal
   author: string;
   appTagline: string;
@@ -893,7 +895,7 @@ export interface Translations {
   releaseNotes: string;
   later: string;
   detectingSystemInfo: string;
-  
+
   // 2FA Authenticator
   twoFactorAuth: string;
   totpDescription: string;
@@ -914,7 +916,7 @@ export interface Translations {
   securityNote: string;
   totpSecurityInfo: string;
   add: string;
-  
+
   // Custom Hotkeys / Snippets
   customHotkeys: string;
   hotkeyDescription: string;
@@ -947,7 +949,7 @@ export interface Translations {
   reservedSwitchTerminalSFTP: string;
   reservedLocalTerminal: string;
   reservedPaste: string;
-  
+
   // Command Snippets
   snippets: string;
   snippetsDescription: string;
@@ -1001,7 +1003,7 @@ export interface Translations {
   snippetTagsPlaceholder: string;
   snippetAddFirst: string;
   snippetReservedKeys: string;
-  
+
   // Port Forwarding
   portForwarding: string;
   portForwardingDescription: string;
@@ -1019,12 +1021,12 @@ export interface Translations {
   remoteHost: string;
   remotePort: string;
   forwardNamePlaceholder: string;
-  
+
   // Changelog
   changelog: string;
   changelogDesc: string;
   loadChangelog: string;
-  
+
   // About Page (additional fields)
   security: string;
   techStack: string;
@@ -1033,7 +1035,7 @@ export interface Translations {
   argon2Encryption: string;
   openSource: string;
   available: string;
-  
+
   // GitLab Backup
   gitlabBackup: string;
   gitlabConnect: string;
@@ -1049,7 +1051,7 @@ export interface Translations {
   gitlabSecurityWarning: string;
   gitlabPasswordWarning: string;
   selectBackupMethod: string;
-  
+
   // Box Backup
   boxBackup: string;
   boxConnect: string;
@@ -1064,7 +1066,7 @@ export interface Translations {
   boxLastBackup: string;
   boxSecurityWarning: string;
   boxPasswordWarning: string;
-  
+
   // OneDrive Backup
   onedriveBackup: string;
   onedriveConnect: string;
@@ -1079,7 +1081,7 @@ export interface Translations {
   onedriveLastBackup: string;
   onedriveSecurityWarning: string;
   onedrivePasswordWarning: string;
-  
+
   // Google Drive Backup
   gdriveBackup: string;
   gdriveConnect: string;
@@ -1091,27 +1093,27 @@ export interface Translations {
   gdriveRestoreWarning: string;
   gdriveLastBackup: string;
   gdriveNotConnected: string;
-  
+
   // OAuth Callback
   oauthSuccess: string;
   oauthSuccessMessage: string;
   oauthFailed: string;
   oauthCanClose: string;
-  
+
   backupAndRestore: string;
   passwordRequirements: string;
   localSecurityWarning: string;
   githubSecurityWarning: string;
-  
+
   // Environment Variables
   envVars: string;
   envVarsDesc: string;
   envVarsConfigured: string;
-  
+
   // Default Paths
   defaultRemotePath: string;
   defaultLocalPath: string;
-  
+
   portKnocking: string;
   portKnockingDesc: string;
   knockSequence: string;
@@ -1122,7 +1124,7 @@ export interface Translations {
   random: string;
   ports: string;
   learnMore: string;
-  
+
   knockGuideTitle: string;
   knockSecurityBenefits: string;
   knockStealth: string;
@@ -1180,7 +1182,7 @@ export interface Translations {
   knockMarixStep4: string;
   knockMarixStep5: string;
   knockMarixAutomatic: string;
-  
+
   lanShare: string;
   thisDevice: string;
   serversToShare: string;
@@ -1192,7 +1194,7 @@ export interface Translations {
   noDevicesFound: string;
   shareOnLAN: string;
   selectServersToShare: string;
-  
+
   localForwardDesc: string;
   remoteForwardDesc: string;
   dynamicForwardDesc: string;
@@ -1204,7 +1206,7 @@ export interface Translations {
   stopBeforeEdit: string;
   start: string;
   stop: string;
-  
+
   // LAN File Transfer
   lanFileTransfer: string;
   transferDirectly: string;
@@ -1242,7 +1244,7 @@ export interface Translations {
   receivingFilesProgress: string;
   failedToAcceptWrongCode: string;
   transferRejected: string;
-  
+
   // LAN File Transfer Page
   shareCodeWithReceiverDesc: string;
   prepareToSend: string;
@@ -1269,7 +1271,7 @@ export interface Translations {
   noSenderFoundWithCode: string;
   pleaseSearchFindSenderFirst: string;
   connectingToSender: string;
-  
+
   // Session Monitor
   sessionLatency: string;
   sessionLatencyAvg: string;
@@ -1287,7 +1289,9 @@ export interface Translations {
   terminalFont: string;
   terminalFontFamily: string;
   terminalFontDesc: string;
-  
+  terminalFontSize: string;
+  terminalFontSizeDesc: string;
+
   // Command Recall
   commandRecall: string;
   commandRecallEnabled: string;
@@ -1306,7 +1310,7 @@ export interface Translations {
   commandRecallUsed: string;
   commandRecallTimes: string;
   rightClickForOptions: string;
-  
+
   // App Lock
   appLock: string;
   appLockDesc: string;
@@ -1346,7 +1350,7 @@ export interface Translations {
   changelog1012: string;
   changelog1011: string;
   changelog1010: string;
-  
+
   // Feature Grid
   featureSsh: string;
   featureSftp: string;
@@ -1360,11 +1364,11 @@ export interface Translations {
   featureTerminalFont: string;
   featureAppLock: string;
   featureThemes: string;
-  
+
   // Author
   authorRole: string;
   viewOnGithub: string;
-  
+
   // Properties modal
   properties: string;
   location: string;
@@ -1376,7 +1380,7 @@ export interface Translations {
   source: string;
   folder: string;
   file: string;
-  
+
   // Server Benchmark
   benchmark: string;
   serverBenchmark: string;
@@ -1489,7 +1493,7 @@ export const LanguageProvider: React.FC<LanguageProviderProps> = ({ children }) 
         } catch (error) {
           console.log('[Language] IP detection failed, using browser fallback');
         }
-        
+
         // Fallback: Try to detect browser language
         const browserLang = navigator.language.split('-')[0] as Language;
         if (LANGUAGES.some(l => l.code === browserLang)) {
@@ -1497,7 +1501,7 @@ export const LanguageProvider: React.FC<LanguageProviderProps> = ({ children }) 
           console.log(`[Language] Using browser language: ${browserLang}`);
         }
       };
-      
+
       detectLanguage();
     }
   }, []);
@@ -1508,7 +1512,7 @@ export const LanguageProvider: React.FC<LanguageProviderProps> = ({ children }) 
   }, []);
 
   const translations = translationsMap[language];
-  
+
   const t = useCallback((key: keyof Translations): string => {
     return translations[key] || translationsMap.en[key] || key;
   }, [translations]);

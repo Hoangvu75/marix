@@ -36,7 +36,7 @@ const CommandRecallPanel: React.FC<CommandRecallPanelProps> = ({
 }) => {
   const { t } = useLanguage();
   const isDark = theme === 'dark';
-  
+
   const [commands, setCommands] = useState<RecalledCommand[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [contextMenu, setContextMenu] = useState<ContextMenuState>({
@@ -54,7 +54,7 @@ const CommandRecallPanel: React.FC<CommandRecallPanelProps> = ({
       const history = commandRecallStore.getHistory(serverId);
       setCommands(history);
     };
-    
+
     loadCommands();
     const unsubscribe = commandRecallStore.subscribe(loadCommands);
     return () => unsubscribe();
@@ -67,7 +67,7 @@ const CommandRecallPanel: React.FC<CommandRecallPanelProps> = ({
         setContextMenu(prev => ({ ...prev, visible: false }));
       }
     };
-    
+
     document.addEventListener('click', handleClickOutside);
     return () => document.removeEventListener('click', handleClickOutside);
   }, [contextMenu.visible]);
@@ -88,12 +88,12 @@ const CommandRecallPanel: React.FC<CommandRecallPanelProps> = ({
   const handleContextMenu = useCallback((e: React.MouseEvent, cmd: RecalledCommand) => {
     e.preventDefault();
     e.stopPropagation();
-    
+
     // Calculate position relative to panel
     const rect = panelRef.current?.getBoundingClientRect();
     const x = e.clientX - (rect?.left || 0);
     const y = e.clientY - (rect?.top || 0);
-    
+
     setContextMenu({
       visible: true,
       x,
@@ -121,9 +121,9 @@ const CommandRecallPanel: React.FC<CommandRecallPanelProps> = ({
   // Collapsed state - show mini toggle button
   if (isCollapsed) {
     return (
-      <div 
+      <div
         className="flex flex-col items-center py-4 px-1"
-        style={{ 
+        style={{
           backgroundColor: isDark ? '#1e293b' : '#0891b2',
           borderRight: isDark ? '1px solid #334155' : '1px solid #0e7490'
         }}
@@ -132,21 +132,21 @@ const CommandRecallPanel: React.FC<CommandRecallPanelProps> = ({
           onClick={onToggleCollapse}
           className="p-2 rounded-lg transition hover:bg-white/10"
           style={{ color: 'white' }}
-          title={(t as any).commandRecall || 'Command History'}
+          title={t('commandRecall')}
           tabIndex={-1}
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
         </button>
-        <span 
+        <span
           className="text-xs mt-2 font-bold"
           style={{ writingMode: 'vertical-rl', color: 'white' }}
         >
-          {(t as any).commandRecall || 'History'}
+          {t('commandRecall')}
         </span>
         {commands.length > 0 && (
-          <span 
+          <span
             className="mt-2 w-5 h-5 flex items-center justify-center rounded-full text-xs font-bold"
             style={{ backgroundColor: 'rgba(255,255,255,0.2)', color: 'white' }}
           >
@@ -158,10 +158,10 @@ const CommandRecallPanel: React.FC<CommandRecallPanelProps> = ({
   }
 
   return (
-    <div 
+    <div
       ref={panelRef}
       className="w-72 flex flex-col h-full relative"
-      style={{ 
+      style={{
         backgroundColor: isDark ? '#1e293b' : '#f8fafc',
         borderRight: isDark ? '1px solid #334155' : '3px solid #0891b2'
       }}
@@ -175,8 +175,8 @@ const CommandRecallPanel: React.FC<CommandRecallPanelProps> = ({
             top: contextMenu.y,
             backgroundColor: isDark ? '#1e293b' : 'white',
             border: isDark ? '1px solid #475569' : '1px solid #e2e8f0',
-            boxShadow: isDark 
-              ? '0 10px 25px -5px rgba(0, 0, 0, 0.5)' 
+            boxShadow: isDark
+              ? '0 10px 25px -5px rgba(0, 0, 0, 0.5)'
               : '0 10px 25px -5px rgba(0, 0, 0, 0.1)',
           }}
           onClick={(e) => e.stopPropagation()}
@@ -198,18 +198,18 @@ const CommandRecallPanel: React.FC<CommandRecallPanelProps> = ({
               <svg className="w-4 h-4 text-cyan-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
               </svg>
-              {(t as any).commandRecallSaveSnippet || 'Save as Snippet'}
+              {t('commandRecallSaveSnippet')}
             </button>
           )}
-          
+
           {/* Divider */}
           {onSaveAsSnippet && (
-            <div 
+            <div
               className="my-1"
               style={{ borderTop: isDark ? '1px solid #475569' : '1px solid #e2e8f0' }}
             />
           )}
-          
+
           {/* Delete */}
           <button
             onClick={handleDelete}
@@ -225,15 +225,15 @@ const CommandRecallPanel: React.FC<CommandRecallPanelProps> = ({
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
             </svg>
-            {(t as any).delete || 'Delete'}
+            {t('commandRecallDelete')}
           </button>
         </div>
       )}
 
       {/* Header - Cyan theme */}
-      <div 
+      <div
         className="flex items-center justify-between px-3 py-3"
-        style={{ 
+        style={{
           backgroundColor: isDark ? '#0f172a' : '#0891b2',
           borderBottom: isDark ? '1px solid #334155' : '1px solid #0e7490'
         }}
@@ -243,9 +243,9 @@ const CommandRecallPanel: React.FC<CommandRecallPanelProps> = ({
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
           <span className="text-sm font-bold" style={{ color: 'white' }}>
-            {(t as any).commandRecall || 'History'}
+            {t('commandRecall')}
           </span>
-          <span 
+          <span
             className="px-2 py-0.5 rounded-full text-xs font-bold"
             style={{ backgroundColor: 'rgba(255,255,255,0.2)', color: 'white' }}
           >
@@ -256,7 +256,7 @@ const CommandRecallPanel: React.FC<CommandRecallPanelProps> = ({
           onClick={onToggleCollapse}
           className="p-1.5 rounded-lg transition hover:bg-white/20"
           style={{ color: 'white' }}
-          title={(t as any).snippetHidePanel || 'Collapse'}
+          title={t('snippetHidePanel')}
           tabIndex={-1}
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -266,16 +266,16 @@ const CommandRecallPanel: React.FC<CommandRecallPanelProps> = ({
       </div>
 
       {/* Search */}
-      <div 
+      <div
         className="px-3 py-3"
-        style={{ 
+        style={{
           backgroundColor: isDark ? '#1e293b' : 'white',
           borderBottom: isDark ? '1px solid #334155' : '2px solid #e2e8f0'
         }}
       >
         <div className="relative">
-          <svg 
-            className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" 
+          <svg
+            className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4"
             style={{ color: isDark ? '#64748b' : '#64748b' }}
             fill="none" stroke="currentColor" viewBox="0 0 24 24"
           >
@@ -286,10 +286,10 @@ const CommandRecallPanel: React.FC<CommandRecallPanelProps> = ({
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder={(t as any).commandRecallSearch || 'Search commands...'}
+            placeholder={t('commandRecallSearch')}
             className="w-full pl-10 pr-3 py-2.5 text-sm rounded-lg focus:outline-none focus:ring-2"
             tabIndex={-1}
-            style={{ 
+            style={{
               backgroundColor: isDark ? '#0f172a' : '#f1f5f9',
               border: isDark ? '1px solid #334155' : '2px solid #cbd5e1',
               color: isDark ? 'white' : '#0f172a',
@@ -300,39 +300,39 @@ const CommandRecallPanel: React.FC<CommandRecallPanelProps> = ({
       </div>
 
       {/* Command List */}
-      <div 
+      <div
         className="flex-1 overflow-y-auto px-2 py-2"
         style={{ backgroundColor: isDark ? '#1e293b' : 'white' }}
       >
         {commands.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center px-4">
-            <svg 
-              className="w-12 h-12 mb-3" 
+            <svg
+              className="w-12 h-12 mb-3"
               style={{ color: isDark ? '#475569' : '#94a3b8' }}
               fill="none" stroke="currentColor" viewBox="0 0 24 24"
             >
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            <p 
+            <p
               className="text-sm font-bold"
               style={{ color: isDark ? '#64748b' : '#475569' }}
             >
-              {(t as any).commandRecallEmpty || 'No commands yet'}
+              {t('commandRecallEmpty')}
             </p>
-            <p 
+            <p
               className="text-xs mt-1"
               style={{ color: isDark ? '#475569' : '#64748b' }}
             >
-              {(t as any).commandRecallEmptyHint || 'Commands will appear here'}
+              {t('commandRecallEmptyHint')}
             </p>
           </div>
         ) : filteredCommands.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-32 text-center">
-            <p 
+            <p
               className="text-sm font-bold"
               style={{ color: isDark ? '#64748b' : '#475569' }}
             >
-              {(t as any).commandRecallNoMatch || 'No matches found'}
+              {t('commandRecallNoMatch')}
             </p>
           </div>
         ) : (
@@ -343,7 +343,7 @@ const CommandRecallPanel: React.FC<CommandRecallPanelProps> = ({
                 onClick={() => handleInsert(cmd.command)}
                 onContextMenu={(e) => handleContextMenu(e, cmd)}
                 className="px-2 py-2 rounded-lg cursor-pointer transition-all"
-                style={{ 
+                style={{
                   backgroundColor: 'transparent'
                 }}
                 onMouseEnter={(e) => {
@@ -355,30 +355,30 @@ const CommandRecallPanel: React.FC<CommandRecallPanelProps> = ({
               >
                 {/* Command */}
                 <div className="flex items-start gap-2">
-                  <div 
+                  <div
                     className="flex-shrink-0 w-6 h-6 rounded flex items-center justify-center mt-0.5"
                     style={{ backgroundColor: isDark ? '#0f172a' : '#cffafe' }}
                   >
-                    <svg 
-                      className="w-3.5 h-3.5" 
+                    <svg
+                      className="w-3.5 h-3.5"
                       style={{ color: isDark ? '#22d3ee' : '#0891b2' }}
                       fill="none" stroke="currentColor" viewBox="0 0 24 24"
                     >
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                     </svg>
                   </div>
-                  
+
                   <div className="flex-1 min-w-0">
-                    <code 
+                    <code
                       className="block text-xs font-mono truncate"
                       style={{ color: isDark ? '#f1f5f9' : '#0f172a' }}
                       title={cmd.command}
                     >
                       {cmd.command}
                     </code>
-                    
+
                     {/* Meta info */}
-                    <div 
+                    <div
                       className="flex items-center gap-2 mt-1 text-xs"
                       style={{ color: isDark ? '#64748b' : '#94a3b8' }}
                     >
@@ -395,27 +395,27 @@ const CommandRecallPanel: React.FC<CommandRecallPanelProps> = ({
       </div>
 
       {/* Footer */}
-      <div 
+      <div
         className="px-3 py-2 text-xs"
-        style={{ 
+        style={{
           backgroundColor: isDark ? '#0f172a' : '#f1f5f9',
           borderTop: isDark ? '1px solid #334155' : '1px solid #e2e8f0',
           color: isDark ? '#64748b' : '#64748b'
         }}
       >
         <div className="flex items-center justify-between">
-          <span>{(t as any).rightClickForOptions || 'Right-click for options'}</span>
+          <span>{t('rightClickForOptions')}</span>
           {commands.length > 0 && (
             <button
               onClick={() => {
-                if (confirm((t as any).commandRecallClearAll || 'Clear all history?')) {
+                if (confirm(t('commandRecallClearAll'))) {
                   commandRecallStore.clearServerHistory(serverId);
                 }
               }}
               className="text-red-400 hover:text-red-300 transition"
               tabIndex={-1}
             >
-              {(t as any).commandRecallClearAll || 'Clear'}
+              {t('commandRecallClearAll')}
             </button>
           )}
         </div>

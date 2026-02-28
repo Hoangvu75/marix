@@ -13,6 +13,7 @@ export type LockMethod = 'none' | 'blur' | 'pin' | 'password';
 interface AppSettings {
   sessionMonitorEnabled: boolean;
   terminalFont: string;
+  terminalFontSize: number;
   // App Lock settings
   appLockEnabled: boolean;
   appLockMethod: LockMethod;
@@ -24,6 +25,7 @@ interface AppSettings {
 const defaults: AppSettings = {
   sessionMonitorEnabled: true,
   terminalFont: 'JetBrains Mono',
+  terminalFontSize: 14,
   appLockEnabled: false,
   appLockMethod: 'blur',
   appLockTimeout: 5,

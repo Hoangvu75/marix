@@ -48,6 +48,18 @@ import { BenchmarkService } from './services/BenchmarkService';
 import { initDatabaseHandlers, getDatabaseConnectionCount, closeAllDatabaseConnections } from './databaseService';
 import buildInfo from './buildInfo';
 
+// Swallow known node-pty errors that can be thrown asynchronously on Windows (e.g. after SSH timeout)
+// so they don't show the default "JavaScript error in main process" dialog.
+process.on('uncaughtException', (err: Error) => {
+  const msg = err?.message || '';
+  if (msg.includes('Cannot resize a pty that has already exited') || msg.includes('pty that has already exited')) {
+    console.warn('[Main] Swallowing pty-already-exited error (expected when SSH connection fails):', msg);
+    return;
+  }
+  process.removeAllListeners('uncaughtException');
+  throw err;
+});
+
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 
@@ -143,7 +155,7 @@ function createTray() {
     path.join(__dirname, '../icon/i.png'),
     path.join(app.getAppPath(), 'icon/i.png'),
   ];
-  
+
   let iconPath = '';
   for (const p of iconPaths) {
     if (fs.existsSync(p)) {
@@ -151,7 +163,7 @@ function createTray() {
       break;
     }
   }
-  
+
   if (!iconPath) {
     console.log('[Tray] Icon not found, skipping tray creation');
     return;
@@ -159,27 +171,27 @@ function createTray() {
 
   const icon = nativeImage.createFromPath(iconPath);
   tray = new Tray(icon.resize({ width: 16, height: 16 }));
-  
+
   const contextMenu = Menu.buildFromTemplate([
-    { 
-      label: 'Show Marix', 
+    {
+      label: 'Show Marix',
       click: () => {
         mainWindow?.show();
         mainWindow?.focus();
       }
     },
     { type: 'separator' },
-    { 
-      label: 'Exit', 
+    {
+      label: 'Exit',
       click: () => {
         app.quit();
       }
     }
   ]);
-  
+
   tray.setToolTip('Marix SSH Client');
   tray.setContextMenu(contextMenu);
-  
+
   tray.on('click', () => {
     mainWindow?.show();
     mainWindow?.focus();
@@ -188,7 +200,7 @@ function createTray() {
 
 function createWindow() {
   const isMac = process.platform === 'darwin';
-  
+
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
@@ -210,13 +222,13 @@ function createWindow() {
   // Show window when ready to prevent white flash
   mainWindow.once('ready-to-show', () => {
     mainWindow?.show();
-    
+
     // Setup periodic memory cleanup (every 5 minutes)
     setInterval(() => {
       if (mainWindow && !mainWindow.isDestroyed()) {
         // Trigger renderer garbage collection via low memory signal
         mainWindow.webContents.session.clearCache();
-        
+
         // Log memory usage periodically (debug)
         const memUsage = process.memoryUsage();
         console.log(`[Memory] Heap: ${Math.round(memUsage.heapUsed / 1024 / 1024)}MB / ${Math.round(memUsage.heapTotal / 1024 / 1024)}MB, RSS: ${Math.round(memUsage.rss / 1024 / 1024)}MB`);
@@ -243,10 +255,10 @@ function createWindow() {
   // Uses IPC to show custom modal in renderer for smoother UX
   let isQuitting = false;
   let closeRequestId = 0;
-  
+
   mainWindow.on('close', (event) => {
     if (isQuitting) return; // Already confirmed, let it close
-    
+
     // Check for active connections
     const activeSSH = nativeSSH.getActiveCount();
     const activeRDP = rdpManager.getActiveCount();
@@ -257,7 +269,7 @@ function createWindow() {
 
     if (totalActive > 0) {
       event.preventDefault();
-      
+
       // Build detail message
       const details: string[] = [];
       if (activeSSH > 0) details.push(`SSH: ${activeSSH}`);
@@ -265,7 +277,7 @@ function createWindow() {
       if (activeWSS > 0) details.push(`WebSocket: ${activeWSS}`);
       if (activeFTP > 0) details.push(`FTP: ${activeFTP}`);
       if (activeDB > 0) details.push(`Database: ${activeDB}`);
-      
+
       // Send to renderer to show custom modal
       closeRequestId++;
       if (mainWindow && !mainWindow.isDestroyed()) {
@@ -311,7 +323,7 @@ app.whenReady().then(() => {
   } else {
     app.setAsDefaultProtocolClient('marix');
   }
-  
+
   // Handle protocol URL from command line args (Linux)
   const protocolUrl = process.argv.find(arg => arg.startsWith('marix://'));
   if (protocolUrl) {
@@ -322,17 +334,17 @@ app.whenReady().then(() => {
       }
     }, 1000); // Wait for app to initialize
   }
-  
+
   createWindow();
   createTray();
   createAppMenu();
-  
+
   // Initialize database handlers
   initDatabaseHandlers();
-  
+
   // Initialize session monitor with saved setting
   sessionMonitor.setEnabled(appSettings.get('sessionMonitorEnabled'));
-  
+
   // LAN sharing and file transfer services are started on-demand
   // when user enables LAN Discovery toggle in the UI
   // (via 'lan-share:start' IPC handler)
@@ -348,7 +360,7 @@ app.whenReady().then(() => {
 app.on('open-url', (event, url) => {
   event.preventDefault();
   console.log('[Protocol] Received URL:', url);
-  
+
   if (url.startsWith('marix://oauth/gitlab')) {
     GitLabOAuthService.handleCallback(url);
   }
@@ -368,7 +380,7 @@ if (!gotTheLock) {
         GitLabOAuthService.handleCallback(url);
       }
     }
-    
+
     // Focus main window
     if (mainWindow) {
       if (mainWindow.isMinimized()) mainWindow.restore();
@@ -386,7 +398,7 @@ app.on('window-all-closed', () => {
   wssManager.closeAll();
   ftpManager.closeAll();
   closeAllDatabaseConnections();
-  
+
   if (process.platform !== 'darwin') {
     app.quit();
   }
@@ -439,7 +451,7 @@ ipcMain.handle('themes:getTheme', async (_, themeName: string) => {
       return { success: false, error: 'Theme not found' };
     }
     const themeData = JSON.parse(fs.readFileSync(themePath, 'utf-8'));
-    
+
     // Convert VSCode terminal color format to xterm.js format
     const colors = themeData.workbench?.colorCustomizations || themeData;
     const theme = {
@@ -505,7 +517,7 @@ ipcMain.handle('local:getDrives', async () => {
   const { execSync } = require('child_process');
   const platform = os.platform();
   const drives: { name: string; path: string; type: string; mounted: boolean; device?: string }[] = [];
-  
+
   if (platform === 'win32') {
     // Windows: Check drive letters A-Z
     try {
@@ -539,7 +551,7 @@ ipcMain.handle('local:getDrives', async () => {
         try {
           fs.accessSync(drivePath);
           drives.push({ name: `${letter}:`, path: drivePath, type: 'Local', mounted: true });
-        } catch {}
+        } catch { }
       }
     }
   } else if (platform === 'darwin') {
@@ -547,7 +559,7 @@ ipcMain.handle('local:getDrives', async () => {
     try {
       drives.push({ name: 'Macintosh HD', path: '/', type: 'System', mounted: true });
       drives.push({ name: 'Home', path: os.homedir(), type: 'Home', mounted: true });
-      
+
       // Get mounted volumes
       const volumes = fs.readdirSync('/Volumes');
       for (const vol of volumes) {
@@ -564,17 +576,17 @@ ipcMain.handle('local:getDrives', async () => {
             } else if (diskInfo.includes('Network')) {
               volType = 'Network';
             }
-          } catch {}
+          } catch { }
           drives.push({ name: vol, path: volPath, type: volType, mounted: true });
         }
       }
-      
+
       // Check for unmounted disks using diskutil
       try {
         const listOutput = execSync('diskutil list -plist external 2>/dev/null', { encoding: 'utf8' });
         // Parse plist output for unmounted external drives
         // This is simplified - in practice you'd parse the plist properly
-      } catch {}
+      } catch { }
     } catch (e) {
       drives.push({ name: '/', path: '/', type: 'System', mounted: true });
     }
@@ -582,12 +594,12 @@ ipcMain.handle('local:getDrives', async () => {
     // Linux: Use lsblk to get all block devices including unmounted ones
     drives.push({ name: '/', path: '/', type: 'System', mounted: true });
     drives.push({ name: 'Home', path: os.homedir(), type: 'Home', mounted: true });
-    
+
     try {
       // Get all block devices with lsblk (JSON output)
       const lsblkOutput = execSync('lsblk -J -o NAME,SIZE,TYPE,MOUNTPOINT,FSTYPE,LABEL,HOTPLUG 2>/dev/null', { encoding: 'utf8' });
       const lsblkData = JSON.parse(lsblkOutput);
-      
+
       const processDevices = (devices: any[], parentDevice?: string) => {
         for (const dev of devices) {
           // Process partitions (type === 'part') and check if it's a filesystem we care about
@@ -597,23 +609,23 @@ ipcMain.handle('local:getDrives', async () => {
             const label = dev.label || dev.name;
             const mountpoint = dev.mountpoint;
             const devicePath = `/dev/${dev.name}`;
-            
+
             // Skip swap, boot, and system partitions
             if (fstype === 'swap' || fstype === 'vfat' && dev.size?.includes('M')) continue;
-            
+
             // Include ntfs, ext4, exfat, btrfs, xfs partitions
             if (['ntfs', 'ext4', 'ext3', 'exfat', 'btrfs', 'xfs', 'vfat', 'fuseblk'].includes(fstype)) {
               let driveType = 'Partition';
               if (fstype === 'ntfs' || fstype === 'fuseblk') driveType = 'NTFS';
               else if (fstype === 'exfat') driveType = 'ExFAT';
               else if (isRemovable) driveType = 'USB';
-              
+
               // Skip if already in drives (by mountpoint or label)
-              const alreadyExists = drives.some(d => 
-                (mountpoint && d.path === mountpoint) || 
+              const alreadyExists = drives.some(d =>
+                (mountpoint && d.path === mountpoint) ||
                 (d.name === label && d.mounted)
               );
-              
+
               if (!alreadyExists) {
                 drives.push({
                   name: label,
@@ -625,21 +637,21 @@ ipcMain.handle('local:getDrives', async () => {
               }
             }
           }
-          
+
           // Process children (partitions)
           if (dev.children) {
             processDevices(dev.children, dev.name);
           }
         }
       };
-      
+
       if (lsblkData.blockdevices) {
         processDevices(lsblkData.blockdevices);
       }
     } catch (e) {
       console.error('[getDrives] lsblk failed:', e);
     }
-    
+
     // Also add mounted points from /media and /mnt that might not show in lsblk
     const mountPoints = ['/mnt', '/media', `/media/${os.userInfo().username}`, `/run/media/${os.userInfo().username}`];
     for (const mp of mountPoints) {
@@ -654,21 +666,21 @@ ipcMain.handle('local:getDrives', async () => {
               if (!drives.some(d => d.path === fullPath)) {
                 const contents = fs.readdirSync(fullPath);
                 if (contents.length > 0) {
-                  drives.push({ 
-                    name: subdir, 
-                    path: fullPath, 
+                  drives.push({
+                    name: subdir,
+                    path: fullPath,
                     type: mp.includes('media') ? 'Media' : 'Mount',
-                    mounted: true 
+                    mounted: true
                   });
                 }
               }
             }
-          } catch {}
+          } catch { }
         }
-      } catch {}
+      } catch { }
     }
   }
-  
+
   return drives;
 });
 
@@ -677,15 +689,15 @@ ipcMain.handle('local:mountDrive', async (_, device: string, password?: string) 
   const os = require('os');
   const { exec, execSync } = require('child_process');
   const platform = os.platform();
-  
+
   if (platform === 'win32') {
     return { success: false, error: 'Mount not supported on Windows' };
   }
-  
+
   // Get device info
   let mountPoint = '';
   let fstype = '';
-  
+
   try {
     const lsblkOutput = execSync(`lsblk -J -o NAME,FSTYPE,LABEL,MOUNTPOINT ${device} 2>/dev/null`, { encoding: 'utf8' });
     const data = JSON.parse(lsblkOutput);
@@ -702,13 +714,13 @@ ipcMain.handle('local:mountDrive', async (_, device: string, password?: string) 
   } catch (e) {
     return { success: false, error: 'Failed to get device info' };
   }
-  
+
   // For NTFS on Debian/Ubuntu, we might need to use udisksctl which handles polkit auth
   return new Promise((resolve) => {
     if (platform === 'linux') {
       // Try udisksctl first (handles polkit authentication automatically with GUI prompt)
       const udisksCmd = `udisksctl mount -b ${device}`;
-      
+
       exec(udisksCmd, (error: any, stdout: string, stderr: string) => {
         if (!error) {
           // Parse mount point from output: "Mounted /dev/sdb1 at /media/user/DriveName"
@@ -721,11 +733,11 @@ ipcMain.handle('local:mountDrive', async (_, device: string, password?: string) 
         } else {
           // Check if it's an authentication error
           if (stderr.includes('Not authorized') || stderr.includes('authentication') || stderr.includes('polkit')) {
-            resolve({ 
-              success: false, 
+            resolve({
+              success: false,
               error: 'Authentication required',
               needsAuth: true,
-              device 
+              device
             });
           } else {
             resolve({ success: false, error: stderr || error.message });
@@ -753,29 +765,29 @@ ipcMain.handle('local:mountDriveWithAuth', async (_, device: string) => {
   const os = require('os');
   const { exec } = require('child_process');
   const platform = os.platform();
-  
+
   if (platform !== 'linux') {
     return { success: false, error: 'Only supported on Linux' };
   }
-  
+
   return new Promise((resolve) => {
     // Use pkexec to get graphical password prompt
     // First, we need to create mount point and mount
     const username = os.userInfo().username;
-    
+
     // Get device label for mount point name
     const { execSync } = require('child_process');
     let label = path.basename(device);
     try {
       const lsblkOutput = execSync(`lsblk -n -o LABEL ${device} 2>/dev/null`, { encoding: 'utf8' });
       label = lsblkOutput.trim() || label;
-    } catch {}
-    
+    } catch { }
+
     const mountPoint = `/media/${username}/${label}`;
-    
+
     // Use pkexec to mount with graphical auth dialog
     const cmd = `pkexec sh -c "mkdir -p '${mountPoint}' && mount '${device}' '${mountPoint}' && chown ${username}:${username} '${mountPoint}'"`;
-    
+
     exec(cmd, (error: any, stdout: string, stderr: string) => {
       if (!error) {
         resolve({ success: true, mountPoint });
@@ -955,7 +967,7 @@ ipcMain.handle('window:close', () => {
 ipcMain.handle('window:resetFocus', async () => {
   if (mainWindow) {
     const wc = mainWindow.webContents;
-    
+
     // Send keyUp events for all modifier keys to release any stuck state
     // This is more reliable than blur/focus which minimizes the window
     const modifiers: Array<'Control' | 'Shift' | 'Alt' | 'Meta'> = ['Control', 'Shift', 'Alt', 'Meta'];
@@ -966,7 +978,7 @@ ipcMain.handle('window:resetFocus', async () => {
         // Ignore errors
       }
     }
-    
+
     // Send Escape key to clear any focus traps
     try {
       wc.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' });
@@ -974,10 +986,10 @@ ipcMain.handle('window:resetFocus', async () => {
     } catch (e) {
       // Ignore errors
     }
-    
+
     // Refocus webContents
     wc.focus();
-    
+
     // Send a message to renderer
     wc.send('window:focusReset');
   }
@@ -992,11 +1004,11 @@ ipcMain.handle('dialog:openFile', async (event, options) => {
     filters: filters,
     properties: ['openFile', 'showHiddenFiles'],
   });
-  
+
   if (result.canceled || result.filePaths.length === 0) {
     return null;
   }
-  
+
   try {
     const content = fs.readFileSync(result.filePaths[0], 'utf-8');
     return { path: result.filePaths[0], content };
@@ -1013,7 +1025,7 @@ ipcMain.handle('ssh:connect', async (event, config) => {
       console.log('[Main] Port knocking enabled, knocking before SSH connect...');
       await PortKnockService.knock(config.host, config.knockSequence);
     }
-    
+
     // Helper to setup event forwarding
     const setupEventForwarding = (connectionId: string, emitter: any) => {
       const dataHandler = (data: string | Buffer) => {
@@ -1024,7 +1036,7 @@ ipcMain.handle('ssh:connect', async (event, config) => {
         const bytes = typeof data === 'string' ? Buffer.byteLength(data, 'utf8') : data.length;
         sessionMonitor.recordBytesReceived(connectionId, bytes);
       };
-      
+
       const closeHandler = () => {
         if (event.sender && !event.sender.isDestroyed()) {
           event.sender.send('ssh:shellClose', connectionId);
@@ -1032,58 +1044,58 @@ ipcMain.handle('ssh:connect', async (event, config) => {
         // Mark session as disconnected
         sessionMonitor.markDisconnected(connectionId);
       };
-      
+
       emitter.on('data', dataHandler);
       emitter.on('close', closeHandler);
     };
-    
+
     // Try connecting without legacy algorithms first
     try {
       const { connectionId, emitter } = await nativeSSH.connectAndCreateShell({ ...config, useLegacyAlgorithms: false });
       setupEventForwarding(connectionId, emitter);
-      
+
       // Also connect SSH2 in background for execute commands (OS info, etc)
       sshManager.connect(config).then(() => {
         console.log('[Main] SSH2 connected in background for:', connectionId);
       }).catch(err => {
         console.log('[Main] SSH2 background connect failed:', err.message);
       });
-      
+
       // Start session monitoring (uses TCP ping, doesn't need SSH2)
       sessionMonitor.startMonitoring(connectionId);
-      
+
       return { success: true, connectionId };
     } catch (firstError: any) {
       // Check if error is related to algorithms/key types - retry with legacy mode
       const errMsg = firstError.message?.toLowerCase() || '';
-      const isAlgorithmError = errMsg.includes('bad key types') || 
-                              errMsg.includes('no matching') ||
-                              errMsg.includes('algorithm') ||
-                              errMsg.includes('kex') ||
-                              errMsg.includes('cipher') ||
-                              errMsg.includes('unable to negotiate');
-      
+      const isAlgorithmError = errMsg.includes('bad key types') ||
+        errMsg.includes('no matching') ||
+        errMsg.includes('algorithm') ||
+        errMsg.includes('kex') ||
+        errMsg.includes('cipher') ||
+        errMsg.includes('unable to negotiate');
+
       if (isAlgorithmError) {
         console.log('[Main] Algorithm error detected, retrying with legacy algorithms...');
         console.log('[Main] Original error:', firstError.message);
-        
+
         // Retry with legacy algorithms enabled
         const { connectionId, emitter } = await nativeSSH.connectAndCreateShell({ ...config, useLegacyAlgorithms: true });
         setupEventForwarding(connectionId, emitter);
-        
+
         // Also connect SSH2 in background
         sshManager.connect(config).then(() => {
           console.log('[Main] SSH2 connected in background for:', connectionId);
         }).catch(err => {
           console.log('[Main] SSH2 background connect failed:', err.message);
         });
-        
+
         // Start session monitoring (uses TCP ping, doesn't need SSH2)
         sessionMonitor.startMonitoring(connectionId);
-        
+
         return { success: true, connectionId };
       }
-      
+
       // Not an algorithm error, rethrow
       throw firstError;
     }
@@ -1096,23 +1108,23 @@ ipcMain.handle('ssh:connect', async (event, config) => {
 ipcMain.handle('local:createShell', async (event, cols, rows) => {
   try {
     const { connectionId, emitter } = nativeSSH.createLocalShell(cols, rows);
-    
+
     // Setup data forwarding to renderer
     const dataHandler = (data: string) => {
       if (event.sender && !event.sender.isDestroyed()) {
         event.sender.send('ssh:shellData', connectionId, data);
       }
     };
-    
+
     const closeHandler = () => {
       if (event.sender && !event.sender.isDestroyed()) {
         event.sender.send('ssh:shellClose', connectionId);
       }
     };
-    
+
     emitter.on('data', dataHandler);
     emitter.on('close', closeHandler);
-    
+
     return { success: true, connectionId };
   } catch (error: any) {
     return { success: false, error: error.message };
@@ -1124,10 +1136,10 @@ ipcMain.handle('local:getOsInfo', async () => {
   try {
     const os = require('os');
     const { execSync } = require('child_process');
-    
+
     let osName = os.type(); // 'Linux', 'Darwin', 'Windows_NT'
     let ip = '';
-    
+
     // Get more detailed OS info on Linux
     if (osName === 'Linux') {
       try {
@@ -1145,7 +1157,7 @@ ipcMain.handle('local:getOsInfo', async () => {
     } else if (osName === 'Windows_NT') {
       osName = 'Windows';
     }
-    
+
     // Get local IP
     const networkInterfaces = os.networkInterfaces();
     for (const name of Object.keys(networkInterfaces)) {
@@ -1161,7 +1173,7 @@ ipcMain.handle('local:getOsInfo', async () => {
       }
       if (ip) break;
     }
-    
+
     return {
       os: osName,
       ip: ip || 'localhost',
@@ -1191,7 +1203,7 @@ ipcMain.handle('ssh:disconnect', async (event, connectionId) => {
     // Stop session monitoring
     sessionMonitor.stopMonitoring(connectionId);
     nativeSSH.disconnect(connectionId);
-    await sshManager.disconnect(connectionId).catch(() => {});
+    await sshManager.disconnect(connectionId).catch(() => { });
     return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message };
@@ -1208,7 +1220,7 @@ ipcMain.handle('ssh:execute', async (event, connectionId, command) => {
       client = sshManager.getConnection(connectionId);
       retries++;
     }
-    
+
     if (!client) {
       return { success: false, error: 'SSH2 not connected yet. Please try again.' };
     }
@@ -1229,16 +1241,16 @@ ipcMain.handle('ssh:executeStream', async (event, connectionId, command, streamI
       client = sshManager.getConnection(connectionId);
       retries++;
     }
-    
+
     if (!client) {
       return { success: false, error: 'SSH2 not connected yet. Please try again.' };
     }
-    
+
     const result = await sshManager.executeCommandStream(connectionId, command, (data, isError) => {
       // Send each chunk of data to renderer
       event.sender.send('ssh:streamData', streamId, data, isError);
     });
-    
+
     return { success: result.success, exitCode: result.exitCode };
   } catch (error: any) {
     return { success: false, error: error.message };
@@ -1335,6 +1347,15 @@ ipcMain.handle('settings:setTerminalFont', async (event, fontFamily: string) => 
   return { success: true };
 });
 
+ipcMain.handle('settings:getTerminalFontSize', async () => {
+  return appSettings.get('terminalFontSize');
+});
+
+ipcMain.handle('settings:setTerminalFontSize', async (event, fontSize: number) => {
+  appSettings.set('terminalFontSize', fontSize);
+  return { success: true };
+});
+
 // App Lock settings
 ipcMain.handle('settings:getAppLockSettings', async () => {
   return {
@@ -1398,14 +1419,14 @@ ipcMain.handle('sftp:connect', async (event, connectionId, config) => {
     // First, try to find existing SSH2 connection by server info (ignoring timestamp)
     let client: any = null;
     let sftpConnectionId = connectionId;
-    
+
     const existingConn = sshManager.findConnectionByServer(config.host, config.port, config.username);
     if (existingConn) {
       console.log('[Main] Found existing SSH2 connection for SFTP:', existingConn.connectionId);
       client = existingConn.client;
       sftpConnectionId = existingConn.connectionId;
     }
-    
+
     if (!client) {
       // No existing connection, create new SSH2 connection for SFTP
       console.log('[Main] Creating new SSH2 connection for SFTP');
@@ -1414,11 +1435,11 @@ ipcMain.handle('sftp:connect', async (event, connectionId, config) => {
       client = sshManager.getConnection(newConnId);
       sftpConnectionId = newConnId;
     }
-    
+
     if (!client) {
       throw new Error('Failed to establish SSH2 connection for SFTP');
     }
-    
+
     await sftpManager.connect(connectionId, client);
     console.log('[Main] SFTP subsystem ready for:', connectionId);
     return { success: true };
@@ -1599,7 +1620,7 @@ ipcMain.handle('lookup-ip-info', async (_, hostnameOrIp: string) => {
     // First, resolve hostname to IP if needed
     let ip = hostnameOrIp;
     const isIP = /^(\d{1,3}\.){3}\d{1,3}$/.test(hostnameOrIp) || hostnameOrIp.includes(':'); // IPv4 or IPv6
-    
+
     if (!isIP) {
       try {
         const dnsResult = await dnsLookup(hostnameOrIp, { family: 4 }); // Prefer IPv4
@@ -1609,7 +1630,7 @@ ipcMain.handle('lookup-ip-info', async (_, hostnameOrIp: string) => {
         // Continue with original hostname
       }
     }
-    
+
     // Fetch IP info from ipinfo.io
     return new Promise((resolve) => {
       const req = https.get(`https://ipinfo.io/${ip}/json`, { timeout: 5000 }, (res) => {
@@ -1631,12 +1652,12 @@ ipcMain.handle('lookup-ip-info', async (_, hostnameOrIp: string) => {
           }
         });
       });
-      
+
       req.on('error', (err: any) => {
         console.log('[IPInfo] Request failed:', err.message);
         resolve({ success: true, ip, org: '' });
       });
-      
+
       req.on('timeout', () => {
         req.destroy();
         resolve({ success: true, ip, org: '' });
@@ -1844,33 +1865,33 @@ ipcMain.handle('js:runScript', async (_event, scriptContent: string) => {
         resolve({ success: false, error: 'Script content is empty' });
         return;
       }
-      
+
       // Wrap script in async function to support await
       const wrappedScript = `
         (async () => {
           ${scriptContentTrimmed}
         })()
       `;
-      
+
       // Execute script with timeout
       const timeoutMs = 30000; // 30 seconds
       let timeoutId: NodeJS.Timeout | null = null;
-      
+
       const timeoutPromise = new Promise<never>((_, reject) => {
         timeoutId = setTimeout(() => {
           reject(new Error('Script timeout (30s)'));
         }, timeoutMs);
       });
-      
+
       const executePromise = (async () => {
         // Use vm module for sandboxed execution
         const vm = require('vm');
         const https = require('https');
-        
+
         // Create a custom fetch that ignores SSL certificate errors (like curl -k)
         const unsafeFetch = async (url: string, options: any = {}) => {
           const urlObj = new URL(url);
-          
+
           // For HTTPS requests, use custom agent that ignores SSL errors
           if (urlObj.protocol === 'https:') {
             const agent = new https.Agent({
@@ -1878,12 +1899,12 @@ ipcMain.handle('js:runScript', async (_event, scriptContent: string) => {
             });
             options = { ...options, agent };
           }
-          
+
           // Use node-fetch for compatibility with custom agent
           const nodeFetch = require('node-fetch');
           return nodeFetch(url, options);
         };
-        
+
         // Create sandbox with fetch and common utilities
         const sandbox = {
           fetch: unsafeFetch, // Use custom fetch that ignores SSL errors
@@ -1912,34 +1933,34 @@ ipcMain.handle('js:runScript', async (_event, scriptContent: string) => {
           URL,
           setTimeout: (fn: () => void, ms: number) => setTimeout(fn, Math.min(ms, 10000)), // Max 10s delay
         };
-        
+
         // Create context
         const context = vm.createContext(sandbox);
-        
+
         // Execute script
         const script = new vm.Script(wrappedScript, { timeout: timeoutMs });
         const result = await script.runInContext(context, { timeout: timeoutMs });
-        
+
         return result;
       })();
-      
+
       try {
         const result = await Promise.race([executePromise, timeoutPromise]);
         if (timeoutId) clearTimeout(timeoutId);
-        
+
         // Validate result
         if (!result || typeof result !== 'object') {
           resolve({ success: false, error: 'Script must return an object' });
           return;
         }
-        
+
         if (!result.host || !result.username) {
           resolve({ success: false, error: 'Script must return object with host and username' });
           return;
         }
-        
-        resolve({ 
-          success: true, 
+
+        resolve({
+          success: true,
           data: {
             host: String(result.host),
             port: result.port ? Number(result.port) : 22,
@@ -2126,7 +2147,7 @@ ipcMain.handle('rdp:checkDeps', async () => {
 ipcMain.handle('rdp:installDeps', async (event, password: string) => {
   try {
     const deps = rdpManager.checkDependencies();
-    
+
     if (deps.xfreerdp3 && deps.xdotool) {
       return { success: true, message: 'All dependencies already installed' };
     }
@@ -2382,11 +2403,11 @@ ipcMain.handle('backup:selectFile', async (event) => {
       ],
       properties: ['openFile'],
     });
-    
+
     if (result.canceled || result.filePaths.length === 0) {
       return { success: false, canceled: true };
     }
-    
+
     return { success: true, filePath: result.filePaths[0] };
   } catch (error: any) {
     return { success: false, error: error.message };
@@ -2397,11 +2418,11 @@ ipcMain.handle('backup:selectSaveLocation', async (event) => {
   try {
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const defaultName = `marix-backup-${timestamp}.marix`;
-    
+
     // Use home directory as default, not desktop
     const homePath = app.getPath('home');
     const defaultPath = path.join(homePath, defaultName);
-    
+
     const result = await dialog.showSaveDialog(mainWindow!, {
       title: 'Save Backup File',
       defaultPath: defaultPath,
@@ -2410,11 +2431,11 @@ ipcMain.handle('backup:selectSaveLocation', async (event) => {
       ],
       properties: ['showOverwriteConfirmation', 'createDirectory'],
     });
-    
+
     if (result.canceled || !result.filePath) {
       return { success: false, canceled: true };
     }
-    
+
     return { success: true, filePath: result.filePath };
   } catch (error: any) {
     return { success: false, error: error.message };
@@ -2526,14 +2547,14 @@ ipcMain.handle('gdrive:createBackup', async (event, password: string) => {
     const servers = serverStore.getAllServers();
     const tagColors = serverStore.getTagColors();
     const cloudflareToken = cloudflareService.getToken() || undefined;
-    
+
     // Get SSH keys
     const sshKeys = sshKeyService.exportAllKeysForBackup();
-    
+
     // Get 2FA TOTP entries
     const totpJson = await mainWindow?.webContents.executeJavaScript('localStorage.getItem("totp_entries")');
     const totpEntries = totpJson ? JSON.parse(totpJson) : [];
-    
+
     // Get Port Forwards
     const pfJson = await mainWindow?.webContents.executeJavaScript('localStorage.getItem("port_forwards")');
     const portForwards = pfJson ? JSON.parse(pfJson) : [];
@@ -2553,7 +2574,7 @@ ipcMain.handle('gdrive:createBackup', async (event, password: string) => {
       portForwards,
       snippets
     );
-    
+
     if (!result.success || !result.content) {
       return { success: false, error: result.error || 'Failed to create backup content' };
     }
@@ -2581,7 +2602,7 @@ ipcMain.handle('gdrive:restoreBackup', async (event, password: string) => {
   try {
     // Download backup from Google Drive
     const downloadResult = await googleDriveService.downloadBackup();
-    
+
     if (!downloadResult.success || !downloadResult.data) {
       return { success: false, error: downloadResult.error || 'Failed to download backup' };
     }
@@ -2593,7 +2614,7 @@ ipcMain.handle('gdrive:restoreBackup', async (event, password: string) => {
       // Restore data
       serverStore.setServers(result.data.servers);
       serverStore.setTagColors(result.data.tagColors);
-      
+
       if (result.data.cloudflareToken) {
         cloudflareService.setToken(result.data.cloudflareToken);
       }
@@ -2638,18 +2659,18 @@ ipcMain.handle('github:uploadBackup', async (event, password: string, totpEntrie
   if (!validation.valid) {
     return { success: false, error: validation.errors.join('\n') };
   }
-  
+
   const servers = serverStore.getAllServers();
   const tagColors = serverStore.getTagColors();
   const cloudflareToken = cloudflareService.getToken() || undefined;
   const sshKeys = sshKeyService.exportAllKeysForBackup();
-  
+
   // Create encrypted backup content (including 2FA, port forwards and snippets)
   const backupResult = await backupService.createBackupContent(password, servers, tagColors, cloudflareToken, sshKeys, totpEntries, portForwards, snippets);
   if (!backupResult.success || !backupResult.content) {
     return { success: false, error: backupResult.error };
   }
-  
+
   // Upload to GitHub (will overwrite existing backup.arix file)
   const now = new Date();
   const dd = String(now.getUTCDate()).padStart(2, '0');
@@ -2667,30 +2688,30 @@ ipcMain.handle('github:downloadBackup', async (event, password: string) => {
   if (!downloadResult.success || !downloadResult.content) {
     return { success: false, error: downloadResult.error };
   }
-  
+
   // Decrypt backup
   const restoreResult = await backupService.restoreBackupContent(downloadResult.content, password);
   if (!restoreResult.success || !restoreResult.data) {
     return { success: false, error: restoreResult.error };
   }
-  
+
   // Restore data
   serverStore.setServers(restoreResult.data.servers);
   serverStore.setTagColors(restoreResult.data.tagColors);
   if (restoreResult.data.cloudflareToken) {
     cloudflareService.setToken(restoreResult.data.cloudflareToken);
   }
-  
+
   // Restore SSH keys
   let sshKeyCount = 0;
   if (restoreResult.data.sshKeys && restoreResult.data.sshKeys.length > 0) {
     const importResult = await sshKeyService.importKeysFromBackup(restoreResult.data.sshKeys);
     sshKeyCount = importResult.imported;
   }
-  
-  return { 
-    success: true, 
-    serverCount: restoreResult.data.servers.length, 
+
+  return {
+    success: true,
+    serverCount: restoreResult.data.servers.length,
     sshKeyCount,
     totpEntries: restoreResult.data.totpEntries,
     portForwards: restoreResult.data.portForwards,
@@ -2731,12 +2752,12 @@ ipcMain.handle('gitlab:hasToken', async () => {
   if (!tokens) {
     return { hasToken: false };
   }
-  
+
   // Check if token is valid or can be refreshed
   if (GitLabOAuthService.isTokenValid(tokens)) {
     return { hasToken: true };
   }
-  
+
   // Try to refresh
   try {
     const newTokens = await GitLabOAuthService.refreshToken(tokens);
@@ -2759,38 +2780,38 @@ ipcMain.handle('gitlab:uploadBackup', async (event, password: string, totpEntrie
     if (!validation.valid) {
       return { success: false, error: validation.errors.join('\n') };
     }
-    
+
     // Get access token
     const accessToken = await GitLabOAuthService.getValidAccessToken();
     if (!accessToken) {
       return { success: false, error: 'Not authenticated with GitLab. Please connect first.' };
     }
-    
+
     // Gather data to backup
     const servers = serverStore.getAllServers();
     const tagColors = serverStore.getTagColors();
     const cloudflareToken = cloudflareService.getToken() || undefined;
     const sshKeys = sshKeyService.exportAllKeysForBackup();
-    
+
     // Create encrypted backup content
     const backupResult = await backupService.createBackupContent(
-      password, 
-      servers, 
-      tagColors, 
-      cloudflareToken, 
-      sshKeys, 
-      totpEntries, 
+      password,
+      servers,
+      tagColors,
+      cloudflareToken,
+      sshKeys,
+      totpEntries,
       portForwards,
       snippets
     );
-    
+
     if (!backupResult.success || !backupResult.content) {
       return { success: false, error: backupResult.error };
     }
-    
+
     // Upload to GitLab
     await GitLabApiService.uploadBackup(accessToken, backupResult.content);
-    
+
     return { success: true };
   } catch (error: any) {
     console.error('[GitLab] Upload backup error:', error);
@@ -2805,32 +2826,32 @@ ipcMain.handle('gitlab:downloadBackup', async (event, password: string) => {
     if (!accessToken) {
       return { success: false, error: 'Not authenticated with GitLab. Please connect first.' };
     }
-    
+
     // Download from GitLab
     const encryptedContent = await GitLabApiService.downloadBackup(accessToken);
-    
+
     // Decrypt backup
     const restoreResult = await backupService.restoreBackupContent(encryptedContent, password);
     if (!restoreResult.success || !restoreResult.data) {
       return { success: false, error: restoreResult.error };
     }
-    
+
     // Restore data
     serverStore.setServers(restoreResult.data.servers);
     serverStore.setTagColors(restoreResult.data.tagColors);
     if (restoreResult.data.cloudflareToken) {
       cloudflareService.setToken(restoreResult.data.cloudflareToken);
     }
-    
+
     // Restore SSH keys
     let sshKeyCount = 0;
     if (restoreResult.data.sshKeys && restoreResult.data.sshKeys.length > 0) {
       const importResult = await sshKeyService.importKeysFromBackup(restoreResult.data.sshKeys);
       sshKeyCount = importResult.imported;
     }
-    
-    return { 
-      success: true, 
+
+    return {
+      success: true,
       serverCount: restoreResult.data.servers.length,
       sshKeyCount,
       totpEntries: restoreResult.data.totpEntries,
@@ -2849,12 +2870,12 @@ ipcMain.handle('gitlab:checkBackup', async () => {
     if (!accessToken) {
       return { exists: false };
     }
-    
+
     const exists = await GitLabApiService.backupExists(accessToken);
     if (!exists) {
       return { exists: false };
     }
-    
+
     const metadata = await GitLabApiService.getBackupMetadata(accessToken);
     return { exists: true, metadata };
   } catch (error: any) {
@@ -2908,37 +2929,37 @@ ipcMain.handle('box:uploadBackup', async (event, password: string, totpEntries?:
     if (!validation.valid) {
       return { success: false, error: validation.errors.join('\n') };
     }
-    
+
     // Get access token
     const accessToken = await BoxOAuthService.getValidAccessToken();
     if (!accessToken) {
       return { success: false, error: 'Not authenticated with Box. Please connect first.' };
     }
-    
+
     const servers = serverStore.getAllServers();
     const tagColors = serverStore.getTagColors();
     const cloudflareToken = cloudflareService.getToken() || undefined;
     const sshKeys = sshKeyService.exportAllKeysForBackup();
-    
+
     // Create encrypted backup content
     const backupResult = await backupService.createBackupContent(
-      password, 
-      servers, 
-      tagColors, 
-      cloudflareToken, 
-      sshKeys, 
-      totpEntries, 
+      password,
+      servers,
+      tagColors,
+      cloudflareToken,
+      sshKeys,
+      totpEntries,
       portForwards,
       snippets
     );
-    
+
     if (!backupResult.success || !backupResult.content) {
       return { success: false, error: backupResult.error };
     }
-    
+
     // Upload to Box
     await BoxApiService.uploadBackup(accessToken, backupResult.content);
-    
+
     return { success: true };
   } catch (error: any) {
     console.error('[Box] Upload backup error:', error);
@@ -2953,32 +2974,32 @@ ipcMain.handle('box:downloadBackup', async (event, password: string) => {
     if (!accessToken) {
       return { success: false, error: 'Not authenticated with Box. Please connect first.' };
     }
-    
+
     // Download from Box
     const encryptedContent = await BoxApiService.downloadBackup(accessToken);
-    
+
     // Decrypt backup
     const restoreResult = await backupService.restoreBackupContent(encryptedContent, password);
     if (!restoreResult.success || !restoreResult.data) {
       return { success: false, error: restoreResult.error };
     }
-    
+
     // Restore data
     serverStore.setServers(restoreResult.data.servers);
     serverStore.setTagColors(restoreResult.data.tagColors);
     if (restoreResult.data.cloudflareToken) {
       cloudflareService.setToken(restoreResult.data.cloudflareToken);
     }
-    
+
     // Restore SSH keys
     let sshKeyCount = 0;
     if (restoreResult.data.sshKeys && restoreResult.data.sshKeys.length > 0) {
       const importResult = await sshKeyService.importKeysFromBackup(restoreResult.data.sshKeys);
       sshKeyCount = importResult.imported;
     }
-    
-    return { 
-      success: true, 
+
+    return {
+      success: true,
       serverCount: restoreResult.data.servers.length,
       sshKeyCount,
       totpEntries: restoreResult.data.totpEntries,
@@ -2997,12 +3018,12 @@ ipcMain.handle('box:checkBackup', async () => {
     if (!accessToken) {
       return { exists: false };
     }
-    
+
     const exists = await BoxApiService.backupExists(accessToken);
     if (!exists) {
       return { exists: false };
     }
-    
+
     const metadata = await BoxApiService.getBackupMetadata(accessToken);
     return { exists: true, metadata };
   } catch (error: any) {
@@ -3060,37 +3081,37 @@ ipcMain.handle('onedrive:uploadBackup', async (event, password: string, totpEntr
     if (!validation.valid) {
       return { success: false, error: validation.errors.join('\n') };
     }
-    
+
     // Get access token
     const accessToken = await OneDriveOAuthService.getValidAccessToken();
     if (!accessToken) {
       return { success: false, error: 'Not authenticated with OneDrive. Please connect first.' };
     }
-    
+
     const servers = serverStore.getAllServers();
     const tagColors = serverStore.getTagColors();
     const cloudflareToken = cloudflareService.getToken() || undefined;
     const sshKeys = sshKeyService.exportAllKeysForBackup();
-    
+
     // Create encrypted backup content
     const backupResult = await backupService.createBackupContent(
-      password, 
-      servers, 
-      tagColors, 
-      cloudflareToken, 
-      sshKeys, 
-      totpEntries, 
+      password,
+      servers,
+      tagColors,
+      cloudflareToken,
+      sshKeys,
+      totpEntries,
       portForwards,
       snippets
     );
-    
+
     if (!backupResult.success || !backupResult.content) {
       return { success: false, error: backupResult.error };
     }
-    
+
     // Upload to OneDrive
     await OneDriveApiService.uploadBackup(accessToken, backupResult.content);
-    
+
     return { success: true };
   } catch (error: any) {
     console.error('[OneDrive] Upload backup error:', error);
@@ -3105,32 +3126,32 @@ ipcMain.handle('onedrive:downloadBackup', async (event, password: string) => {
     if (!accessToken) {
       return { success: false, error: 'Not authenticated with OneDrive. Please connect first.' };
     }
-    
+
     // Download from OneDrive
     const encryptedContent = await OneDriveApiService.downloadBackup(accessToken);
-    
+
     // Decrypt backup
     const restoreResult = await backupService.restoreBackupContent(encryptedContent, password);
     if (!restoreResult.success || !restoreResult.data) {
       return { success: false, error: restoreResult.error };
     }
-    
+
     // Restore data
     serverStore.setServers(restoreResult.data.servers);
     serverStore.setTagColors(restoreResult.data.tagColors);
     if (restoreResult.data.cloudflareToken) {
       cloudflareService.setToken(restoreResult.data.cloudflareToken);
     }
-    
+
     // Restore SSH keys
     let sshKeyCount = 0;
     if (restoreResult.data.sshKeys && restoreResult.data.sshKeys.length > 0) {
       const importResult = await sshKeyService.importKeysFromBackup(restoreResult.data.sshKeys);
       sshKeyCount = importResult.imported;
     }
-    
-    return { 
-      success: true, 
+
+    return {
+      success: true,
       serverCount: restoreResult.data.servers.length,
       sshKeyCount,
       totpEntries: restoreResult.data.totpEntries,
@@ -3149,12 +3170,12 @@ ipcMain.handle('onedrive:checkBackup', async () => {
     if (!accessToken) {
       return { exists: false };
     }
-    
+
     const exists = await OneDriveApiService.backupExists(accessToken);
     if (!exists) {
       return { exists: false };
     }
-    
+
     const metadata = await OneDriveApiService.getBackupMetadata(accessToken);
     return { exists: true, metadata };
   } catch (error: any) {
@@ -3328,7 +3349,7 @@ ipcMain.handle('app:focusWindow', async () => {
 ipcMain.handle('knownhosts:check', async (event, host: string, port: number) => {
   // First check if host is already in known_hosts (instant, no network)
   const storedHost = knownHostsService.getStoredFingerprint(host, port);
-  
+
   if (storedHost) {
     // Host is known - return match status immediately for fast connection
     // The actual fingerprint verification happens during SSH handshake
@@ -3340,7 +3361,7 @@ ipcMain.handle('knownhosts:check', async (event, host: string, port: number) => 
       fullKey: storedHost.fullKey,
     };
   }
-  
+
   // Host not known - need to fetch fingerprint (slower, requires network)
   console.log(`[KnownHosts] Host ${host}:${port} not known, fetching fingerprint...`);
   return await knownHostsService.getHostFingerprint(host, port);
@@ -3426,35 +3447,35 @@ ipcMain.handle('sshkey:exportToFile', async (event, keyId: string, keyName: stri
     if (!keyInfo) {
       return { success: false, error: 'Key not found' };
     }
-    
+
     if (includePrivate) {
       // Export both public and private keys
       const privateKey = sshKeyService.getPrivateKey(keyId);
       if (!privateKey) {
         return { success: false, error: 'Private key not found' };
       }
-      
+
       // Ask for folder to save
       const result = await dialog.showOpenDialog(mainWindow!, {
         title: 'Select folder to save SSH keys',
         properties: ['openDirectory', 'createDirectory'],
       });
-      
+
       if (result.canceled || result.filePaths.length === 0) {
         return { success: false, canceled: true };
       }
-      
+
       const folderPath = result.filePaths[0];
       const safeName = keyName.replace(/[^a-zA-Z0-9_-]/g, '_');
-      
+
       // Save private key
       const privateKeyPath = path.join(folderPath, safeName);
       fs.writeFileSync(privateKeyPath, privateKey, { mode: 0o600 });
-      
+
       // Save public key
       const publicKeyPath = path.join(folderPath, `${safeName}.pub`);
       fs.writeFileSync(publicKeyPath, keyInfo.publicKey);
-      
+
       return { success: true, path: folderPath, files: [safeName, `${safeName}.pub`] };
     } else {
       // Export only public key
@@ -3466,11 +3487,11 @@ ipcMain.handle('sshkey:exportToFile', async (event, keyId: string, keyName: stri
           { name: 'All Files', extensions: ['*'] },
         ],
       });
-      
+
       if (result.canceled || !result.filePath) {
         return { success: false, canceled: true };
       }
-      
+
       fs.writeFileSync(result.filePath, keyInfo.publicKey);
       return { success: true, path: result.filePath };
     }
@@ -3489,15 +3510,15 @@ ipcMain.handle('sshkey:selectFile', async () => {
         { name: 'All Files', extensions: ['*'] },
       ],
     });
-    
+
     if (result.canceled || result.filePaths.length === 0) {
       return { success: false, canceled: true };
     }
-    
+
     const filePath = result.filePaths[0];
     const content = fs.readFileSync(filePath, 'utf-8');
     const fileName = path.basename(filePath);
-    
+
     return { success: true, content, fileName, filePath };
   } catch (error: any) {
     return { success: false, error: error.message };
@@ -3604,9 +3625,9 @@ ipcMain.handle('app:checkForUpdates', async () => {
             'Accept': 'application/vnd.github.v3+json'
           }
         };
-        
+
         console.log('[Update] Fetching:', path);
-        
+
         https.get(options, (res: any) => {
           let data = '';
           res.on('data', (chunk: string) => data += chunk);
@@ -3657,7 +3678,7 @@ ipcMain.handle('app:checkForUpdates', async () => {
           resolve({ success: false, error: err.message });
         });
       };
-      
+
       // Start with releases endpoint
       tryFetch(`/repos/${UPDATE_REPO}/releases/latest`, true);
     });
