@@ -1416,11 +1416,25 @@ sessionMonitor.on('session-closed', (connectionId: string) => {
 
 ipcMain.handle('sftp:connect', async (event, connectionId, config) => {
   try {
+    // Normalize auth config for SSH2 SFTP connection.
+    // JS-SSH sessions keep credentials in _pendingPassword to avoid persisting password on server objects.
+    const sftpConfig: any = { ...config };
+    if (!sftpConfig.password && typeof sftpConfig._pendingPassword === 'string' && sftpConfig._pendingPassword) {
+      sftpConfig.password = sftpConfig._pendingPassword;
+    }
+    // If server only stores key ID, resolve private key on-demand for SSH2 auth.
+    if (!sftpConfig.privateKey && sftpConfig.authType === 'key' && sftpConfig.sshKeyId) {
+      const privateKey = sshKeyService.getPrivateKey(sftpConfig.sshKeyId);
+      if (privateKey) {
+        sftpConfig.privateKey = privateKey;
+      }
+    }
+
     // First, try to find existing SSH2 connection by server info (ignoring timestamp)
     let client: any = null;
     let sftpConnectionId = connectionId;
 
-    const existingConn = sshManager.findConnectionByServer(config.host, config.port, config.username);
+    const existingConn = sshManager.findConnectionByServer(sftpConfig.host, sftpConfig.port, sftpConfig.username);
     if (existingConn) {
       console.log('[Main] Found existing SSH2 connection for SFTP:', existingConn.connectionId);
       client = existingConn.client;
@@ -1430,7 +1444,7 @@ ipcMain.handle('sftp:connect', async (event, connectionId, config) => {
     if (!client) {
       // No existing connection, create new SSH2 connection for SFTP
       console.log('[Main] Creating new SSH2 connection for SFTP');
-      const newConnId = await sshManager.connect(config);
+      const newConnId = await sshManager.connect(sftpConfig);
       console.log('[Main] SSH2 connected, newConnId:', newConnId);
       client = sshManager.getConnection(newConnId);
       sftpConnectionId = newConnId;

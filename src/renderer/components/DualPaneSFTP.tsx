@@ -16,11 +16,16 @@ interface FileInfo {
 interface Props {
   connectionId: string;
   server: {
+    id?: string;
     host: string;
     port: number;
     username: string;
     password?: string;
     protocol?: 'ssh' | 'js-ssh' | 'ftp' | 'ftps' | 'rdp' | 'wss' | 'mysql' | 'postgresql' | 'mongodb' | 'redis' | 'sqlite';
+    authType?: 'password' | 'key';
+    privateKey?: string;
+    passphrase?: string;
+    sshKeyId?: string;
   };
   initialLocalPath?: string;
   initialRemotePath?: string;
@@ -45,21 +50,21 @@ let cachedHomedir = '';
 
 const DualPaneSFTP: React.FC<Props> = ({ connectionId, server, initialLocalPath, initialRemotePath, onPathChange, onSftpConnected }) => {
   const { t } = useLanguage();
-  
+
   // Local state - use initial values if provided, will be set properly in useEffect
   const [localPath, setLocalPath] = useState(initialLocalPath || '');
   const [localFiles, setLocalFiles] = useState<FileInfo[]>([]);
   const [localHistory, setLocalHistory] = useState<string[]>([]);
   const [localHistoryIndex, setLocalHistoryIndex] = useState(0);
   const [localSearch, setLocalSearch] = useState('');
-  
+
   // Remote state - use initial values if provided
   const [remotePath, setRemotePath] = useState(initialRemotePath || '/');
   const [remoteFiles, setRemoteFiles] = useState<FileInfo[]>([]);
   const [remoteHistory, setRemoteHistory] = useState<string[]>([initialRemotePath || '/']);
   const [remoteHistoryIndex, setRemoteHistoryIndex] = useState(0);
   const [remoteSearch, setRemoteSearch] = useState('');
-  
+
   // UI state
   const [loading, setLoading] = useState(false);
   const [localLoading, setLocalLoading] = useState(false);
@@ -70,7 +75,7 @@ const DualPaneSFTP: React.FC<Props> = ({ connectionId, server, initialLocalPath,
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; type: 'local' | 'remote'; file: FileInfo | null } | null>(null);
   const [contextMenuPosition, setContextMenuPosition] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
   const contextMenuRef = useRef<HTMLDivElement>(null);
-  
+
   // Drag & drop state
   const [localDragOver, setLocalDragOver] = useState(false);
   const [remoteDragOver, setRemoteDragOver] = useState(false);
@@ -153,20 +158,20 @@ const DualPaneSFTP: React.FC<Props> = ({ connectionId, server, initialLocalPath,
       const viewportHeight = window.innerHeight;
       const viewportWidth = window.innerWidth;
       const padding = 10;
-      
+
       let top = contextMenu.y;
       let left = contextMenu.x;
-      
+
       // Adjust vertical position
       if (contextMenu.y + menuRect.height > viewportHeight - padding) {
         top = Math.max(padding, viewportHeight - menuRect.height - padding);
       }
-      
+
       // Adjust horizontal position
       if (contextMenu.x + menuRect.width > viewportWidth - padding) {
         left = Math.max(padding, viewportWidth - menuRect.width - padding);
       }
-      
+
       setContextMenuPosition({ top, left });
     }
   }, [contextMenu]);
@@ -229,7 +234,7 @@ const DualPaneSFTP: React.FC<Props> = ({ connectionId, server, initialLocalPath,
     try {
       // Try to mount using udisksctl first (handles polkit auth)
       const result = await ipcRenderer.invoke('local:mountDrive', drive.device);
-      
+
       if (result.success) {
         showToast(`Mounted ${drive.name}`, 'success');
         await refreshDrives();
@@ -297,10 +302,10 @@ const DualPaneSFTP: React.FC<Props> = ({ connectionId, server, initialLocalPath,
       'dockerfile',
     ];
     const lowerName = filename.toLowerCase();
-    if (lowerName === 'dockerfile' || lowerName === 'makefile' || 
-        lowerName === 'caddyfile' || lowerName === 'vagrantfile' ||
-        lowerName.startsWith('.env') || lowerName.startsWith('.git') ||
-        lowerName.endsWith('rc') || lowerName.endsWith('ignore')) {
+    if (lowerName === 'dockerfile' || lowerName === 'makefile' ||
+      lowerName === 'caddyfile' || lowerName === 'vagrantfile' ||
+      lowerName.startsWith('.env') || lowerName.startsWith('.git') ||
+      lowerName.endsWith('rc') || lowerName.endsWith('ignore')) {
       return true;
     }
     return editableExts.includes(ext);
@@ -359,14 +364,9 @@ const DualPaneSFTP: React.FC<Props> = ({ connectionId, server, initialLocalPath,
         if (!isFTP && (result.error?.includes('not connected') || result.error?.includes('No SFTP'))) {
           sftpConnections.delete(connectionId);
           setConnected(false);
-          
-          const reconnectResult = await ipcRenderer.invoke('sftp:connect', connectionId, {
-            host: server.host,
-            port: server.port,
-            username: server.username,
-            password: server.password,
-          });
-          
+
+          const reconnectResult = await ipcRenderer.invoke('sftp:connect', connectionId, server);
+
           if (reconnectResult.success) {
             sftpConnections.set(connectionId, true);
             setConnected(true);
@@ -405,7 +405,7 @@ const DualPaneSFTP: React.FC<Props> = ({ connectionId, server, initialLocalPath,
         }
         return;
       }
-      
+
       // Check if already connected (persisted across tab switches)
       if (sftpConnections.get(connectionId)) {
         console.log('[DualPaneSFTP] Already connected, reusing session');
@@ -416,17 +416,12 @@ const DualPaneSFTP: React.FC<Props> = ({ connectionId, server, initialLocalPath,
         }
         return;
       }
-      
+
       setLoading(true);
       setError(null);
       try {
-        const result = await ipcRenderer.invoke('sftp:connect', connectionId, {
-          host: server.host,
-          port: server.port,
-          username: server.username,
-          password: server.password,
-        });
-        
+        const result = await ipcRenderer.invoke('sftp:connect', connectionId, server);
+
         if (result.success) {
           sftpConnections.set(connectionId, true);
           setConnected(true);
@@ -442,9 +437,9 @@ const DualPaneSFTP: React.FC<Props> = ({ connectionId, server, initialLocalPath,
       }
       setLoading(false);
     };
-    
+
     connectRemote();
-    
+
     // DON'T cleanup on unmount - keep connection alive for tab switching
     // Connection will be cleaned up when the session is closed
   }, [connectionId]);
@@ -472,7 +467,7 @@ const DualPaneSFTP: React.FC<Props> = ({ connectionId, server, initialLocalPath,
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       if (!isResizing || !containerRef.current) return;
-      
+
       const rect = containerRef.current.getBoundingClientRect();
       const x = e.clientX - rect.left;
       const newWidth = Math.min(Math.max((x / rect.width) * 100, 15), 85); // Min 15%, max 85%
@@ -512,9 +507,9 @@ const DualPaneSFTP: React.FC<Props> = ({ connectionId, server, initialLocalPath,
     const handleKeyDown = (e: KeyboardEvent) => {
       const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
       const ctrlOrCmd = isMac ? e.metaKey : e.ctrlKey;
-      
+
       if (!ctrlOrCmd) return;
-      
+
       // Don't trigger if typing in an input
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
 
@@ -633,7 +628,7 @@ const DualPaneSFTP: React.FC<Props> = ({ connectionId, server, initialLocalPath,
   const downloadFile = async (name: string) => {
     const remoteFilePath = remotePath === '/' ? `/${name}` : `${remotePath}/${name}`;
     const localFilePath = await ipcRenderer.invoke('local:pathJoin', localPath, name);
-    
+
     // Check if file exists locally
     const exists = await ipcRenderer.invoke('local:exists', localFilePath);
     if (exists) {
@@ -642,7 +637,7 @@ const DualPaneSFTP: React.FC<Props> = ({ connectionId, server, initialLocalPath,
         return;
       }
     }
-    
+
     try {
       const downloadCmd = isFTP ? 'ftp:download' : 'sftp:download';
       console.log(`[${ftpPrefix.toUpperCase()}] Downloading:`, remoteFilePath, '->', localFilePath);
@@ -664,7 +659,7 @@ const DualPaneSFTP: React.FC<Props> = ({ connectionId, server, initialLocalPath,
   const downloadFolder = async (name: string) => {
     const remoteFilePath = remotePath === '/' ? `/${name}` : `${remotePath}/${name}`;
     const localFilePath = await ipcRenderer.invoke('local:pathJoin', localPath, name);
-    
+
     try {
       console.log(`[${ftpPrefix.toUpperCase()}] Downloading folder:`, remoteFilePath, '->', localFilePath);
       setTransferProgress({
@@ -676,11 +671,11 @@ const DualPaneSFTP: React.FC<Props> = ({ connectionId, server, initialLocalPath,
         totalBytes: 0,
         transferredBytes: 0,
       });
-      
+
       const result = await ipcRenderer.invoke('sftp:downloadFolder', connectionId, remoteFilePath, localFilePath);
-      
+
       setTransferProgress(null);
-      
+
       if (result.success) {
         console.log(`[${ftpPrefix.toUpperCase()}] Folder download success`);
         loadLocalFiles(localPath);
@@ -707,7 +702,7 @@ const DualPaneSFTP: React.FC<Props> = ({ connectionId, server, initialLocalPath,
   const uploadFile = async (name: string) => {
     const localFilePath = await ipcRenderer.invoke('local:pathJoin', localPath, name);
     const remoteFilePath = remotePath === '/' ? `/${name}` : `${remotePath}/${name}`;
-    
+
     // Check if file exists on remote
     const existingFile = remoteFiles.find(f => f.name === name);
     if (existingFile) {
@@ -716,7 +711,7 @@ const DualPaneSFTP: React.FC<Props> = ({ connectionId, server, initialLocalPath,
         return;
       }
     }
-    
+
     try {
       const uploadCmd = isFTP ? 'ftp:upload' : 'sftp:upload';
       console.log(`[${ftpPrefix.toUpperCase()}] Uploading:`, localFilePath, '->', remoteFilePath);
@@ -738,7 +733,7 @@ const DualPaneSFTP: React.FC<Props> = ({ connectionId, server, initialLocalPath,
   const uploadFolder = async (name: string) => {
     const localFilePath = await ipcRenderer.invoke('local:pathJoin', localPath, name);
     const remoteFilePath = remotePath === '/' ? `/${name}` : `${remotePath}/${name}`;
-    
+
     try {
       console.log(`[${ftpPrefix.toUpperCase()}] Uploading folder:`, localFilePath, '->', remoteFilePath);
       setTransferProgress({
@@ -750,11 +745,11 @@ const DualPaneSFTP: React.FC<Props> = ({ connectionId, server, initialLocalPath,
         totalBytes: 0,
         transferredBytes: 0,
       });
-      
+
       const result = await ipcRenderer.invoke('sftp:uploadFolder', connectionId, localFilePath, remoteFilePath);
-      
+
       setTransferProgress(null);
-      
+
       if (result.success) {
         console.log(`[${ftpPrefix.toUpperCase()}] Folder upload success`);
         loadRemoteFiles(remotePath);
@@ -916,13 +911,13 @@ const DualPaneSFTP: React.FC<Props> = ({ connectionId, server, initialLocalPath,
     if (!clipboard) return;
 
     const targetPath = targetType === 'local' ? localPath : remotePath;
-    
+
     for (const file of clipboard.files) {
-      const sourcePath = clipboard.path.endsWith('/') 
-        ? `${clipboard.path}${file.name}` 
+      const sourcePath = clipboard.path.endsWith('/')
+        ? `${clipboard.path}${file.name}`
         : `${clipboard.path}/${file.name}`;
-      const destPath = targetPath.endsWith('/') 
-        ? `${targetPath}${file.name}` 
+      const destPath = targetPath.endsWith('/')
+        ? `${targetPath}${file.name}`
         : `${targetPath}/${file.name}`;
 
       try {
@@ -932,27 +927,27 @@ const DualPaneSFTP: React.FC<Props> = ({ connectionId, server, initialLocalPath,
             // Local to local copy/move
             const destFilePath = await ipcRenderer.invoke('local:pathJoin', targetPath, file.name);
             const sourceFilePath = await ipcRenderer.invoke('local:pathJoin', clipboard.path, file.name);
-            
+
             if (file.type === 'directory') {
               // Use cp -r for directories
               await ipcRenderer.invoke('local:copyDir', sourceFilePath, destFilePath);
             } else {
               await ipcRenderer.invoke('local:copyFile', sourceFilePath, destFilePath);
             }
-            
+
             if (clipboard.operation === 'cut') {
               await ipcRenderer.invoke('local:rm', sourceFilePath, true);
             }
           } else {
             // Remote to remote copy/move via SSH commands
-            const copyCmd = file.type === 'directory' 
+            const copyCmd = file.type === 'directory'
               ? `cp -r "${sourcePath}" "${destPath}"`
               : `cp "${sourcePath}" "${destPath}"`;
-            
+
             await ipcRenderer.invoke('ssh:execute', connectionId, copyCmd);
-            
+
             if (clipboard.operation === 'cut') {
-              const rmCmd = file.type === 'directory' 
+              const rmCmd = file.type === 'directory'
                 ? `rm -rf "${sourcePath}"`
                 : `rm "${sourcePath}"`;
               await ipcRenderer.invoke('ssh:execute', connectionId, rmCmd);
@@ -1111,10 +1106,10 @@ const DualPaneSFTP: React.FC<Props> = ({ connectionId, server, initialLocalPath,
   // Compress file/folder to archive (remote)
   const compressRemote = async (fileName: string, format: 'zip' | 'tar.gz' | 'tar') => {
     const filePath = remotePath === '/' ? `/${fileName}` : `${remotePath}/${fileName}`;
-    const archiveName = format === 'zip' ? `${fileName}.zip` : 
-                        format === 'tar.gz' ? `${fileName}.tar.gz` : `${fileName}.tar`;
+    const archiveName = format === 'zip' ? `${fileName}.zip` :
+      format === 'tar.gz' ? `${fileName}.tar.gz` : `${fileName}.tar`;
     const archivePath = remotePath === '/' ? `/${archiveName}` : `${remotePath}/${archiveName}`;
-    
+
     try {
       setLoading(true);
       let cmd: string;
@@ -1125,7 +1120,7 @@ const DualPaneSFTP: React.FC<Props> = ({ connectionId, server, initialLocalPath,
       } else {
         cmd = `cd "${remotePath}" && tar -cvf "${archiveName}" "${fileName}"`;
       }
-      
+
       const result = await ipcRenderer.invoke('ssh:execute', connectionId, cmd);
       if (result.success) {
         loadRemoteFiles(remotePath);
@@ -1138,15 +1133,15 @@ const DualPaneSFTP: React.FC<Props> = ({ connectionId, server, initialLocalPath,
       setLoading(false);
     }
   };
-  
+
   // Extract archive (remote)
   const extractRemote = async (fileName: string) => {
     const filePath = remotePath === '/' ? `/${fileName}` : `${remotePath}/${fileName}`;
-    
+
     // Determine extraction command based on file extension
     const lowerName = fileName.toLowerCase();
     let cmd: string;
-    
+
     if (lowerName.endsWith('.zip')) {
       cmd = `cd "${remotePath}" && unzip -o "${fileName}"`;
     } else if (lowerName.endsWith('.tar.gz') || lowerName.endsWith('.tgz')) {
@@ -1171,7 +1166,7 @@ const DualPaneSFTP: React.FC<Props> = ({ connectionId, server, initialLocalPath,
       alert('Unsupported archive format');
       return;
     }
-    
+
     try {
       setLoading(true);
       const result = await ipcRenderer.invoke('ssh:execute', connectionId, cmd);
@@ -1186,23 +1181,23 @@ const DualPaneSFTP: React.FC<Props> = ({ connectionId, server, initialLocalPath,
       setLoading(false);
     }
   };
-  
+
   // Check if file is an archive
   const isArchive = (fileName: string): boolean => {
     const lowerName = fileName.toLowerCase();
-    return lowerName.endsWith('.zip') || 
-           lowerName.endsWith('.tar') ||
-           lowerName.endsWith('.tar.gz') || 
-           lowerName.endsWith('.tgz') ||
-           lowerName.endsWith('.tar.bz2') || 
-           lowerName.endsWith('.tbz2') ||
-           lowerName.endsWith('.tar.xz') || 
-           lowerName.endsWith('.txz') ||
-           lowerName.endsWith('.gz') ||
-           lowerName.endsWith('.bz2') ||
-           lowerName.endsWith('.xz') ||
-           lowerName.endsWith('.7z') ||
-           lowerName.endsWith('.rar');
+    return lowerName.endsWith('.zip') ||
+      lowerName.endsWith('.tar') ||
+      lowerName.endsWith('.tar.gz') ||
+      lowerName.endsWith('.tgz') ||
+      lowerName.endsWith('.tar.bz2') ||
+      lowerName.endsWith('.tbz2') ||
+      lowerName.endsWith('.tar.xz') ||
+      lowerName.endsWith('.txz') ||
+      lowerName.endsWith('.gz') ||
+      lowerName.endsWith('.bz2') ||
+      lowerName.endsWith('.xz') ||
+      lowerName.endsWith('.7z') ||
+      lowerName.endsWith('.rar');
   };
 
   const handleContextMenu = (e: React.MouseEvent, type: 'local' | 'remote', file: FileInfo | null) => {
@@ -1215,26 +1210,26 @@ const DualPaneSFTP: React.FC<Props> = ({ connectionId, server, initialLocalPath,
         setSelectedRemote(file.name);
       }
     }
-    
+
     // Calculate position with boundary checking
     const menuHeight = 350; // Approximate menu height (more items now)
     const menuWidth = 200; // Approximate menu width
     const windowHeight = window.innerHeight;
     const windowWidth = window.innerWidth;
-    
+
     let x = e.clientX;
     let y = e.clientY;
-    
+
     // Adjust if menu would go off bottom of screen
     if (y + menuHeight > windowHeight - 50) { // 50px buffer for footer
       y = windowHeight - menuHeight - 50;
     }
-    
+
     // Adjust if menu would go off right side of screen
     if (x + menuWidth > windowWidth) {
       x = windowWidth - menuWidth - 10;
     }
-    
+
     // Set initial position (will be refined by useEffect after menu renders)
     setContextMenuPosition({ top: y, left: x });
     setContextMenu({ x, y, type, file });
@@ -1243,12 +1238,12 @@ const DualPaneSFTP: React.FC<Props> = ({ connectionId, server, initialLocalPath,
   // Show file/folder properties
   const showProperties = async (file: FileInfo, type: 'local' | 'remote') => {
     const basePath = type === 'local' ? localPath : remotePath;
-    const fullPath = type === 'local' 
+    const fullPath = type === 'local'
       ? await ipcRenderer.invoke('local:pathJoin', basePath, file.name)
       : (basePath === '/' ? `/${file.name}` : `${basePath}/${file.name}`);
-    
+
     let extraInfo: typeof propertiesModal.extraInfo = {};
-    
+
     try {
       if (type === 'remote') {
         // Get additional info for remote files via SFTP stat
@@ -1275,7 +1270,7 @@ const DualPaneSFTP: React.FC<Props> = ({ connectionId, server, initialLocalPath,
     } catch (err) {
       console.warn('Could not get extra file info:', err);
     }
-    
+
     setPropertiesModal({
       open: true,
       file,
@@ -1332,7 +1327,7 @@ const DualPaneSFTP: React.FC<Props> = ({ connectionId, server, initialLocalPath,
     e.preventDefault();
     e.stopPropagation();
     setLocalDragOver(false);
-    
+
     // Handle drop from remote pane
     if (draggingFile?.from === 'remote') {
       await downloadItem(draggingFile.name, draggingFile.isDirectory);
@@ -1354,7 +1349,7 @@ const DualPaneSFTP: React.FC<Props> = ({ connectionId, server, initialLocalPath,
       }
       loadLocalFiles(localPath);
     }
-    
+
     setDraggingFile(null);
   };
 
@@ -1362,12 +1357,12 @@ const DualPaneSFTP: React.FC<Props> = ({ connectionId, server, initialLocalPath,
     e.preventDefault();
     e.stopPropagation();
     setRemoteDragOver(false);
-    
+
     // Handle drop from local pane
     if (draggingFile?.from === 'local') {
       await uploadItem(draggingFile.name, draggingFile.isDirectory);
     }
-    
+
     setDraggingFile(null);
   };
 
@@ -1414,10 +1409,10 @@ const DualPaneSFTP: React.FC<Props> = ({ connectionId, server, initialLocalPath,
     const date = new Date(timestamp);
     const now = new Date();
     const isThisYear = date.getFullYear() === now.getFullYear();
-    
+
     const month = date.toLocaleString('en', { month: 'short' });
     const day = date.getDate().toString().padStart(2, ' ');
-    
+
     if (isThisYear) {
       const hours = date.getHours().toString().padStart(2, '0');
       const mins = date.getMinutes().toString().padStart(2, '0');
@@ -1495,10 +1490,9 @@ const DualPaneSFTP: React.FC<Props> = ({ connectionId, server, initialLocalPath,
     <div className="h-full flex flex-col bg-navy-900 relative">
       {/* Toast notification */}
       {toast && (
-        <div className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg flex items-center gap-3 animate-slide-in ${
-          toast.type === 'success' ? 'bg-green-600' : 
+        <div className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg flex items-center gap-3 animate-slide-in ${toast.type === 'success' ? 'bg-green-600' :
           toast.type === 'error' ? 'bg-red-600' : 'bg-navy-700 border border-navy-600'
-        }`}>
+          }`}>
           {toast.type === 'success' && (
             <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
@@ -1563,9 +1557,8 @@ const DualPaneSFTP: React.FC<Props> = ({ connectionId, server, initialLocalPath,
                             key={i}
                             onClick={() => mountAndNavigate(drive)}
                             disabled={mountingDrive === drive.device}
-                            className={`w-full flex items-center gap-2 px-3 py-2 text-xs text-left hover:bg-navy-700 transition ${
-                              drive.mounted === false ? 'text-gray-500' : 'text-gray-300'
-                            } ${mountingDrive === drive.device ? 'opacity-50' : ''}`}
+                            className={`w-full flex items-center gap-2 px-3 py-2 text-xs text-left hover:bg-navy-700 transition ${drive.mounted === false ? 'text-gray-500' : 'text-gray-300'
+                              } ${mountingDrive === drive.device ? 'opacity-50' : ''}`}
                           >
                             {/* Drive icon based on type */}
                             {drive.type === 'USB' || drive.type === 'usb' || drive.type === 'Removable' ? (
@@ -1656,7 +1649,7 @@ const DualPaneSFTP: React.FC<Props> = ({ connectionId, server, initialLocalPath,
 
           {/* Local files */}
           {/* Local files - with drag & drop */}
-          <div 
+          <div
             className={`flex-1 overflow-auto relative transition-colors ${localDragOver ? 'bg-teal-900/30 ring-2 ring-teal-500 ring-inset' : ''}`}
             onContextMenu={(e) => handleContextMenu(e, 'local', null)}
             onDragOver={handleLocalDragOver}
@@ -1770,7 +1763,7 @@ const DualPaneSFTP: React.FC<Props> = ({ connectionId, server, initialLocalPath,
           </div>
 
           {/* Remote files - with drag & drop */}
-          <div 
+          <div
             className={`flex-1 overflow-auto relative transition-colors ${remoteDragOver ? 'bg-purple-900/30 ring-2 ring-purple-500 ring-inset' : ''}`}
             onContextMenu={(e) => handleContextMenu(e, 'remote', null)}
             onDragOver={handleRemoteDragOver}
@@ -1876,33 +1869,33 @@ const DualPaneSFTP: React.FC<Props> = ({ connectionId, server, initialLocalPath,
                   {transferProgress.type === 'download' ? 'Downloading Folder' : 'Uploading Folder'}
                 </h3>
                 <p className="text-gray-400 text-sm">
-                  {transferProgress.totalFiles > 0 
+                  {transferProgress.totalFiles > 0
                     ? `${transferProgress.completedFiles} / ${transferProgress.totalFiles} files`
                     : 'Scanning files...'}
                 </p>
               </div>
             </div>
-            
+
             {/* Progress bar */}
             <div className="mb-3">
               <div className="h-2 bg-navy-700 rounded-full overflow-hidden">
-                <div 
+                <div
                   className={`h-full transition-all duration-300 ${transferProgress.type === 'download' ? 'bg-teal-500' : 'bg-purple-500'}`}
-                  style={{ 
-                    width: transferProgress.totalFiles > 0 
-                      ? `${(transferProgress.completedFiles / transferProgress.totalFiles) * 100}%` 
-                      : '0%' 
+                  style={{
+                    width: transferProgress.totalFiles > 0
+                      ? `${(transferProgress.completedFiles / transferProgress.totalFiles) * 100}%`
+                      : '0%'
                   }}
                 />
               </div>
             </div>
-            
+
             {/* Current file */}
             <div className="text-xs text-gray-500 truncate" title={transferProgress.currentFile}>
               <span className="text-gray-400">Current: </span>
               {transferProgress.currentFile}
             </div>
-            
+
             {/* Bytes transferred */}
             {transferProgress.totalBytes > 0 && (
               <div className="text-xs text-gray-500 mt-1">
@@ -1967,7 +1960,7 @@ const DualPaneSFTP: React.FC<Props> = ({ connectionId, server, initialLocalPath,
                     <>
                       <MenuItem icon="folder" onClick={() => { navigateRemote(remotePath === '/' ? `/${contextMenu.file!.name}` : `${remotePath}/${contextMenu.file!.name}`); setContextMenu(null); }}>{t('sftpOpen')}</MenuItem>
                       <MenuItem icon="download" onClick={() => { downloadItem(contextMenu.file!.name, true); setContextMenu(null); }}>{t('sftpDownloadToLocal')}</MenuItem>
-                      <MenuItem icon="package" onClick={() => { 
+                      <MenuItem icon="package" onClick={() => {
                         const targetDir = remotePath === '/' ? `/${contextMenu.file!.name}` : `${remotePath}/${contextMenu.file!.name}`;
                         setSourceInstallerPath(targetDir);
                         setSourceInstallerOpen(true);
@@ -2010,7 +2003,7 @@ const DualPaneSFTP: React.FC<Props> = ({ connectionId, server, initialLocalPath,
                 <>
                   <MenuItem icon="folder-plus" onClick={() => { createRemoteFolder(); setContextMenu(null); }}>{t('newFolder')}</MenuItem>
                   <MenuItem icon="file-plus" onClick={() => { createRemoteFile(); setContextMenu(null); }}>{t('newFile')}</MenuItem>
-                  <MenuItem icon="package" onClick={() => { 
+                  <MenuItem icon="package" onClick={() => {
                     setSourceInstallerPath(remotePath);
                     setSourceInstallerOpen(true);
                     setContextMenu(null);
@@ -2032,7 +2025,7 @@ const DualPaneSFTP: React.FC<Props> = ({ connectionId, server, initialLocalPath,
           <div className="bg-navy-800 rounded-lg shadow-xl border border-navy-600 p-4 min-w-[300px] max-w-md" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-white font-medium mb-2">{dialog.title}</h3>
             <p className="text-gray-400 text-sm mb-4 whitespace-pre-wrap">{dialog.message}</p>
-            
+
             {dialog.type === 'prompt' && (
               <input
                 ref={dialogInputRef}
@@ -2047,7 +2040,7 @@ const DualPaneSFTP: React.FC<Props> = ({ connectionId, server, initialLocalPath,
                 autoFocus
               />
             )}
-            
+
             <div className="flex justify-end gap-2">
               <button
                 onClick={() => closeDialog(dialog.type === 'confirm' ? false : null)}
@@ -2103,7 +2096,7 @@ const DualPaneSFTP: React.FC<Props> = ({ connectionId, server, initialLocalPath,
             <div className="flex items-center gap-3 p-4 border-b border-navy-600">
               {propertiesModal.file.type === 'directory' ? (
                 <svg className="w-10 h-10 text-yellow-500" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/>
+                  <path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z" />
                 </svg>
               ) : (
                 <svg className="w-10 h-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2115,22 +2108,22 @@ const DualPaneSFTP: React.FC<Props> = ({ connectionId, server, initialLocalPath,
                 <p className="text-gray-400 text-sm">{t('properties')}</p>
               </div>
             </div>
-            
+
             {/* Content */}
             <div className="p-4 space-y-3 text-sm">
               <div className="grid grid-cols-[120px_1fr] gap-2">
                 <span className="text-gray-400">{t('type')}:</span>
                 <span className="text-white">
-                  {propertiesModal.file.type === 'directory' ? t('folder') : 
-                   propertiesModal.file.type === 'symlink' ? t('symbolicLink') : t('file')}
+                  {propertiesModal.file.type === 'directory' ? t('folder') :
+                    propertiesModal.file.type === 'symlink' ? t('symbolicLink') : t('file')}
                 </span>
               </div>
-              
+
               <div className="grid grid-cols-[120px_1fr] gap-2">
                 <span className="text-gray-400">{t('location')}:</span>
                 <span className="text-white break-all font-mono text-xs">{propertiesModal.fullPath}</span>
               </div>
-              
+
               <div className="grid grid-cols-[120px_1fr] gap-2">
                 <span className="text-gray-400">{t('size')}:</span>
                 <span className="text-white">
@@ -2140,7 +2133,7 @@ const DualPaneSFTP: React.FC<Props> = ({ connectionId, server, initialLocalPath,
                   )}
                 </span>
               </div>
-              
+
               {propertiesModal.file.permissions !== undefined && (
                 <div className="grid grid-cols-[120px_1fr] gap-2">
                   <span className="text-gray-400">{t('permissions')}:</span>
@@ -2152,14 +2145,14 @@ const DualPaneSFTP: React.FC<Props> = ({ connectionId, server, initialLocalPath,
                   </span>
                 </div>
               )}
-              
+
               <div className="grid grid-cols-[120px_1fr] gap-2">
                 <span className="text-gray-400">{t('modified')}:</span>
                 <span className="text-white">
                   {new Date(propertiesModal.file.modifyTime * 1000).toLocaleString()}
                 </span>
               </div>
-              
+
               {propertiesModal.extraInfo?.accessed && (
                 <div className="grid grid-cols-[120px_1fr] gap-2">
                   <span className="text-gray-400">{t('accessed')}:</span>
@@ -2168,7 +2161,7 @@ const DualPaneSFTP: React.FC<Props> = ({ connectionId, server, initialLocalPath,
                   </span>
                 </div>
               )}
-              
+
               {propertiesModal.extraInfo?.created && (
                 <div className="grid grid-cols-[120px_1fr] gap-2">
                   <span className="text-gray-400">{t('created')}:</span>
@@ -2177,7 +2170,7 @@ const DualPaneSFTP: React.FC<Props> = ({ connectionId, server, initialLocalPath,
                   </span>
                 </div>
               )}
-              
+
               {propertiesModal.extraInfo?.owner && (
                 <div className="grid grid-cols-[120px_1fr] gap-2">
                   <span className="text-gray-400">{t('owner')}:</span>
@@ -2187,7 +2180,7 @@ const DualPaneSFTP: React.FC<Props> = ({ connectionId, server, initialLocalPath,
                   </span>
                 </div>
               )}
-              
+
               <div className="grid grid-cols-[120px_1fr] gap-2">
                 <span className="text-gray-400">{t('source')}:</span>
                 <span className="text-white">
@@ -2195,7 +2188,7 @@ const DualPaneSFTP: React.FC<Props> = ({ connectionId, server, initialLocalPath,
                 </span>
               </div>
             </div>
-            
+
             {/* Footer */}
             <div className="flex justify-end p-4 border-t border-navy-600">
               <button
@@ -2250,10 +2243,10 @@ const MenuItem: React.FC<{ icon: string; onClick: () => void; danger?: boolean; 
 };
 
 // SubMenu component for nested menus - horizontal hover submenu
-const SubMenu: React.FC<{ 
-  icon: string; 
-  label: string; 
-  children: React.ReactNode 
+const SubMenu: React.FC<{
+  icon: string;
+  label: string;
+  children: React.ReactNode
 }> = ({ icon, label, children }) => {
   const [isOpen, setIsOpen] = useState(false);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -2268,7 +2261,7 @@ const SubMenu: React.FC<{
   };
 
   return (
-    <div 
+    <div
       className="relative"
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
