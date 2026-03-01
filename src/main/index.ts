@@ -1,9 +1,16 @@
 import { app, BrowserWindow, ipcMain, dialog, shell, Tray, Menu, nativeImage } from 'electron';
+import * as electron from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
+import * as os from 'os';
 import * as dns from 'dns';
 import * as https from 'https';
+import * as http from 'http';
+import * as net from 'net';
 import { promisify } from 'util';
+import { spawn, ChildProcess } from 'child_process';
+import { pathToFileURL } from 'url';
+import { randomUUID } from 'crypto';
 
 // ============================================================================
 // MEMORY OPTIMIZATION FLAGS (applied before app ready)
@@ -45,7 +52,6 @@ import { getGoogleDriveService } from './services/GoogleDriveService';
 import { sessionMonitor, SessionMonitorData } from './services/SSHSessionMonitor';
 import { appSettings } from './services/AppSettingsStore';
 import { BenchmarkService } from './services/BenchmarkService';
-import { initDatabaseHandlers, getDatabaseConnectionCount, closeAllDatabaseConnections } from './databaseService';
 import buildInfo from './buildInfo';
 
 // Swallow known node-pty errors that can be thrown asynchronously on Windows (e.g. after SSH timeout)
@@ -83,6 +89,885 @@ const backupService = new BackupService();  // For backup/restore
 const githubAuthService = new GitHubAuthService();  // For GitHub OAuth
 const googleDriveService = getGoogleDriveService();  // For Google Drive backup
 const lanSharingService = new LANSharingService();  // For LAN sharing
+let beeKeeperProc: ChildProcess | null = null;
+let beeKeeperUtilityProc: electron.UtilityProcess | null = null;
+let beeKeeperUtilityReady = false;
+let beeKeeperUtilityInitPromise: Promise<void> | null = null;
+let beeKeeperRemoteMain: any | null = null;
+let beeKeeperRemoteInitialized = false;
+const beeKeeperLogs: string[] = [];
+const DEFAULT_BEEKEEPER_PORT = 3003;
+const BEEKEEPER_UTILITY_READY_TIMEOUT_MS = 120000;
+const BEEKEEPER_DISABLED_PLUGINS = ['bks-ai-shell', 'bks-er-diagram'] as const;
+const BEEKEEPER_HOST = '127.0.0.1';
+let beeKeeperPort = DEFAULT_BEEKEEPER_PORT;
+let beeKeeperConnectionUrl: string | null = null;
+type BeeKeeperConfigSource = {
+  defaultConfig: Record<string, any>;
+  systemConfig: Record<string, any>;
+  userConfig: Record<string, any>;
+  warnings: Array<{ type: string; sourceName: string; section: string; path: string }>;
+};
+let beeKeeperConfigSource: BeeKeeperConfigSource | null = null;
+const beeKeeperPortSessions = new Map<number, string>();
+const beeKeeperLifecycleBoundSenders = new Set<number>();
+// Reference count of active DB sessions using the shared BeeKeeper server.
+// The server is only killed when this reaches 0.
+let beeKeeperSessionCount = 0;
+
+const getBeeKeeperUrl = (): string => `http://${BEEKEEPER_HOST}:${beeKeeperPort}`;
+
+/**
+ * Returns the studio directory.
+ * Dev: third_party/beekeeper-studio/apps/studio
+ * Prod: process.resourcesPath/beekeeper-dist  (dist and extra_resources are directly here)
+ */
+const getBeeKeeperStudioDir = (): string => {
+  if (IS_PACKAGED) return path.join(process.resourcesPath, 'beekeeper-dist');
+  return path.join(getBeeKeeperRoot(), 'apps', 'studio');
+};
+
+const getBeeKeeperEmbedUrl = (): string => {
+  const params = new URLSearchParams();
+  params.set('marixEmbed', 'true');
+  if (beeKeeperConnectionUrl) {
+    params.set('openUrl', beeKeeperConnectionUrl);
+  }
+  return `${getBeeKeeperUrl()}/?${params.toString()}`;
+};
+
+const getBeeKeeperPreloadPath = (): string => path.join(getBeeKeeperStudioDir(), 'dist', 'preload.js');
+const getBeeKeeperUtilityEntryPath = (): string => path.join(getBeeKeeperStudioDir(), 'dist', 'utility.js');
+const getBeeKeeperEmbedPreloadUrl = (): string => pathToFileURL(getBeeKeeperPreloadPath()).toString();
+
+const BEEKEEPER_DATABASE_TYPES = [
+  'sqlite',
+  'sqlserver',
+  'redshift',
+  'cockroachdb',
+  'mysql',
+  'postgresql',
+  'mariadb',
+  'cassandra',
+  'oracle',
+  'bigquery',
+  'firebird',
+  'tidb',
+  'libsql',
+  'clickhouse',
+  'duckdb',
+  'mongodb',
+  'sqlanywhere',
+  'surrealdb',
+  'redis',
+  'trino',
+] as const;
+
+const isPlainObject = (value: unknown): value is Record<string, any> =>
+  !!value && typeof value === 'object' && !Array.isArray(value);
+
+const deepClone = <T>(value: T): T => JSON.parse(JSON.stringify(value));
+
+const getByPath = (obj: Record<string, any>, pathValue: string): any => {
+  if (!pathValue) return obj;
+  const parts = pathValue.split('.').filter(Boolean);
+  let current: any = obj;
+  for (const part of parts) {
+    if (current === null || current === undefined || typeof current !== 'object') {
+      return undefined;
+    }
+    current = (current as any)[part];
+    if (current === undefined) return undefined;
+  }
+  return current;
+};
+
+const setByPath = (obj: Record<string, any>, pathValue: string, value: any): void => {
+  const parts = pathValue.split('.').filter(Boolean);
+  if (parts.length === 0) return;
+
+  let current: Record<string, any> = obj;
+  for (let i = 0; i < parts.length - 1; i++) {
+    const part = parts[i];
+    if (!isPlainObject(current[part])) {
+      current[part] = {};
+    }
+    current = current[part];
+  }
+  current[parts[parts.length - 1]] = value;
+};
+
+const stripIniInlineComment = (line: string): string => {
+  let inSingle = false;
+  let inDouble = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === "'" && !inDouble) {
+      inSingle = !inSingle;
+      continue;
+    }
+    if (ch === '"' && !inSingle) {
+      inDouble = !inDouble;
+      continue;
+    }
+    if (ch === ';' && !inSingle && !inDouble) {
+      return line.slice(0, i);
+    }
+  }
+  return line;
+};
+
+const parseIniScalar = (raw: string): any => {
+  const value = raw.trim();
+  if (value === '') return '';
+
+  if (
+    (value.startsWith('"') && value.endsWith('"')) ||
+    (value.startsWith("'") && value.endsWith("'"))
+  ) {
+    return value.slice(1, -1);
+  }
+
+  const lower = value.toLowerCase();
+  if (lower === 'true') return true;
+  if (lower === 'false') return false;
+  if (/^-?\d+(?:\.\d+)?$/.test(value)) return Number(value);
+  return value;
+};
+
+const parseIniToObject = (content: string): Record<string, any> => {
+  const result: Record<string, any> = {};
+  let section = '';
+
+  for (const rawLine of content.split(/\r?\n/)) {
+    const withoutComment = stripIniInlineComment(rawLine);
+    const line = withoutComment.trim();
+    if (!line) continue;
+    if (line.startsWith(';') || line.startsWith('#')) continue;
+
+    if (line.startsWith('[') && line.endsWith(']')) {
+      section = line.slice(1, -1).trim();
+      continue;
+    }
+
+    const eqIndex = line.indexOf('=');
+    if (eqIndex < 0) continue;
+
+    const rawKey = line.slice(0, eqIndex).trim();
+    const rawValue = line.slice(eqIndex + 1).trim();
+    const isArrayKey = rawKey.endsWith('[]');
+    const key = isArrayKey ? rawKey.slice(0, -2).trim() : rawKey;
+    const fullPath = section ? `${section}.${key}` : key;
+    const parsedValue = parseIniScalar(rawValue);
+
+    if (isArrayKey) {
+      const existing = getByPath(result, fullPath);
+      const arr = Array.isArray(existing) ? existing : [];
+      arr.push(parsedValue);
+      setByPath(result, fullPath, arr);
+      continue;
+    }
+
+    setByPath(result, fullPath, parsedValue);
+  }
+
+  return result;
+};
+
+const populateDefaults = (
+  config: Record<string, any>,
+  parentPath: string,
+  defaultPath: string,
+): void => {
+  const defaultObj = getByPath(config, defaultPath);
+  if (!isPlainObject(defaultObj)) {
+    return;
+  }
+
+  for (const key of Object.keys(defaultObj)) {
+    const nextParentPath = `${parentPath}.${key}`;
+    const nextDefaultPath = `${defaultPath}.${key}`;
+    const currentValue = getByPath(config, nextParentPath);
+    let defaultValue = defaultObj[key];
+
+    if (isPlainObject(defaultValue)) {
+      if (!isPlainObject(currentValue)) {
+        setByPath(config, nextParentPath, {});
+      }
+      populateDefaults(config, nextParentPath, nextDefaultPath);
+      continue;
+    }
+
+    if (currentValue !== undefined && currentValue !== null) {
+      continue;
+    }
+
+    if (typeof defaultValue === 'string' && defaultValue.length === 0) {
+      defaultValue = null;
+    }
+    if (Array.isArray(defaultValue) && defaultValue.length > 0 && typeof defaultValue[0] === 'string') {
+      defaultValue = defaultValue.filter((v) => !(typeof v === 'string' && v.length === 0));
+    }
+
+    setByPath(config, nextParentPath, deepClone(defaultValue));
+  }
+};
+
+const processRawBeeKeeperConfig = (rawConfig: Record<string, any>): Record<string, any> => {
+  const config = deepClone(rawConfig);
+  if (!isPlainObject(config.db) || !isPlainObject(config.db.default)) {
+    return config;
+  }
+
+  setByPath(config, 'db.default_parsed', deepClone(config.db.default));
+  populateDefaults(config, 'db.default_parsed', 'db.default');
+  const parsedDefault = getByPath(config, 'db.default_parsed');
+  config.db = { ...config.db, default: parsedDefault };
+  delete config.db.default_parsed;
+
+  for (const dbType of BEEKEEPER_DATABASE_TYPES) {
+    const section = dbType === 'postgresql' ? 'postgres' : dbType;
+    const sectionPath = `db.${section}`;
+    if (!isPlainObject(getByPath(config, sectionPath))) {
+      setByPath(config, sectionPath, {});
+    }
+    populateDefaults(config, sectionPath, 'db.default');
+  }
+
+  return config;
+};
+
+const readBeeKeeperConfigFile = (filePath: string): Record<string, any> => {
+  const content = fs.readFileSync(filePath, 'utf-8');
+  return processRawBeeKeeperConfig(parseIniToObject(content));
+};
+
+const minimalBeeKeeperConfigSource = (): BeeKeeperConfigSource => ({
+  defaultConfig: {
+    security: {
+      disconnectOnSuspend: false,
+      disconnectOnLock: false,
+      disconnectOnIdle: false,
+      lockMode: 'disabled',
+      idleThresholdSeconds: 300,
+      idleCheckIntervalSeconds: 30,
+      minPinLength: 6,
+    },
+    plugins: {
+      'bks-ai-shell': { disabled: false },
+      'bks-er-diagram': { disabled: false },
+    },
+  },
+  systemConfig: {},
+  userConfig: {},
+  warnings: [],
+});
+
+const forceDisableBeeKeeperPlugins = (
+  source: BeeKeeperConfigSource,
+): BeeKeeperConfigSource => {
+  const patched: BeeKeeperConfigSource = {
+    defaultConfig: deepClone(source.defaultConfig || {}),
+    systemConfig: deepClone(source.systemConfig || {}),
+    userConfig: deepClone(source.userConfig || {}),
+    warnings: Array.isArray(source.warnings) ? deepClone(source.warnings) : [],
+  };
+
+  for (const cfg of [patched.defaultConfig, patched.systemConfig, patched.userConfig]) {
+    if (!isPlainObject(cfg.plugins)) {
+      cfg.plugins = {};
+    }
+    for (const pluginName of BEEKEEPER_DISABLED_PLUGINS) {
+      const current = getByPath(cfg, `plugins.${pluginName}`);
+      const nextConfig = isPlainObject(current) ? { ...current } : {};
+      nextConfig.disabled = true;
+      setByPath(cfg, `plugins.${pluginName}`, nextConfig);
+    }
+  }
+
+  return patched;
+};
+
+const loadBeeKeeperConfigSource = (): BeeKeeperConfigSource => {
+  const studioDir = getBeeKeeperStudioDir();
+  const defaultFile = path.join(studioDir, 'default.config.ini');
+  const systemFile = path.join(studioDir, 'system.config.ini');
+  const localUserFile = path.join(studioDir, 'local.config.ini');
+  const userFile = path.join(studioDir, 'user.config.ini');
+
+  if (!fs.existsSync(defaultFile)) {
+    throw new Error(`BeeKeeper config file not found: ${defaultFile}`);
+  }
+
+  const defaultConfig = readBeeKeeperConfigFile(defaultFile);
+  const systemConfig = fs.existsSync(systemFile) ? readBeeKeeperConfigFile(systemFile) : {};
+  const selectedUserFile = fs.existsSync(localUserFile) ? localUserFile : userFile;
+  const userConfig = fs.existsSync(selectedUserFile) ? readBeeKeeperConfigFile(selectedUserFile) : {};
+
+  return {
+    defaultConfig,
+    systemConfig,
+    userConfig,
+    warnings: [],
+  };
+};
+
+const getBeeKeeperConfigSource = (): BeeKeeperConfigSource => {
+  if (beeKeeperConfigSource) {
+    return beeKeeperConfigSource;
+  }
+
+  try {
+    beeKeeperConfigSource = forceDisableBeeKeeperPlugins(loadBeeKeeperConfigSource());
+    const lockMode = getByPath(beeKeeperConfigSource.defaultConfig, 'security.lockMode');
+    const pluginKeys = Object.keys(getByPath(beeKeeperConfigSource.defaultConfig, 'plugins') || {}).join(', ') || '(none)';
+    pushBeeKeeperLog(`[SETUP] Loaded BeeKeeper config source from ini files. lockMode=${String(lockMode)} plugins=[${pluginKeys}]`);
+    pushBeeKeeperLog(`[SETUP] Embedded mode forces plugins disabled: ${BEEKEEPER_DISABLED_PLUGINS.join(', ')}`);
+  } catch (err: any) {
+    pushBeeKeeperLog(`[WARN] Failed to load BeeKeeper config source, using minimal fallback: ${err?.message || err}`);
+    beeKeeperConfigSource = forceDisableBeeKeeperPlugins(minimalBeeKeeperConfigSource());
+    pushBeeKeeperLog(`[SETUP] Embedded mode forces plugins disabled: ${BEEKEEPER_DISABLED_PLUGINS.join(', ')}`);
+  }
+
+  return beeKeeperConfigSource;
+};
+
+const getBeeKeeperRemoteMain = (): any | null => {
+  if (beeKeeperRemoteMain) {
+    return beeKeeperRemoteMain;
+  }
+
+  try {
+    const remoteMainPath = path.join(getBeeKeeperRoot(), 'node_modules', '@electron', 'remote', 'main');
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    beeKeeperRemoteMain = require(remoteMainPath);
+    if (!beeKeeperRemoteInitialized) {
+      beeKeeperRemoteMain.initialize();
+      beeKeeperRemoteInitialized = true;
+      pushBeeKeeperLog('[SETUP] @electron/remote initialized for embedded Beekeeper.');
+    }
+    return beeKeeperRemoteMain;
+  } catch (err: any) {
+    pushBeeKeeperLog(`[WARN] Failed to initialize @electron/remote: ${err?.message || err}`);
+    beeKeeperRemoteMain = null;
+    return null;
+  }
+};
+
+const pushBeeKeeperLog = (line: string) => {
+  const msg = line.trim();
+  if (!msg) return;
+  beeKeeperLogs.push(`[${new Date().toISOString()}] ${msg}`);
+  if (beeKeeperLogs.length > 200) {
+    beeKeeperLogs.splice(0, beeKeeperLogs.length - 200);
+  }
+};
+
+const isPortFree = async (port: number): Promise<boolean> => {
+  return new Promise((resolve) => {
+    const server = net.createServer();
+    server.once('error', () => resolve(false));
+    server.once('listening', () => {
+      server.close(() => resolve(true));
+    });
+    server.listen(port, BEEKEEPER_HOST);
+  });
+};
+
+const pickBeeKeeperPort = async (): Promise<number> => {
+  const rangeStart = DEFAULT_BEEKEEPER_PORT;
+  const rangeEnd = DEFAULT_BEEKEEPER_PORT + 20;
+  for (let port = rangeStart; port <= rangeEnd; port++) {
+    // eslint-disable-next-line no-await-in-loop
+    const free = await isPortFree(port);
+    if (free) return port;
+  }
+  throw new Error(`No free BeeKeeper dev port in range ${rangeStart}-${rangeEnd}`);
+};
+
+const isBeeKeeperReachable = async (): Promise<boolean> => {
+  const url = getBeeKeeperUrl();
+  return new Promise((resolve) => {
+    const req = http.get(url, (res) => {
+      resolve((res.statusCode || 500) < 500);
+      res.resume();
+    });
+    req.on('error', () => resolve(false));
+    req.setTimeout(1000, () => {
+      req.destroy();
+      resolve(false);
+    });
+  });
+};
+
+const IS_PACKAGED = app.isPackaged;
+
+/**
+ * In dev: uses source tree at third_party/beekeeper-studio.
+ * In production: BeeKeeper's built dist/ is copied to <resources>/beekeeper-dist/
+ * by the build script and electron-builder extraResources config.
+ */
+const getBeeKeeperRoot = (): string => {
+  if (IS_PACKAGED) {
+    // In packaged app, resources are in process.resourcesPath
+    return path.join(process.resourcesPath, 'beekeeper-dist');
+  }
+  return path.join(process.cwd(), 'third_party', 'beekeeper-studio');
+};
+
+/** In production, BeeKeeper frontend dist is at <root>/dist-web/ */
+const getBeeKeeperWebDistDir = (): string => {
+  if (IS_PACKAGED) {
+    return path.join(process.resourcesPath, 'beekeeper-dist', 'web');
+  }
+  return path.join(getBeeKeeperStudioDir(), 'dist-web');
+};
+
+let beeKeeperStaticServer: import('http').Server | null = null;
+
+/** A zero-dependency static HTTP server for serving BeeKeeper's pre-built SPA. */
+const startBeeKeeperStaticServer = (staticDir: string, port: number): Promise<void> => {
+  return new Promise((resolve, reject) => {
+    const MIME: Record<string, string> = {
+      '.html': 'text/html; charset=utf-8',
+      '.js': 'application/javascript',
+      '.css': 'text/css',
+      '.json': 'application/json',
+      '.png': 'image/png',
+      '.jpg': 'image/jpeg',
+      '.svg': 'image/svg+xml',
+      '.ico': 'image/x-icon',
+      '.woff': 'font/woff',
+      '.woff2': 'font/woff2',
+      '.ttf': 'font/ttf',
+      '.eot': 'application/vnd.ms-fontobject',
+      '.map': 'application/json',
+    };
+    beeKeeperStaticServer = http.createServer((req, res) => {
+      const url = req.url || '/';
+      const urlPath = url.split('?')[0].split('#')[0];
+      let filePath = path.join(staticDir, urlPath);
+
+      // SPA fallback: unknown paths serve index.html
+      if (!fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
+        filePath = path.join(staticDir, 'index.html');
+      }
+
+      const ext = path.extname(filePath).toLowerCase();
+      const contentType = MIME[ext] || 'application/octet-stream';
+
+      fs.readFile(filePath, (err, data) => {
+        if (err) {
+          res.writeHead(404);
+          res.end('Not found');
+          return;
+        }
+        res.writeHead(200, {
+          'Content-Type': contentType,
+          'Cache-Control': 'no-store',
+        });
+        res.end(data);
+      });
+    });
+
+    beeKeeperStaticServer.on('error', reject);
+    beeKeeperStaticServer.listen(port, BEEKEEPER_HOST, () => resolve());
+  });
+};
+const killProcessTree = async (pid: number): Promise<void> => {
+  if (process.platform === 'win32') {
+    await new Promise<void>((resolve) => {
+      const killer = spawn('taskkill', ['/PID', String(pid), '/T', '/F'], {
+        windowsHide: true,
+        shell: true,
+      });
+      killer.on('exit', () => resolve());
+      killer.on('error', () => resolve());
+    });
+    return;
+  }
+
+  try {
+    process.kill(-pid, 'SIGTERM');
+  } catch {
+    try {
+      process.kill(pid, 'SIGTERM');
+    } catch {
+      // Ignore if process already exited.
+    }
+  }
+};
+
+const stopBeeKeeperProcess = () => {
+  if (beeKeeperProc && !beeKeeperProc.killed) {
+    const pid = beeKeeperProc.pid;
+    if (pid) {
+      void killProcessTree(pid);
+    } else {
+      beeKeeperProc.kill('SIGTERM');
+    }
+    beeKeeperProc = null;
+  }
+  void stopBeeKeeperUtilityProcess();
+};
+
+const runCommandWithLogs = async (command: string, cwd: string): Promise<{ success: boolean; code: number | null }> => {
+  return new Promise((resolve) => {
+    pushBeeKeeperLog(`[CMD] ${command}`);
+    const proc = spawn(command, {
+      cwd,
+      shell: true,
+      env: { ...process.env },
+      windowsHide: true,
+    });
+
+    proc.stdout?.on('data', (data: Buffer) => pushBeeKeeperLog(data.toString('utf-8')));
+    proc.stderr?.on('data', (data: Buffer) => pushBeeKeeperLog(data.toString('utf-8')));
+    proc.on('exit', (code) => {
+      const ok = code === 0;
+      pushBeeKeeperLog(`[CMD_EXIT] code=${code}`);
+      resolve({ success: ok, code });
+    });
+    proc.on('error', (err) => {
+      pushBeeKeeperLog(`[CMD_ERROR] ${err.message}`);
+      resolve({ success: false, code: 1 });
+    });
+  });
+};
+
+const hasBetterSqliteBinding = (beeKeeperRoot: string): boolean => {
+  const candidates = [
+    path.join(beeKeeperRoot, 'node_modules', 'better-sqlite3', 'build', 'Release', 'better_sqlite3.node'),
+    path.join(beeKeeperRoot, 'node_modules', 'better-sqlite3', 'build', 'better_sqlite3.node'),
+  ];
+  if (candidates.some((file) => fs.existsSync(file))) {
+    return true;
+  }
+
+  const bindingDir = path.join(beeKeeperRoot, 'node_modules', 'better-sqlite3', 'lib', 'binding');
+  if (!fs.existsSync(bindingDir)) {
+    return false;
+  }
+  try {
+    const subdirs = fs.readdirSync(bindingDir, { withFileTypes: true }).filter((d) => d.isDirectory());
+    return subdirs.some((dir) => {
+      const bin = path.join(bindingDir, dir.name, 'better_sqlite3.node');
+      return fs.existsSync(bin);
+    });
+  } catch {
+    return false;
+  }
+};
+
+const ensureBetterSqliteForBeeKeeper = async (beeKeeperRoot: string): Promise<boolean> => {
+  if (hasBetterSqliteBinding(beeKeeperRoot)) {
+    return true;
+  }
+
+  pushBeeKeeperLog('[SETUP] better-sqlite3 native binding missing, preparing rebuild...');
+  const cpuFeaturesBuildcheck = path.join(beeKeeperRoot, 'node_modules', 'cpu-features', 'buildcheck.js');
+  if (fs.existsSync(cpuFeaturesBuildcheck)) {
+    const buildcheckCmd = 'node ./node_modules/cpu-features/buildcheck.js > ./node_modules/cpu-features/buildcheck.gypi';
+    const buildcheckResult = await runCommandWithLogs(buildcheckCmd, beeKeeperRoot);
+    if (!buildcheckResult.success) {
+      pushBeeKeeperLog('[SETUP] Failed to generate cpu-features/buildcheck.gypi');
+      return false;
+    }
+  }
+
+  const studioDir = path.join(beeKeeperRoot, 'apps', 'studio');
+  const rebuildResult = await runCommandWithLogs('npx electron-rebuild -f -w better-sqlite3', studioDir);
+  if (!rebuildResult.success) {
+    pushBeeKeeperLog('[SETUP] Failed to rebuild better-sqlite3');
+    return false;
+  }
+
+  const ok = hasBetterSqliteBinding(beeKeeperRoot);
+  if (ok) {
+    pushBeeKeeperLog('[SETUP] better-sqlite3 rebuilt successfully');
+  }
+  return ok;
+};
+
+const ensureBeeKeeperElectronPathFile = (beeKeeperRoot: string): void => {
+  const electronPkgDir = path.join(beeKeeperRoot, 'node_modules', 'electron');
+  const pathTxt = path.join(electronPkgDir, 'path.txt');
+  if (!fs.existsSync(electronPkgDir) || fs.existsSync(pathTxt)) {
+    return;
+  }
+
+  const rootElectronExe = process.platform === 'win32'
+    ? path.join(process.cwd(), 'node_modules', 'electron', 'dist', 'electron.exe')
+    : path.join(process.cwd(), 'node_modules', 'electron', 'dist', 'electron');
+
+  if (!fs.existsSync(rootElectronExe)) {
+    pushBeeKeeperLog('[SETUP] Root Electron binary not found, cannot create BeeKeeper electron/path.txt.');
+    return;
+  }
+
+  fs.writeFileSync(pathTxt, rootElectronExe, 'utf-8');
+  pushBeeKeeperLog(`[SETUP] Created BeeKeeper electron/path.txt -> ${rootElectronExe}`);
+};
+
+const parseBeeKeeperVersion = (version: string): {
+  major: number;
+  minor: number;
+  patch: number;
+  channel: string;
+  channelRelease?: number;
+} => {
+  const [majorPart = '0', minorPart = '0', patchPart = '0', channelReleasePart] = version.split('.');
+  if (!patchPart.includes('-')) {
+    return {
+      major: Number(majorPart),
+      minor: Number(minorPart),
+      patch: Number(patchPart),
+      channel: 'stable',
+    };
+  }
+
+  const [realPatch, channel] = patchPart.split('-');
+  return {
+    major: Number(majorPart),
+    minor: Number(minorPart),
+    patch: Number(realPatch || 0),
+    channel: channel || 'stable',
+    channelRelease: Number(channelReleasePart || 0),
+  };
+};
+
+const readBeeKeeperVersion = (): string => {
+  try {
+    const pkgPath = path.join(getBeeKeeperStudioDir(), 'package.json');
+    const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
+    return pkg.version || '0.0.0';
+  } catch {
+    return '0.0.0';
+  }
+};
+
+const buildBeeKeeperPlatformInfo = () => {
+  const platform = process.platform;
+  const isWindows = platform === 'win32';
+  const isMac = platform === 'darwin';
+  const isDevelopmentEnv = !IS_PACKAGED;
+  const appVersion = readBeeKeeperVersion();
+  const userDirectory = path.join(app.getPath('appData'), 'beekeeper-studio');
+  const downloadsDirectory = app.getPath('downloads');
+  const homeDirectory = app.getPath('home');
+  const pluginsDirectory = path.join(userDirectory, 'plugins');
+  const parsedAppVersion = parseBeeKeeperVersion(appVersion);
+  const easyPlatform = isWindows ? 'windows' : (isMac ? 'mac' : 'linux');
+  const locale = app.getLocale();
+  const resourcesPath = path.join(getBeeKeeperStudioDir(), 'extra_resources');
+
+  return {
+    isWindows,
+    isMac,
+    isArm: process.arch.startsWith('arm'),
+    oracleSupported: true,
+    parsedArgs: { _: [] },
+    isLinux: !isWindows && !isMac,
+    sessionType: process.env.XDG_SESSION_TYPE,
+    isWayland: false,
+    isSnap: false,
+    isPortable: false,
+    isDevelopment: isDevelopmentEnv,
+    isAppImage: false,
+    sshAuthSock: process.env.SSH_AUTH_SOCK,
+    environment: isDevelopmentEnv ? 'development' : 'production',
+    resourcesPath,
+    env: {
+      development: isDevelopmentEnv,
+      test: false,
+      production: !isDevelopmentEnv,
+    },
+    debugEnabled: false,
+    DEBUG: process.env.DEBUG,
+    platform: easyPlatform,
+    darkMode: electron.nativeTheme.shouldUseDarkColors,
+    userDirectory,
+    downloadsDirectory,
+    homeDirectory,
+    pluginsDirectory,
+    testMode: false,
+    appDbPath: path.join(userDirectory, isDevelopmentEnv ? 'app-dev.db' : 'app.db'),
+    updatesDisabled: true,
+    appVersion,
+    parsedAppVersion,
+    locale,
+    cloudUrl: 'http://localhost:3000',
+  };
+};
+
+const ensureBeeKeeperUtilityProcess = async (): Promise<void> => {
+  if (beeKeeperUtilityProc && beeKeeperUtilityProc.pid && beeKeeperUtilityReady) {
+    return;
+  }
+
+  if (!beeKeeperUtilityProc || !beeKeeperUtilityProc.pid) {
+    const utilityEntry = getBeeKeeperUtilityEntryPath();
+    if (!fs.existsSync(utilityEntry)) {
+      throw new Error(`BeeKeeper utility entry not found: ${utilityEntry}`);
+    }
+    pushBeeKeeperLog(`[UTILITY] Starting utility process from: ${utilityEntry}`);
+
+    const platformInfoPayload = buildBeeKeeperPlatformInfo();
+    try {
+      fs.mkdirSync(platformInfoPayload.userDirectory, { recursive: true });
+      fs.mkdirSync(platformInfoPayload.pluginsDirectory, { recursive: true });
+      fs.mkdirSync(path.dirname(platformInfoPayload.appDbPath), { recursive: true });
+    } catch (err: any) {
+      pushBeeKeeperLog(`[WARN] Failed to prepare BeeKeeper user directories: ${err?.message || err}`);
+    }
+
+    const env: NodeJS.ProcessEnv = {
+      ...process.env,
+      bksPlatformInfo: JSON.stringify(platformInfoPayload),
+      bksConfigSource: JSON.stringify(getBeeKeeperConfigSource()),
+      BKS_EMBED_MODE: '1',
+      BKS_EMBED_DISABLE_BUNDLED_PLUGINS: '1',
+      BKS_BUNDLED_CONFIG_DIR: getBeeKeeperStudioDir(),
+    };
+    const runtimeNodeModules = path.join(getBeeKeeperStudioDir(), 'node_modules');
+    const nodePathParts = [runtimeNodeModules];
+    if (process.env.NODE_PATH) {
+      nodePathParts.push(process.env.NODE_PATH);
+    }
+    env.NODE_PATH = nodePathParts.join(path.delimiter);
+    pushBeeKeeperLog(`[UTILITY] NODE_PATH=${env.NODE_PATH}`);
+
+    beeKeeperUtilityReady = false;
+    beeKeeperUtilityInitPromise = null;
+    beeKeeperUtilityProc = electron.utilityProcess.fork(utilityEntry, [], {
+      env,
+      cwd: getBeeKeeperStudioDir(),
+      stdio: 'pipe',
+      serviceName: 'MarixBeeKeeperUtility',
+    });
+
+    beeKeeperUtilityProc.stdout?.on('data', (data) => {
+      pushBeeKeeperLog(`[UTILITY_STDOUT] ${String(data)}`);
+    });
+    beeKeeperUtilityProc.stderr?.on('data', (data) => {
+      pushBeeKeeperLog(`[UTILITY_STDERR] ${String(data)}`);
+    });
+    beeKeeperUtilityProc.on('error', (err: any) => {
+      pushBeeKeeperLog(`[UTILITY_ERROR] ${err?.message || err}`);
+    });
+
+    beeKeeperUtilityProc.on('message', (msg: any) => {
+      if (msg?.type === 'ready') {
+        beeKeeperUtilityReady = true;
+      }
+      if (msg?.type === 'openExternal' && msg?.url) {
+        void shell.openExternal(msg.url);
+      }
+    });
+
+    beeKeeperUtilityProc.on('exit', (code) => {
+      pushBeeKeeperLog(`[UTILITY_EXIT] code=${code}`);
+      beeKeeperUtilityReady = false;
+      beeKeeperUtilityInitPromise = null;
+      beeKeeperUtilityProc = null;
+    });
+  }
+
+  if (beeKeeperUtilityReady) {
+    return;
+  }
+
+  if (!beeKeeperUtilityInitPromise) {
+    beeKeeperUtilityInitPromise = new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        beeKeeperUtilityProc?.off('message', onMessage);
+        beeKeeperUtilityInitPromise = null;
+        reject(
+          new Error(
+            `Timed out waiting for BeeKeeper utility process (${BEEKEEPER_UTILITY_READY_TIMEOUT_MS}ms)`,
+          ),
+        );
+      }, BEEKEEPER_UTILITY_READY_TIMEOUT_MS);
+
+      const onMessage = (msg: any) => {
+        if (msg?.type === 'ready') {
+          clearTimeout(timer);
+          beeKeeperUtilityProc?.off('message', onMessage);
+          beeKeeperUtilityReady = true;
+          beeKeeperUtilityInitPromise = null;
+          resolve();
+        }
+      };
+
+      beeKeeperUtilityProc?.on('message', onMessage);
+      beeKeeperUtilityProc?.postMessage({ type: 'init' });
+    });
+  }
+
+  await beeKeeperUtilityInitPromise;
+};
+
+const bindBeeKeeperSenderLifecycle = (sender: Electron.WebContents) => {
+  if (beeKeeperLifecycleBoundSenders.has(sender.id)) {
+    return;
+  }
+  beeKeeperLifecycleBoundSenders.add(sender.id);
+
+  sender.once('destroyed', () => {
+    const sessionId = beeKeeperPortSessions.get(sender.id);
+    if (sessionId && beeKeeperUtilityProc && beeKeeperUtilityProc.pid) {
+      beeKeeperUtilityProc.postMessage({ type: 'close', sId: sessionId });
+    }
+    beeKeeperPortSessions.delete(sender.id);
+    beeKeeperLifecycleBoundSenders.delete(sender.id);
+  });
+};
+
+const sendBeeKeeperPortToSender = (sender: Electron.WebContents, utilDied = false) => {
+  if (!beeKeeperUtilityProc || !beeKeeperUtilityProc.pid) {
+    throw new Error('BeeKeeper utility process is not running');
+  }
+  if (!beeKeeperUtilityReady) {
+    throw new Error('BeeKeeper utility process is not ready yet');
+  }
+
+  bindBeeKeeperSenderLifecycle(sender);
+
+  const oldSessionId = beeKeeperPortSessions.get(sender.id);
+  if (oldSessionId) {
+    beeKeeperUtilityProc.postMessage({ type: 'close', sId: oldSessionId });
+  }
+
+  const { port1, port2 } = new electron.MessageChannelMain();
+  const sessionId = randomUUID();
+  beeKeeperPortSessions.set(sender.id, sessionId);
+  pushBeeKeeperLog(`[PORT] Sending utility port to webview sender=${sender.id} session=${sessionId}`);
+
+  beeKeeperUtilityProc.postMessage({ type: 'init', sId: sessionId }, [port1]);
+  sender.postMessage('port', { sId: sessionId, utilDied }, [port2]);
+};
+
+const stopBeeKeeperUtilityProcess = async () => {
+  if (!beeKeeperUtilityProc) {
+    return;
+  }
+
+  for (const sId of beeKeeperPortSessions.values()) {
+    beeKeeperUtilityProc.postMessage({ type: 'close', sId });
+  }
+  beeKeeperPortSessions.clear();
+  beeKeeperUtilityReady = false;
+  beeKeeperUtilityInitPromise = null;
+  beeKeeperLifecycleBoundSenders.clear();
+
+  const pid = beeKeeperUtilityProc.pid;
+  if (pid) {
+    await killProcessTree(pid);
+  } else {
+    beeKeeperUtilityProc.kill();
+  }
+  beeKeeperUtilityProc = null;
+};
 
 function createAppMenu() {
   const template: any[] = [
@@ -211,6 +1096,8 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
+      sandbox: false,
+      webviewTag: true,
       preload: path.join(__dirname, 'preload.js'),
       backgroundThrottling: false,  // Keep app responsive in background
       spellcheck: false,  // Disable spellcheck for performance
@@ -244,6 +1131,22 @@ function createWindow() {
     }
   });
 
+  mainWindow.webContents.on('did-attach-webview', (_event, webContents) => {
+    const remoteMain = getBeeKeeperRemoteMain();
+    if (remoteMain) {
+      try {
+        remoteMain.enable(webContents);
+      } catch (err: any) {
+        pushBeeKeeperLog(`[WARN] Failed to enable @electron/remote for webview: ${err?.message || err}`);
+      }
+    }
+
+    webContents.setWindowOpenHandler(({ url }) => {
+      void shell.openExternal(url);
+      return { action: 'deny' };
+    });
+  });
+
   if (process.env.NODE_ENV === 'development') {
     mainWindow.loadURL('http://localhost:8080');
     mainWindow.webContents.openDevTools();
@@ -264,8 +1167,7 @@ function createWindow() {
     const activeRDP = rdpManager.getActiveCount();
     const activeWSS = wssManager.getActiveCount();
     const activeFTP = ftpManager.getActiveCount();
-    const activeDB = getDatabaseConnectionCount();
-    const totalActive = activeSSH + activeRDP + activeWSS + activeFTP + activeDB;
+    const totalActive = activeSSH + activeRDP + activeWSS + activeFTP;
 
     if (totalActive > 0) {
       event.preventDefault();
@@ -276,7 +1178,6 @@ function createWindow() {
       if (activeRDP > 0) details.push(`RDP: ${activeRDP}`);
       if (activeWSS > 0) details.push(`WebSocket: ${activeWSS}`);
       if (activeFTP > 0) details.push(`FTP: ${activeFTP}`);
-      if (activeDB > 0) details.push(`Database: ${activeDB}`);
 
       // Send to renderer to show custom modal
       closeRequestId++;
@@ -299,7 +1200,7 @@ function createWindow() {
       sshManager.closeAll();
       wssManager.closeAll();
       ftpManager.closeAll();
-      closeAllDatabaseConnections();
+      stopBeeKeeperProcess();
       mainWindow?.destroy();
     }
   });
@@ -338,9 +1239,6 @@ app.whenReady().then(() => {
   createWindow();
   createTray();
   createAppMenu();
-
-  // Initialize database handlers
-  initDatabaseHandlers();
 
   // Initialize session monitor with saved setting
   sessionMonitor.setEnabled(appSettings.get('sessionMonitorEnabled'));
@@ -397,7 +1295,7 @@ app.on('window-all-closed', () => {
   sshManager.closeAll();
   wssManager.closeAll();
   ftpManager.closeAll();
-  closeAllDatabaseConnections();
+  stopBeeKeeperProcess();
 
   if (process.platform !== 'darwin') {
     app.quit();
@@ -413,7 +1311,7 @@ app.on('before-quit', (event) => {
   sshManager.closeAll();
   wssManager.closeAll();
   ftpManager.closeAll();
-  closeAllDatabaseConnections();
+  stopBeeKeeperProcess();
 });
 
 // Additional cleanup on will-quit (ensures processes are killed)
@@ -425,7 +1323,7 @@ app.on('will-quit', (event) => {
   sshManager.closeAll();
   wssManager.closeAll();
   ftpManager.closeAll();
-  closeAllDatabaseConnections();
+  stopBeeKeeperProcess();
 });
 
 // Theme loading handlers (for lazy theme loading)
@@ -482,6 +1380,295 @@ ipcMain.handle('themes:getTheme', async (_, themeName: string) => {
     console.error('[Themes] Failed to load theme:', err);
     return { success: false, error: err.message };
   }
+});
+
+// BeeKeeper embedded bridge handlers
+ipcMain.handle('beekeeper:status', async () => {
+  const running = !!beeKeeperProc && !beeKeeperProc.killed;
+  const reachable = running ? await isBeeKeeperReachable() : false;
+  return {
+    success: true,
+    running,
+    reachable,
+    url: getBeeKeeperUrl(),
+    embedUrl: getBeeKeeperEmbedUrl(),
+    embedPreload: getBeeKeeperEmbedPreloadUrl(),
+    pid: beeKeeperProc?.pid,
+    logs: beeKeeperLogs.slice(-80),
+  };
+});
+
+ipcMain.handle('beekeeper:start', async (_, options?: { connectionUrl?: string; reserveSession?: boolean }) => {
+  try {
+    const connectionUrl = options?.connectionUrl?.trim();
+    const reserveSession = options?.reserveSession !== false;
+    if (connectionUrl) {
+      beeKeeperConnectionUrl = connectionUrl;
+    }
+
+    if (beeKeeperProc && !beeKeeperProc.killed) {
+      // Server already running — just register a new session reference.
+      if (reserveSession) {
+        beeKeeperSessionCount++;
+        pushBeeKeeperLog(`[SESSION] New session attached, total sessions: ${beeKeeperSessionCount}`);
+      } else {
+        pushBeeKeeperLog('[SESSION] Prewarm request attached without reserving session.');
+      }
+      return {
+        success: true,
+        running: true,
+        pid: beeKeeperProc.pid,
+        url: getBeeKeeperUrl(),
+        embedUrl: getBeeKeeperEmbedUrl(),
+      };
+    }
+
+    beeKeeperPort = await pickBeeKeeperPort();
+    pushBeeKeeperLog(`[SETUP] Using BeeKeeper server at ${getBeeKeeperUrl()}`);
+
+    const beeKeeperRoot = getBeeKeeperRoot();
+    const rootPkg = path.join(beeKeeperRoot, 'package.json');
+    if (!IS_PACKAGED && !fs.existsSync(rootPkg)) {
+      return { success: false, error: `BeeKeeper source not found at: ${beeKeeperRoot}` };
+    }
+    // Reload config source on each start to pick up local.config.ini edits.
+    beeKeeperConfigSource = null;
+    getBeeKeeperConfigSource();
+
+    if (!IS_PACKAGED) {
+      const nodeModulesDir = path.join(beeKeeperRoot, 'node_modules');
+      if (!fs.existsSync(nodeModulesDir)) {
+        pushBeeKeeperLog('[SETUP] node_modules not found, running yarn install (skip scripts)...');
+        const installResult = await runCommandWithLogs('yarn install --ignore-scripts', beeKeeperRoot);
+        if (!installResult.success) {
+          return {
+            success: false,
+            error: 'Failed to install BeeKeeper dependencies. Try manual install with Node v22 and --ignore-scripts.',
+          };
+        }
+      }
+      ensureBeeKeeperElectronPathFile(beeKeeperRoot);
+      const sqliteReady = await ensureBetterSqliteForBeeKeeper(beeKeeperRoot);
+      if (!sqliteReady) {
+        return {
+          success: false,
+          error: 'Failed to prepare better-sqlite3 native module for BeeKeeper.',
+        };
+      }
+
+      const uiKitDistIndex = path.join(beeKeeperRoot, 'apps', 'ui-kit', 'dist', 'index.js');
+      const uiKitDistCss = path.join(beeKeeperRoot, 'apps', 'ui-kit', 'dist', 'style.css');
+      if (!fs.existsSync(uiKitDistIndex) || !fs.existsSync(uiKitDistCss)) {
+        pushBeeKeeperLog('[SETUP] @beekeeperstudio/ui-kit dist missing, building ui-kit...');
+        const uiKitBuildResult = await runCommandWithLogs('yarn workspace @beekeeperstudio/ui-kit build', beeKeeperRoot);
+        if (!uiKitBuildResult.success) {
+          return {
+            success: false,
+            error: 'Failed to build @beekeeperstudio/ui-kit. Check logs.',
+          };
+        }
+      }
+
+      const buildEsbuildResult = await runCommandWithLogs('yarn workspace beekeeper-studio build:esbuild', beeKeeperRoot);
+      if (!buildEsbuildResult.success) {
+        return {
+          success: false,
+          error: 'Failed to build BeeKeeper dist (main/preload/utility). Check logs.',
+        };
+      }
+    }
+
+    const preloadPath = getBeeKeeperPreloadPath();
+    const utilityPath = getBeeKeeperUtilityEntryPath();
+    if (!fs.existsSync(preloadPath) || !fs.existsSync(utilityPath)) {
+      return {
+        success: false,
+        error: 'BeeKeeper dist preload/utility files are missing after build.',
+      };
+    }
+
+    if (IS_PACKAGED) {
+      // ── PRODUCTION: serve pre-built static files ──────────────────────────
+      const webDistDir = getBeeKeeperWebDistDir();
+      if (!fs.existsSync(webDistDir)) {
+        return {
+          success: false,
+          error: `BeeKeeper web dist not found at: ${webDistDir}. Run 'npm run build:beekeeper' before packaging.`,
+        };
+      }
+      pushBeeKeeperLog(`[PROD] Serving BeeKeeper static files from: ${webDistDir}`);
+      await startBeeKeeperStaticServer(webDistDir, beeKeeperPort);
+      // In production there is no child process; set a sentinel so "running" checks work.
+      beeKeeperProc = { pid: -1, killed: false, kill: () => false } as any;
+    } else {
+      // ── DEVELOPMENT: start Vite dev server ────────────────────────────────
+      const command = `yarn workspace beekeeper-studio dev:vite --host ${BEEKEEPER_HOST} --port ${beeKeeperPort}`;
+      pushBeeKeeperLog(`[START] ${command}`);
+      beeKeeperProc = spawn(command, {
+        cwd: beeKeeperRoot,
+        shell: true,
+        env: {
+          ...process.env,
+          BKS_DEV_HOST: BEEKEEPER_HOST,
+          BKS_DEV_PORT: String(beeKeeperPort),
+          SASS_SILENCE_DEPRECATIONS: 'legacy-js-api,import,global-builtin,color-functions',
+        },
+        windowsHide: true,
+      });
+
+      beeKeeperProc.stdout?.on('data', (data: Buffer) => pushBeeKeeperLog(data.toString('utf-8')));
+      beeKeeperProc.stderr?.on('data', (data: Buffer) => pushBeeKeeperLog(data.toString('utf-8')));
+      beeKeeperProc.on('exit', (code, signal) => {
+        pushBeeKeeperLog(`[EXIT] code=${code} signal=${signal}`);
+        beeKeeperProc = null;
+      });
+      beeKeeperProc.on('error', (err) => pushBeeKeeperLog(`[ERROR] ${err.message}`));
+    }
+
+    beeKeeperSessionCount = reserveSession ? 1 : 0;
+    if (reserveSession) {
+      pushBeeKeeperLog('[SESSION] Initial session reserved.');
+    } else {
+      pushBeeKeeperLog('[SESSION] Prewarm started without reserving session.');
+    }
+    pushBeeKeeperLog('[INFO] BeeKeeper embed mode started. Renderer can now mount webview.');
+
+    // Warm utility process in background to reduce first in-tab wait time.
+    void ensureBeeKeeperUtilityProcess()
+      .then(() => {
+        pushBeeKeeperLog('[SETUP] BeeKeeper utility prewarmed.');
+      })
+      .catch((err: any) => {
+        pushBeeKeeperLog(`[WARN] BeeKeeper utility prewarm failed: ${err?.message || err}`);
+      });
+
+    return {
+      success: true,
+      running: true,
+      pid: beeKeeperProc?.pid,
+      url: getBeeKeeperUrl(),
+      embedUrl: getBeeKeeperEmbedUrl(),
+      embedPreload: getBeeKeeperEmbedPreloadUrl(),
+    };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('beekeeper:stop', async () => {
+  try {
+    // Decrement the session reference count. Only kill the server when no
+    // active sessions remain, so duplicate DB tabs don't kill each other.
+    beeKeeperSessionCount = Math.max(0, beeKeeperSessionCount - 1);
+    pushBeeKeeperLog(`[SESSION] Session released, remaining sessions: ${beeKeeperSessionCount}`);
+
+    if (beeKeeperSessionCount > 0) {
+      // Other sessions still active — keep the server running.
+      return { success: true, running: true };
+    }
+
+    // Stop static file server (production) or child process (development)
+    if (beeKeeperStaticServer) {
+      await new Promise<void>((resolve) => beeKeeperStaticServer!.close(() => resolve()));
+      beeKeeperStaticServer = null;
+      pushBeeKeeperLog('[STOP] Static file server stopped');
+    }
+
+    if (beeKeeperProc && !beeKeeperProc.killed) {
+      const pid = beeKeeperProc.pid;
+      if (pid && pid !== -1) {
+        await killProcessTree(pid);
+      } else {
+        beeKeeperProc.kill('SIGTERM');
+      }
+      beeKeeperProc = null;
+      pushBeeKeeperLog(`[STOP] pid=${pid}`);
+    }
+
+    await stopBeeKeeperUtilityProcess();
+    return { success: true, running: false };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+});
+
+// BeeKeeper webview IPC bridge (compatible with BeeKeeper preload API)
+ipcMain.handle('platformInfo', (event) => {
+  pushBeeKeeperLog(`[IPC] platformInfo requested by sender=${event.sender.id}`);
+  return buildBeeKeeperPlatformInfo();
+});
+ipcMain.handle('bksConfigSource', (event) => {
+  pushBeeKeeperLog(`[IPC] bksConfigSource requested by sender=${event.sender.id}`);
+  return getBeeKeeperConfigSource();
+});
+
+ipcMain.handle('requestPorts', async (event) => {
+  pushBeeKeeperLog(`[PORT] requestPorts from sender=${event.sender.id}`);
+  try {
+    await ensureBeeKeeperUtilityProcess();
+    sendBeeKeeperPortToSender(event.sender, false);
+    return true;
+  } catch (err: any) {
+    pushBeeKeeperLog(`[PORT_ERROR] Failed to provide utility port: ${err?.message || err}`);
+    throw err;
+  }
+});
+
+ipcMain.on('oe', (_event, args: any[]) => {
+  const url = args?.[0];
+  if (typeof url === 'string' && url.trim()) {
+    void shell.openExternal(url);
+  }
+});
+
+ipcMain.on('setWindowTitle', (_event, title: string) => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.setTitle(title || 'Marix');
+  }
+});
+
+ipcMain.on('enable-connection-menu-items', () => { });
+ipcMain.on('disable-connection-menu-items', () => { });
+ipcMain.on('updater-ready', () => { });
+ipcMain.on('download-update', () => { });
+ipcMain.on('install-update', () => { });
+ipcMain.on('add-native-menu-item', () => { });
+ipcMain.on('remove-native-menu-item', () => { });
+
+ipcMain.handle('isMaximized', () => mainWindow?.isMaximized() || false);
+ipcMain.handle('isFullscreen', () => mainWindow?.isFullScreen() || false);
+ipcMain.handle('setFullscreen', (_event, value: boolean) => {
+  mainWindow?.setFullScreen(!!value);
+});
+ipcMain.handle('minimizeWindow', () => {
+  mainWindow?.minimize();
+});
+ipcMain.handle('unmaximizeWindow', () => {
+  mainWindow?.unmaximize();
+});
+ipcMain.handle('maximizeWindow', () => {
+  mainWindow?.maximize();
+});
+ipcMain.handle('closeWindow', () => {
+  // In embedded mode, avoid closing the whole Marix app.
+  // Keep this as a no-op so Beekeeper's titlebar close button does not terminate Marix.
+});
+
+ipcMain.handle('fileHelpers:save', async (_event, params: {
+  fileName: string;
+  content: Buffer | Uint8Array | string;
+  filters?: { name: string; extensions: string[] }[];
+  encoding?: BufferEncoding;
+}) => {
+  const result = await dialog.showSaveDialog({
+    defaultPath: params.fileName,
+    filters: params.filters,
+  });
+  if (result.canceled || !result.filePath) {
+    return false;
+  }
+  fs.writeFileSync(result.filePath, params.content, params.encoding ?? 'utf8');
+  return true;
 });
 
 // System info handlers

@@ -10,3 +10,4 @@ src/main/services/box-credentials.json
 src/main/services/onedrive-credentials.json
 sample-script/ssh_via_bash.sh
 sample-script
+working-phases

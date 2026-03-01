@@ -1,7 +1,6 @@
 import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
-import { getThemeSync, getTheme } from '../themeService';
+import { getThemeSync } from '../themeService';
 import { ITheme } from '@xterm/xterm';
-import ThemeSelector from './ThemeSelector';
 import { useLanguage } from '../contexts/LanguageContext';
 
 const { ipcRenderer } = window.electron;
@@ -45,26 +44,12 @@ const WSSViewer: React.FC<WSSViewerProps> = ({
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState<string>('');
   const [autoScroll, setAutoScroll] = useState(true);
-  const [currentTheme, setCurrentTheme] = useState(theme);
-  const [loadedTheme, setLoadedTheme] = useState<ITheme | null>(null);
+  const [currentTheme] = useState('Dracula');
+  const [loadedTheme] = useState<ITheme | null>(getThemeSync('Dracula'));
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messageIdRef = useRef(0);
 
-  // Load theme data
-  useEffect(() => {
-    // First set sync theme
-    setLoadedTheme(getThemeSync(currentTheme));
-    // Then load async
-    getTheme(currentTheme).then(setLoadedTheme);
-  }, [currentTheme]);
-
-  // Handle theme change
-  const handleThemeChange = (newTheme: string) => {
-    setCurrentTheme(newTheme);
-    onThemeChange?.(newTheme);
-  };
-
-  // Get theme colors
+  // Dracula theme colors (fixed)
   const themeColors = useMemo(() => {
     const t = loadedTheme || getThemeSync('Dracula');
     return {
@@ -95,7 +80,7 @@ const WSSViewer: React.FC<WSSViewerProps> = ({
 
   useEffect(() => {
     console.log('[WSSViewer] Setting up listeners for connectionId:', currentConnectionId);
-    
+
     // Note: preload strips the event parameter, so handlers receive args directly
     const handleConnect = (receivedId: string) => {
       console.log('[WSSViewer] Connect event - received:', receivedId, 'expected:', currentConnectionId);
@@ -119,7 +104,7 @@ const WSSViewer: React.FC<WSSViewerProps> = ({
         } catch {
           // Keep as is if not JSON
         }
-        
+
         setMessages(prev => [...prev, {
           id: messageIdRef.current++,
           type: 'received',
@@ -194,15 +179,15 @@ const WSSViewer: React.FC<WSSViewerProps> = ({
   const handleReconnect = async () => {
     // Disconnect existing if any
     await ipcRenderer.invoke('wss:disconnect', currentConnectionId);
-    
+
     // Create new connection ID
     const newConnectionId = `wss-${Date.now()}`;
     setCurrentConnectionId(newConnectionId);
     setStatus('connecting');
     setErrorMessage('');
-    
+
     console.log('[WSSViewer] Reconnecting with new ID:', newConnectionId);
-    
+
     const result = await ipcRenderer.invoke('wss:connect', newConnectionId, { url });
     if (result.success) {
       setStatus('connected');
@@ -233,18 +218,18 @@ const WSSViewer: React.FC<WSSViewerProps> = ({
   const inputBg = darkenColor(themeColors.background, 3);
 
   return (
-    <div 
+    <div
       className="flex-1 flex flex-col h-full"
       style={{ backgroundColor: themeColors.background, color: themeColors.foreground }}
     >
       {/* Header */}
-      <div 
+      <div
         className="px-4 py-3 flex items-center justify-between border-b"
         style={{ backgroundColor: headerBg, borderColor: themeColors.black }}
       >
         <div className="flex items-center gap-3">
           {/* WSS Protocol Icon */}
-          <div 
+          <div
             className="w-9 h-9 rounded-lg flex items-center justify-center"
             style={{ backgroundColor: '#8b5cf620', color: '#8b5cf6' }}
           >
@@ -258,25 +243,20 @@ const WSSViewer: React.FC<WSSViewerProps> = ({
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <ThemeSelector
-            currentTheme={currentTheme}
-            onThemeChange={handleThemeChange}
-            direction="down"
-          />
-          <span 
+          <span
             className="text-xs px-2 py-1 rounded"
-            style={{ 
+            style={{
               backgroundColor: status === 'connected' ? `${themeColors.green}33` :
-                              status === 'connecting' ? `${themeColors.yellow}33` :
-                              status === 'error' ? `${themeColors.red}33` : `${themeColors.white}33`,
+                status === 'connecting' ? `${themeColors.yellow}33` :
+                  status === 'error' ? `${themeColors.red}33` : `${themeColors.white}33`,
               color: status === 'connected' ? themeColors.green :
-                     status === 'connecting' ? themeColors.yellow :
-                     status === 'error' ? themeColors.red : themeColors.white
+                status === 'connecting' ? themeColors.yellow :
+                  status === 'error' ? themeColors.red : themeColors.white
             }}
           >
             {status === 'connected' ? t('connected') :
-             status === 'connecting' ? t('connecting') :
-             status === 'disconnected' ? t('disconnected') : t('error')}
+              status === 'connecting' ? t('connecting') :
+                status === 'disconnected' ? t('disconnected') : t('error')}
           </span>
           <button
             onClick={clearMessages}
@@ -313,7 +293,7 @@ const WSSViewer: React.FC<WSSViewerProps> = ({
         {status === 'connecting' && (
           <div className="flex items-center justify-center h-full">
             <div className="text-center">
-              <div 
+              <div
                 className="animate-spin rounded-full h-8 w-8 border-b-2 mx-auto mb-3"
                 style={{ borderColor: themeColors.cyan }}
               ></div>
@@ -374,7 +354,7 @@ const WSSViewer: React.FC<WSSViewerProps> = ({
             }}
           >
             <div className="flex items-center justify-between mb-1">
-              <span 
+              <span
                 className="text-xs font-medium"
                 style={{ color: msg.type === 'sent' ? themeColors.green : themeColors.magenta }}
               >
@@ -382,7 +362,7 @@ const WSSViewer: React.FC<WSSViewerProps> = ({
               </span>
               <span className="text-xs" style={{ color: themeColors.white + '60' }}>{formatTime(msg.timestamp)}</span>
             </div>
-            <pre 
+            <pre
               className="whitespace-pre-wrap break-all text-xs"
               style={{ color: themeColors.foreground }}
             >{msg.content}</pre>
@@ -401,8 +381,8 @@ const WSSViewer: React.FC<WSSViewerProps> = ({
               onKeyDown={handleKeyDown}
               placeholder={t('wssTypeMessage')}
               className="flex-1 rounded-lg px-4 py-3 text-sm resize-none font-mono focus:outline-none"
-              style={{ 
-                backgroundColor: inputBg, 
+              style={{
+                backgroundColor: inputBg,
                 color: themeColors.foreground,
                 borderWidth: 1,
                 borderColor: themeColors.black
@@ -413,7 +393,7 @@ const WSSViewer: React.FC<WSSViewerProps> = ({
               onClick={handleSend}
               disabled={!inputMessage.trim()}
               className="px-6 font-medium rounded-lg transition disabled:opacity-50"
-              style={{ 
+              style={{
                 backgroundColor: inputMessage.trim() ? themeColors.cyan : themeColors.black,
                 color: inputMessage.trim() ? themeColors.black : themeColors.white + '60'
               }}

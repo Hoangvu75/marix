@@ -1,15 +1,8 @@
 import { ITheme } from '@xterm/xterm';
 
-const { ipcRenderer } = window.electron;
+// Only two supported themes: Dracula (dark) and Light (light mode)
 
-// Cache loaded themes in memory
-const themeCache = new Map<string, ITheme>();
-
-// Theme list cache
-let themeListCache: string[] | null = null;
-
-// Default theme (Dracula) - inlined for instant startup
-const DEFAULT_THEME: ITheme = {
+export const DRACULA_THEME: ITheme = {
   background: '#282a36',
   foreground: '#f8f8f2',
   cursor: '#f8f8f2',
@@ -33,310 +26,67 @@ const DEFAULT_THEME: ITheme = {
   brightWhite: '#ffffff',
 };
 
-// Common themes inlined for fast access
-const INLINE_THEMES: Record<string, ITheme> = {
-  'Dracula': DEFAULT_THEME,
-  'One Dark': {
-    background: '#282c34',
-    foreground: '#abb2bf',
-    cursor: '#528bff',
-    cursorAccent: '#282c34',
-    selectionBackground: '#3e4451',
-    black: '#282c34',
-    red: '#e06c75',
-    green: '#98c379',
-    yellow: '#e5c07b',
-    blue: '#61afef',
-    magenta: '#c678dd',
-    cyan: '#56b6c2',
-    white: '#abb2bf',
-    brightBlack: '#5c6370',
-    brightRed: '#e06c75',
-    brightGreen: '#98c379',
-    brightYellow: '#e5c07b',
-    brightBlue: '#61afef',
-    brightMagenta: '#c678dd',
-    brightCyan: '#56b6c2',
-    brightWhite: '#ffffff',
-  },
-  'Nord': {
-    background: '#2e3440',
-    foreground: '#d8dee9',
-    cursor: '#d8dee9',
-    cursorAccent: '#2e3440',
-    selectionBackground: '#434c5e',
-    black: '#3b4252',
-    red: '#bf616a',
-    green: '#a3be8c',
-    yellow: '#ebcb8b',
-    blue: '#81a1c1',
-    magenta: '#b48ead',
-    cyan: '#88c0d0',
-    white: '#e5e9f0',
-    brightBlack: '#4c566a',
-    brightRed: '#bf616a',
-    brightGreen: '#a3be8c',
-    brightYellow: '#ebcb8b',
-    brightBlue: '#81a1c1',
-    brightMagenta: '#b48ead',
-    brightCyan: '#8fbcbb',
-    brightWhite: '#eceff4',
-  },
-  'Monokai': {
-    background: '#272822',
-    foreground: '#f8f8f2',
-    cursor: '#f8f8f0',
-    cursorAccent: '#272822',
-    selectionBackground: '#49483e',
-    black: '#272822',
-    red: '#f92672',
-    green: '#a6e22e',
-    yellow: '#f4bf75',
-    blue: '#66d9ef',
-    magenta: '#ae81ff',
-    cyan: '#a1efe4',
-    white: '#f8f8f2',
-    brightBlack: '#75715e',
-    brightRed: '#f92672',
-    brightGreen: '#a6e22e',
-    brightYellow: '#f4bf75',
-    brightBlue: '#66d9ef',
-    brightMagenta: '#ae81ff',
-    brightCyan: '#a1efe4',
-    brightWhite: '#f9f8f5',
-  },
-  'Solarized Dark': {
-    background: '#002b36',
-    foreground: '#839496',
-    cursor: '#839496',
-    cursorAccent: '#002b36',
-    selectionBackground: '#073642',
-    black: '#073642',
-    red: '#dc322f',
-    green: '#859900',
-    yellow: '#b58900',
-    blue: '#268bd2',
-    magenta: '#d33682',
-    cyan: '#2aa198',
-    white: '#eee8d5',
-    brightBlack: '#002b36',
-    brightRed: '#cb4b16',
-    brightGreen: '#586e75',
-    brightYellow: '#657b83',
-    brightBlue: '#839496',
-    brightMagenta: '#6c71c4',
-    brightCyan: '#93a1a1',
-    brightWhite: '#fdf6e3',
-  },
-  'Gruvbox Dark': {
-    background: '#282828',
-    foreground: '#ebdbb2',
-    cursor: '#ebdbb2',
-    cursorAccent: '#282828',
-    selectionBackground: '#504945',
-    black: '#282828',
-    red: '#cc241d',
-    green: '#98971a',
-    yellow: '#d79921',
-    blue: '#458588',
-    magenta: '#b16286',
-    cyan: '#689d6a',
-    white: '#a89984',
-    brightBlack: '#928374',
-    brightRed: '#fb4934',
-    brightGreen: '#b8bb26',
-    brightYellow: '#fabd2f',
-    brightBlue: '#83a598',
-    brightMagenta: '#d3869b',
-    brightCyan: '#8ec07c',
-    brightWhite: '#ebdbb2',
-  },
-  'Tokyo Night': {
-    background: '#1a1b26',
-    foreground: '#a9b1d6',
-    cursor: '#c0caf5',
-    cursorAccent: '#1a1b26',
-    selectionBackground: '#33467c',
-    black: '#15161e',
-    red: '#f7768e',
-    green: '#9ece6a',
-    yellow: '#e0af68',
-    blue: '#7aa2f7',
-    magenta: '#bb9af7',
-    cyan: '#7dcfff',
-    white: '#a9b1d6',
-    brightBlack: '#414868',
-    brightRed: '#f7768e',
-    brightGreen: '#9ece6a',
-    brightYellow: '#e0af68',
-    brightBlue: '#7aa2f7',
-    brightMagenta: '#bb9af7',
-    brightCyan: '#7dcfff',
-    brightWhite: '#c0caf5',
-  },
-  'Catppuccin Mocha': {
-    background: '#1e1e2e',
-    foreground: '#cdd6f4',
-    cursor: '#f5e0dc',
-    cursorAccent: '#1e1e2e',
-    selectionBackground: '#45475a',
-    black: '#45475a',
-    red: '#f38ba8',
-    green: '#a6e3a1',
-    yellow: '#f9e2af',
-    blue: '#89b4fa',
-    magenta: '#f5c2e7',
-    cyan: '#94e2d5',
-    white: '#bac2de',
-    brightBlack: '#585b70',
-    brightRed: '#f38ba8',
-    brightGreen: '#a6e3a1',
-    brightYellow: '#f9e2af',
-    brightBlue: '#89b4fa',
-    brightMagenta: '#f5c2e7',
-    brightCyan: '#94e2d5',
-    brightWhite: '#a6adc8',
-  },
-  // Light theme for terminal when app is in light mode (readable text on light background)
-  'Light': {
-    background: '#f5f5f5',
-    foreground: '#1e1e1e',
-    cursor: '#1e1e1e',
-    cursorAccent: '#f5f5f5',
-    selectionBackground: '#b4d5fe',
-    black: '#2e2e2e',
-    red: '#c41a16',
-    green: '#0e7d0e',
-    yellow: '#b58900',
-    blue: '#268bd2',
-    magenta: '#d33682',
-    cyan: '#2aa198',
-    white: '#4e4e4e',
-    brightBlack: '#6e6e6e',
-    brightRed: '#c41a16',
-    brightGreen: '#0e7d0e',
-    brightYellow: '#b58900',
-    brightBlue: '#268bd2',
-    brightMagenta: '#d33682',
-    brightCyan: '#2aa198',
-    brightWhite: '#1e1e1e',
-  },
+export const LIGHT_THEME: ITheme = {
+  background: '#f5f5f5',
+  foreground: '#1e1e1e',
+  cursor: '#1e1e1e',
+  cursorAccent: '#f5f5f5',
+  selectionBackground: '#b4d5fe',
+  black: '#2e2e2e',
+  red: '#c41a16',
+  green: '#0e7d0e',
+  yellow: '#b58900',
+  blue: '#268bd2',
+  magenta: '#d33682',
+  cyan: '#2aa198',
+  white: '#4e4e4e',
+  brightBlack: '#6e6e6e',
+  brightRed: '#c41a16',
+  brightGreen: '#0e7d0e',
+  brightYellow: '#b58900',
+  brightBlue: '#268bd2',
+  brightMagenta: '#d33682',
+  brightCyan: '#2aa198',
+  brightWhite: '#1e1e1e',
+};
+
+const THEMES: Record<string, ITheme> = {
+  'Dracula': DRACULA_THEME,
+  'Light': LIGHT_THEME,
 };
 
 /**
- * Get list of available theme names
- * Uses cache for performance
- */
-export async function getThemeList(): Promise<string[]> {
-  if (themeListCache) {
-    return themeListCache;
-  }
-  
-  try {
-    const result = await ipcRenderer.invoke('themes:getList');
-    if (result.success && result.themes) {
-      themeListCache = result.themes;
-      return result.themes;
-    }
-  } catch (err) {
-    console.error('[ThemeService] Failed to get theme list:', err);
-  }
-  
-  // Fallback to inline themes if IPC fails
-  return Object.keys(INLINE_THEMES);
-}
-
-/**
- * Get theme by name
- * First checks inline themes, then cache, then loads from file
+ * Get theme by name. Returns Dracula for any unknown name.
  */
 export async function getTheme(name: string): Promise<ITheme> {
-  // Check inline themes first (instant)
-  if (INLINE_THEMES[name]) {
-    return INLINE_THEMES[name];
-  }
-  
-  // Check cache
-  const cached = themeCache.get(name);
-  if (cached) {
-    return cached;
-  }
-  
-  // Load from file via IPC
-  try {
-    const result = await ipcRenderer.invoke('themes:getTheme', name);
-    if (result.success && result.theme) {
-      themeCache.set(name, result.theme);
-      return result.theme;
-    }
-  } catch (err) {
-    console.error('[ThemeService] Failed to load theme:', name, err);
-  }
-  
-  // Fallback to default
-  return DEFAULT_THEME;
+  return THEMES[name] ?? DRACULA_THEME;
 }
 
 /**
- * Get theme synchronously (for immediate use)
- * Only returns inline or cached themes, otherwise returns default
+ * Get theme synchronously. Returns Dracula for any unknown name.
  */
 export function getThemeSync(name: string): ITheme {
-  // Check inline themes first
-  if (INLINE_THEMES[name]) {
-    return INLINE_THEMES[name];
-  }
-  
-  // Check cache
-  const cached = themeCache.get(name);
-  if (cached) {
-    return cached;
-  }
-  
-  // Return default - async load will update later
-  return DEFAULT_THEME;
+  return THEMES[name] ?? DRACULA_THEME;
 }
 
 /**
- * Preload a theme into cache (for smoother UX)
+ * No-op, kept for API compat.
  */
-export async function preloadTheme(name: string): Promise<void> {
-  if (!INLINE_THEMES[name] && !themeCache.has(name)) {
-    await getTheme(name);
-  }
+export async function preloadTheme(_name: string): Promise<void> {
+  // no-op: all themes are inline
 }
 
-// For backwards compatibility - simple theme list
-export interface ThemeInfo {
-  name: string;
+// Legacy compat exports
+export interface ThemeInfo { name: string; }
+
+export async function getThemeList(): Promise<string[]> {
+  return Object.keys(THEMES);
 }
 
-// This will be populated on first call
-let terminalThemesCache: ThemeInfo[] | null = null;
-
-/**
- * Get all themes as simple objects (for ThemeSelector compatibility)
- * This is async but returns fast with cached data
- */
 export async function getAllThemes(): Promise<ThemeInfo[]> {
-  if (terminalThemesCache) {
-    return terminalThemesCache;
-  }
-  
-  const names = await getThemeList();
-  terminalThemesCache = names.map(name => ({ name }));
-  return terminalThemesCache;
+  return Object.keys(THEMES).map(name => ({ name }));
 }
 
-/**
- * Initialize theme service - call early in app startup
- * This preloads the theme list for fast UI rendering
- */
 export async function initThemeService(): Promise<void> {
-  try {
-    await getThemeList();
-    console.log('[ThemeService] Theme list loaded');
-  } catch (err) {
-    console.error('[ThemeService] Failed to initialize:', err);
-  }
+  // no-op
 }

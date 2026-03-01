@@ -9,6 +9,52 @@
     "dist/**/*",
     "package.json"
   ],
+  "extraResources": [
+    {
+      "from": "third_party/beekeeper-studio/apps/studio/dist-web",
+      "to": "beekeeper-dist/web",
+      "filter": [
+        "**/*"
+      ]
+    },
+    {
+      "from": "third_party/beekeeper-studio/apps/studio/dist",
+      "to": "beekeeper-dist/dist",
+      "filter": [
+        "**/*"
+      ]
+    },
+    {
+      "from": "third_party/beekeeper-studio/apps/studio/extra_resources",
+      "to": "beekeeper-dist/extra_resources",
+      "filter": [
+        "**/*"
+      ]
+    },
+    {
+      "from": "third_party/beekeeper-studio/apps/studio/runtime_node_modules",
+      "to": "beekeeper-dist/node_modules",
+      "filter": [
+        "**/*"
+      ]
+    },
+    {
+      "from": "third_party/beekeeper-studio/apps/studio/default.config.ini",
+      "to": "beekeeper-dist/default.config.ini"
+    },
+    {
+      "from": "third_party/beekeeper-studio/apps/studio/system.config.ini",
+      "to": "beekeeper-dist/system.config.ini"
+    },
+    {
+      "from": "third_party/beekeeper-studio/apps/studio/user.config.ini",
+      "to": "beekeeper-dist/user.config.ini"
+    },
+    {
+      "from": "third_party/beekeeper-studio/apps/studio/local.config.ini",
+      "to": "beekeeper-dist/local.config.ini"
+    }
+  ],
   "asar": true,
   "compression": "maximum",
   "linux": {
@@ -16,15 +62,21 @@
     "target": [
       {
         "target": "AppImage",
-        "arch": ["x64"]
+        "arch": [
+          "x64"
+        ]
       },
       {
         "target": "deb",
-        "arch": ["x64"]
+        "arch": [
+          "x64"
+        ]
       },
       {
         "target": "rpm",
-        "arch": ["x64"]
+        "arch": [
+          "x64"
+        ]
       }
     ],
     "category": "Development",
@@ -37,12 +89,15 @@
     "target": [
       {
         "target": "nsis",
-        "arch": ["x64"]
+        "arch": [
+          "x64"
+        ]
       }
     ]
   },
   "nsis": {
     "oneClick": false,
+    "include": "build/installer.nsh",
     "allowToChangeInstallationDirectory": true,
     "createDesktopShortcut": true,
     "createStartMenuShortcut": true,
@@ -53,7 +108,10 @@
     "target": [
       {
         "target": "zip",
-        "arch": ["x64", "arm64"]
+        "arch": [
+          "x64",
+          "arm64"
+        ]
       }
     ],
     "category": "public.app-category.developer-tools",

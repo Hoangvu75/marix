@@ -8,7 +8,7 @@ import DualPaneSFTP from './components/DualPaneSFTP';
 import RDPViewer from './components/RDPViewer';
 import RDPDepsInstaller from './components/RDPDepsInstaller';
 import WSSViewer from './components/WSSViewer';
-import DatabaseClient from './components/DatabaseClient';
+import BeeKeeperDatabase from './components/BeeKeeperDatabase';
 import AddServerModal from './components/AddServerModal';
 import JsSSHModal from './components/JsSSHModal';
 import ThemeSelector from './components/ThemeSelector';
@@ -83,6 +83,7 @@ export interface Session {
   server: Server;
   connectionId: string;
   type: 'terminal' | 'sftp' | 'rdp' | 'wss' | 'database';
+  beekeeperRuntimeManaged?: boolean;
   theme?: string;
   pendingPassword?: string;  // For JS SSH: password to auto-send when terminal prompts
   sftpPaths?: {
@@ -450,23 +451,6 @@ const App: React.FC = () => {
     window.addEventListener('ssh:reconnectFailed', handleReconnectFailed);
     return () => window.removeEventListener('ssh:reconnectFailed', handleReconnectFailed);
   }, [t]);
-
-  // Window close confirmation when there are active sessions
-  useEffect(() => {
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      // Only show warning if there are active sessions
-      if (sessions.length > 0) {
-        // Standard way to show confirmation dialog
-        e.preventDefault();
-        // Chrome requires returnValue to be set
-        e.returnValue = '';
-        return '';
-      }
-    };
-
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [sessions.length]);
 
   // Listen for app close confirmation request from main process
   useEffect(() => {
@@ -2894,6 +2878,78 @@ const App: React.FC = () => {
 
       // Handle database connections
       if (['mysql', 'postgresql', 'mongodb', 'redis', 'sqlite'].includes(protocol)) {
+        const buildDatabaseConnectionUrl = (dbServer: Server): string | null => {
+          const host = dbServer.host?.trim();
+          const username = dbServer.username ? encodeURIComponent(dbServer.username) : '';
+          const password = dbServer.password ? encodeURIComponent(dbServer.password) : '';
+          const auth = username ? `${username}${password ? `:${password}` : ''}@` : '';
+
+          if (dbServer.protocol === 'sqlite') {
+            return dbServer.sqliteFile || dbServer.database || null;
+          }
+
+          if (dbServer.protocol === 'mongodb') {
+            if (dbServer.mongoUri) return dbServer.mongoUri;
+            if (!host) return null;
+            const port = dbServer.port || 27017;
+            const dbName = dbServer.database ? `/${encodeURIComponent(dbServer.database)}` : '';
+            return `mongodb://${auth}${host}:${port}${dbName}`;
+          }
+
+          if (dbServer.protocol === 'postgresql' || dbServer.protocol === 'mysql' || dbServer.protocol === 'redis') {
+            if (!host) return null;
+            const defaultPorts: Record<string, number> = { postgresql: 5432, mysql: 3306, redis: 6379 };
+            const port = dbServer.port || defaultPorts[dbServer.protocol];
+            const dbName = dbServer.database ? `/${encodeURIComponent(dbServer.database)}` : '';
+            const ssl = dbServer.sslEnabled ? '?sslmode=require' : '';
+            return `${dbServer.protocol}://${auth}${host}:${port}${dbName}${ssl}`;
+          }
+
+          return null;
+        };
+
+        const waitForBeeKeeperReady = async (timeoutMs = 15000, intervalMs = 250): Promise<boolean> => {
+          const startedAt = Date.now();
+          while (Date.now() - startedAt < timeoutMs) {
+            try {
+              const st = await ipcRenderer.invoke('beekeeper:status');
+              if (st?.running && st?.reachable && st?.embedUrl && st?.embedPreload) {
+                return true;
+              }
+            } catch (err) {
+              console.warn('[App] BeeKeeper status check failed while waiting for ready:', err);
+            }
+            await new Promise((resolve) => setTimeout(resolve, intervalMs));
+          }
+          return false;
+        };
+
+        const connectionUrl = buildDatabaseConnectionUrl(server);
+        const startResult = await ipcRenderer.invoke('beekeeper:start', {
+          connectionUrl: connectionUrl || undefined,
+          reserveSession: true, // App owns DB session lifecycle; BeeKeeperDatabase should not start again.
+        });
+
+        if (!startResult?.success) {
+          setConnectingServerId(null);
+          setConnectionErrorModal({
+            title: t('connectionFailed') || 'Connection failed',
+            message: startResult?.error || 'Failed to start BeeKeeper runtime.',
+          });
+          return;
+        }
+
+        const ready = await waitForBeeKeeperReady();
+        if (!ready) {
+          await ipcRenderer.invoke('beekeeper:stop');
+          setConnectingServerId(null);
+          setConnectionErrorModal({
+            title: t('connectionFailed') || 'Connection failed',
+            message: 'BeeKeeper startup timed out. Please try again.',
+          });
+          return;
+        }
+
         const connectionId = `db-${server.id}-${Date.now()}`;
 
         const dbSession: Session = {
@@ -2901,10 +2957,11 @@ const App: React.FC = () => {
           server,
           connectionId,
           type: 'database',
+          beekeeperRuntimeManaged: true,
           theme: currentTheme,
         };
 
-        setSessions([...sessions, dbSession]);
+        setSessions(prev => [...prev, dbSession]);
         setActiveSessionId(dbSession.id);
         setConnectingServerId(null);
         console.log('[App] Database Session created:', dbSession.id);
@@ -3309,6 +3366,29 @@ const App: React.FC = () => {
     doCloseSession(id);
   };
 
+  const disconnectSession = async (session: Session) => {
+    const protocol = session.server.protocol || 'ssh';
+    const connectionId = session.connectionId;
+
+    if (session.type === 'database') {
+      await ipcRenderer.invoke('beekeeper:stop');
+      return;
+    }
+
+    if (protocol === 'ftp' || protocol === 'ftps') {
+      await ipcRenderer.invoke('ftp:disconnect', connectionId);
+      return;
+    }
+
+    if (protocol === 'wss') {
+      await ipcRenderer.invoke('wss:disconnect', connectionId);
+      return;
+    }
+
+    destroyTerminal(connectionId);
+    await ipcRenderer.invoke('ssh:disconnect', connectionId);
+  };
+
   // Tab context menu actions
   const handleCloseTabsToLeft = async (sessionId: string) => {
     const targetIndex = sessions.findIndex(s => s.id === sessionId);
@@ -3325,19 +3405,8 @@ const App: React.FC = () => {
 
     // Then disconnect in background
     for (const session of sessionsToClose) {
-      const protocol = session.server.protocol || 'ssh';
-      const connectionId = session.connectionId;
       try {
-        if (protocol === 'ftp' || protocol === 'ftps') {
-          await ipcRenderer.invoke('ftp:disconnect', connectionId);
-        } else if (protocol === 'wss') {
-          await ipcRenderer.invoke('wss:disconnect', connectionId);
-        } else if (['mysql', 'postgresql', 'mongodb', 'redis', 'sqlite'].includes(protocol)) {
-          await ipcRenderer.invoke('db:disconnect', connectionId);
-        } else {
-          destroyTerminal(connectionId);
-          await ipcRenderer.invoke('ssh:disconnect', connectionId);
-        }
+        await disconnectSession(session);
       } catch (err) {
         console.error('[App] Error disconnecting:', err);
       }
@@ -3359,19 +3428,8 @@ const App: React.FC = () => {
 
     // Then disconnect in background
     for (const session of sessionsToClose) {
-      const protocol = session.server.protocol || 'ssh';
-      const connectionId = session.connectionId;
       try {
-        if (protocol === 'ftp' || protocol === 'ftps') {
-          await ipcRenderer.invoke('ftp:disconnect', connectionId);
-        } else if (protocol === 'wss') {
-          await ipcRenderer.invoke('wss:disconnect', connectionId);
-        } else if (['mysql', 'postgresql', 'mongodb', 'redis', 'sqlite'].includes(protocol)) {
-          await ipcRenderer.invoke('db:disconnect', connectionId);
-        } else {
-          destroyTerminal(connectionId);
-          await ipcRenderer.invoke('ssh:disconnect', connectionId);
-        }
+        await disconnectSession(session);
       } catch (err) {
         console.error('[App] Error disconnecting:', err);
       }
@@ -3391,19 +3449,8 @@ const App: React.FC = () => {
 
     // Then disconnect all in background
     for (const session of sessionsToClose) {
-      const protocol = session.server.protocol || 'ssh';
-      const connectionId = session.connectionId;
       try {
-        if (protocol === 'ftp' || protocol === 'ftps') {
-          await ipcRenderer.invoke('ftp:disconnect', connectionId);
-        } else if (protocol === 'wss') {
-          await ipcRenderer.invoke('wss:disconnect', connectionId);
-        } else if (['mysql', 'postgresql', 'mongodb', 'redis', 'sqlite'].includes(protocol)) {
-          await ipcRenderer.invoke('db:disconnect', connectionId);
-        } else {
-          destroyTerminal(connectionId);
-          await ipcRenderer.invoke('ssh:disconnect', connectionId);
-        }
+        await disconnectSession(session);
       } catch (err) {
         console.error('[App] Error disconnecting:', err);
       }
@@ -3427,9 +3474,6 @@ const App: React.FC = () => {
     const session = sessions.find(s => s.id === id);
     if (!session) return;
 
-    const protocol = session.server.protocol || 'ssh';
-    const connectionId = session.connectionId;
-
     // Update UI state FIRST before any async operations
     const newSessions = sessions.filter(s => s.id !== id);
     setSessions(newSessions);
@@ -3446,17 +3490,7 @@ const App: React.FC = () => {
     // Use setTimeout to push disconnect operations to next tick
     setTimeout(async () => {
       try {
-        if (protocol === 'ftp' || protocol === 'ftps') {
-          await ipcRenderer.invoke('ftp:disconnect', connectionId);
-        } else if (protocol === 'wss') {
-          await ipcRenderer.invoke('wss:disconnect', connectionId);
-        } else if (['mysql', 'postgresql', 'mongodb', 'redis', 'sqlite'].includes(protocol)) {
-          await ipcRenderer.invoke('db:disconnect', connectionId);
-        } else {
-          // SSH/RDP - Destroy terminal instance
-          destroyTerminal(connectionId);
-          await ipcRenderer.invoke('ssh:disconnect', connectionId);
-        }
+        await disconnectSession(session);
       } catch (err) {
         console.error('[App] Error disconnecting:', err);
       }
@@ -4152,24 +4186,10 @@ const App: React.FC = () => {
                         </div>
                         <button
                           onClick={toggleAppTheme}
-                          className={`relative w-12 h-6 rounded-full transition ${appTheme === 'light' ? 'bg-teal-600' : 'bg-navy-600'
-                            }`}
+                          className={`relative w-12 h-6 rounded-full transition ${appTheme === 'light' ? 'bg-teal-600' : 'bg-navy-600'}`}
                         >
-                          <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${appTheme === 'light' ? 'translate-x-7' : 'translate-x-1'
-                            }`} />
+                          <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${appTheme === 'light' ? 'translate-x-7' : 'translate-x-1'}`} />
                         </button>
-                      </div>
-
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4">
-                        <div>
-                          <p className={`text-sm ${appTheme === 'light' ? 'text-gray-700' : 'text-gray-300'}`}>{t('terminalTheme')}</p>
-                          <p className={`text-xs ${appTheme === 'light' ? 'text-gray-500' : 'text-gray-500'}`}>{t('defaultTerminalTheme')}</p>
-                        </div>
-                        <ThemeSelector
-                          currentTheme={currentTheme}
-                          onThemeChange={handleThemeChange}
-                          direction="down"
-                        />
                       </div>
                     </div>
                   </div>
@@ -6265,16 +6285,12 @@ const App: React.FC = () => {
                     onError={(err) => console.log('[App] WSS Error:', err)}
                   />
                 ) : session.type === 'database' ? (
-                  <DatabaseClient
+                  <BeeKeeperDatabase
                     server={session.server as any}
                     connectionId={session.connectionId}
+                    runtimeManaged={session.beekeeperRuntimeManaged === true}
                     theme={appTheme}
                     onClose={() => handleCloseSession(session.id)}
-                    onDbInfo={(info) => {
-                      setSessions(prev => prev.map(s =>
-                        s.id === session.id ? { ...s, dbInfo: info } : s
-                      ));
-                    }}
                   />
                 ) : (
                   <DualPaneSFTP
@@ -6324,33 +6340,20 @@ const App: React.FC = () => {
                   <span className={appTheme === 'light' ? 'text-gray-500' : 'text-gray-500'}>{t('detectingSystemInfo') || 'Detecting system info...'}</span>
                 )
               ) : activeSession && activeSession.type === 'database' ? (
-                /* Database Session Info */
-                activeSession.dbInfo ? (
-                  <>
-                    <div className="flex items-center gap-1.5 min-w-0">
-                      <svg className="w-3.5 h-3.5 text-teal-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
-                      </svg>
-                      <span className={appTheme === 'light' ? 'text-gray-600' : 'text-gray-400'}>{activeSession.dbInfo.version}</span>
-                    </div>
-                    <div className="flex items-center gap-1.5 min-w-0">
-                      <svg className="w-3.5 h-3.5 text-purple-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
-                      </svg>
-                      <span className={appTheme === 'light' ? 'text-gray-600' : 'text-gray-400'}>{activeSession.dbInfo.ip}</span>
-                    </div>
-                    {activeSession.dbInfo.provider && (
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        <svg className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                        </svg>
-                        <span className={appTheme === 'light' ? 'text-gray-600' : 'text-gray-400'}>{activeSession.dbInfo.provider}</span>
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <span className={appTheme === 'light' ? 'text-gray-500' : 'text-gray-500'}>{t('detectingSystemInfo') || 'Detecting system info...'}</span>
-                )
+                <>
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <svg className="w-3.5 h-3.5 text-teal-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
+                    </svg>
+                    <span className={appTheme === 'light' ? 'text-gray-600' : 'text-gray-400'}>BeeKeeper Embedded</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <svg className="w-3.5 h-3.5 text-purple-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3" />
+                    </svg>
+                    <span className={appTheme === 'light' ? 'text-gray-600' : 'text-gray-400'}>{activeSession.server.host}:{activeSession.server.port}</span>
+                  </div>
+                </>
               ) : (
                 /* Default: Show version and build info */
                 <>
@@ -6462,14 +6465,7 @@ const App: React.FC = () => {
                   {t('notes')}
                 </button>
               )}
-              {/* Theme selector for SSH sessions */}
-              {activeSession && activeSession.type !== 'rdp' && activeSession.type !== 'wss' && activeSession.type !== 'database' &&
-                activeSession.server.protocol !== 'ftp' && activeSession.server.protocol !== 'ftps' && (
-                  <ThemeSelector
-                    currentTheme={currentTheme}
-                    onThemeChange={handleThemeChange}
-                  />
-                )}
+
               {/* Terminal/SFTP switch for remote SSH sessions */}
               {activeSession && activeSession.type !== 'rdp' && activeSession.type !== 'wss' && activeSession.type !== 'database' &&
                 activeSession.server.protocol !== 'ftp' && activeSession.server.protocol !== 'ftps' && activeSession.server.id !== 'local' && (
